@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { AppLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
@@ -10,6 +11,8 @@ import NotFound from './pages/NotFound'
 
 export default function App() {
   return (
+    <>
+    <Toaster position="bottom-right" richColors />
     <Routes>
       <Route path="/welcome" element={<Welcome />} />
 
@@ -24,5 +27,6 @@ export default function App() {
 
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   )
 }

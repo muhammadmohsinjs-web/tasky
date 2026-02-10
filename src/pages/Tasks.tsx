@@ -65,19 +65,19 @@ export default function Tasks() {
   }, [tasks, activeCategory, search])
 
   return (
-    <div className="p-6 lg:pl-8">
-      <header className="mb-6">
+    <div className="p-6 lg:px-10 lg:py-8">
+      <header className="mb-8">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-5">
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-slate-800">Tasks</h1>
-              <p className="text-xs text-slate-400 mt-0.5">Manage your learning tasks</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-800">Tasks</h1>
+              <p className="text-sm text-slate-400 mt-1">Manage your learning tasks</p>
             </div>
-            <div className="hidden sm:flex items-center gap-3 ml-2 pl-5 border-l border-slate-200">
+            <div className="hidden sm:flex items-center gap-4 ml-2 pl-5 border-l border-slate-200">
               {categories.map((cat) => (
-                <div key={cat.id} className="flex items-center gap-1.5">
-                  <div className={`w-2 h-2 rounded-full ${categoryDot(cat)}`} />
-                  <span className="text-[11px] text-slate-500">{cat.name}</span>
+                <div key={cat.id} className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${categoryDot(cat)}`} />
+                  <span className="text-xs font-medium text-slate-500">{cat.name}</span>
                 </div>
               ))}
             </div>
@@ -85,51 +85,51 @@ export default function Tasks() {
 
           <div className="flex items-center gap-3">
             {totalTasks > 0 && (
-              <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-medium bg-slate-50 px-3 py-1.5 rounded-lg">
                 <span>{doneTasks}/{totalTasks} done</span>
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 bg-white rounded-xl border border-slate-200 shadow-sm px-1 py-1">
-              <button onClick={goToPrevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer">
-                <ChevronLeft className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1.5 bg-white rounded-xl border border-slate-200 shadow-sm px-1.5 py-1.5">
+              <button onClick={goToPrevMonth} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer">
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-medium text-slate-700 min-w-[130px] text-center select-none">
+              <span className="text-base font-semibold text-slate-700 min-w-[150px] text-center select-none">
                 {MONTH_NAMES[month]} {year}
               </span>
-              <button onClick={goToNextMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer">
-                <ChevronRight className="w-3.5 h-3.5" />
+              <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer">
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
             {!isCurrentMonth && (
-              <button onClick={goToToday} className="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-600 font-medium rounded-lg hover:bg-indigo-100 cursor-pointer">
+              <button onClick={goToToday} className="text-sm px-4 py-2 bg-indigo-50 text-indigo-600 font-semibold rounded-xl hover:bg-indigo-100 cursor-pointer">
                 Today
               </button>
             )}
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-            <Search className="w-3.5 h-3.5 text-slate-400" />
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+            <Search className="w-4 h-4 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title, notes..."
-              className="ml-2 text-xs w-44 sm:w-60 bg-transparent outline-none text-slate-600 placeholder:text-slate-400"
+              className="ml-2.5 text-sm w-48 sm:w-64 bg-transparent outline-none text-slate-600 placeholder:text-slate-400"
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400">Filter</span>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-medium text-slate-400">Filter</span>
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setActiveCategory('all')}
-                className={`text-[10px] px-2 py-1 rounded-full border cursor-pointer ${
+                className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer font-medium ${
                   activeCategory === 'all'
                     ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                    : 'border-slate-200 text-slate-400 hover:text-slate-600'
+                    : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
                 }`}
               >
                 All
@@ -138,10 +138,10 @@ export default function Tasks() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`text-[10px] px-2 py-1 rounded-full border cursor-pointer ${
+                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer font-medium ${
                     activeCategory === cat.id
                       ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                      : 'border-slate-200 text-slate-400 hover:text-slate-600'
+                      : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
                   }`}
                 >
                   {cat.name}
@@ -150,23 +150,23 @@ export default function Tasks() {
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+          <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
             <button
               onClick={() => setView('calendar')}
-              className={`text-[10px] px-2.5 py-1 rounded-md flex items-center gap-1.5 cursor-pointer ${
-                view === 'calendar' ? 'bg-indigo-500 text-white' : 'text-slate-500'
+              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
+                view === 'calendar' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
               }`}
             >
-              <CalendarDays className="w-3 h-3" />
+              <CalendarDays className="w-4 h-4" />
               Calendar
             </button>
             <button
               onClick={() => setView('list')}
-              className={`text-[10px] px-2.5 py-1 rounded-md flex items-center gap-1.5 cursor-pointer ${
-                view === 'list' ? 'bg-indigo-500 text-white' : 'text-slate-500'
+              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
+                view === 'list' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
               }`}
             >
-              <List className="w-3 h-3" />
+              <List className="w-4 h-4" />
               List
             </button>
           </div>

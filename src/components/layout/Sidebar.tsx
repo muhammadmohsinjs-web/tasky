@@ -32,23 +32,23 @@ export function Sidebar() {
 
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-60 bg-white border-r border-slate-200 flex flex-col
+        w-64 bg-white border-r border-slate-200/80 flex flex-col shadow-sm
         transform transition-transform duration-200
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
-              <CheckSquare className="w-4 h-4 text-white" />
+        <div className="px-6 py-5 border-b border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md">
+              <CheckSquare className="w-[18px] h-[18px] text-white" />
             </div>
-            <span className="text-lg font-semibold tracking-tight text-slate-800">Tasky</span>
+            <span className="text-xl font-bold tracking-tight text-slate-800">Tasky</span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1 text-slate-400 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 px-4 py-4 space-y-1">
           {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
@@ -56,25 +56,25 @@ export function Sidebar() {
               end={path === '/'}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-all ${
                   isActive
-                    ? 'bg-indigo-50 text-indigo-600'
+                    ? 'bg-indigo-50 text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`
               }
             >
-              <Icon className="w-[18px] h-[18px]" />
+              <Icon className="w-5 h-5" />
               {label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-200">
+        <div className="px-4 py-4 border-t border-slate-200/80">
           <button
             onClick={signOut}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-[15px] font-medium text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-[18px] h-[18px]" />
             Sign out
           </button>
         </div>

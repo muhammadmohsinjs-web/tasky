@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import type { Task, TaskStatus } from '../types'
 
@@ -44,9 +45,11 @@ export function useTasks(year: number, month: number) {
 
     if (error) {
       console.error('Failed to add task:', error)
+      toast.error('Failed to add task')
       return
     }
     setTasks((prev) => [...prev, data as unknown as Task])
+    toast.success('Task added')
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
@@ -65,6 +68,7 @@ export function useTasks(year: number, month: number) {
 
     if (error) {
       console.error('Failed to update task status:', error)
+      toast.error('Failed to update task status')
       setTasks((prev) =>
         prev.map((t) => (t.id === id ? { ...t, status: oldStatus } : t))
       )
@@ -89,8 +93,10 @@ export function useTasks(year: number, month: number) {
 
     if (error) {
       console.error('Failed to update task:', error)
+      toast.error('Failed to save task')
       return
     }
+    toast.success('Task saved')
     if (updates.date || updates.category_id) {
       await fetchTasks()
       return
@@ -104,9 +110,11 @@ export function useTasks(year: number, month: number) {
     const { error } = await supabase.from('tasks').delete().eq('id', id)
     if (error) {
       console.error('Failed to delete task:', error)
+      toast.error('Failed to delete task')
       return
     }
     setTasks((prev) => prev.filter((t) => t.id !== id))
+    toast.success('Task deleted')
   }
 
   return { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask }
