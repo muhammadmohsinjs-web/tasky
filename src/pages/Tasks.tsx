@@ -15,6 +15,7 @@ export default function Tasks() {
   const [month, setMonth] = useState(now.getMonth())
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const { categories, loading: categoriesLoading } = useCategories()
@@ -194,13 +195,13 @@ export default function Tasks() {
               onStatusChange={updateTaskStatus}
               onUpdate={updateTask}
               onDelete={deleteTask}
-              onSelect={setSelectedTask}
+              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
             />
           ) : (
             <TaskList
               tasks={filteredTasks}
               onStatusChange={updateTaskStatus}
-              onSelect={setSelectedTask}
+              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
             />
           )}
         </div>
@@ -208,6 +209,8 @@ export default function Tasks() {
         <TaskDetailPanel
           task={selectedTask}
           categories={categories}
+          mode={panelMode}
+          onModeChange={setPanelMode}
           onClose={() => setSelectedTask(null)}
           onUpdate={updateTask}
           onDelete={(id) => { deleteTask(id); setSelectedTask(null) }}

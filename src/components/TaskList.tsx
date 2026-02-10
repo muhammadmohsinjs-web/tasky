@@ -5,7 +5,7 @@ import { StatusBadge, nextStatus } from './ui/StatusBadge'
 interface Props {
   tasks: Task[]
   onStatusChange: (id: string, status: TaskStatus) => void
-  onSelect: (task: Task) => void
+  onSelect: (task: Task, mode: 'view' | 'edit') => void
 }
 
 export function TaskList({ tasks, onStatusChange, onSelect }: Props) {
@@ -37,10 +37,10 @@ export function TaskList({ tasks, onStatusChange, onSelect }: Props) {
               <div
                 key={task.id}
                 className={`flex items-center gap-3 px-4 py-3 ${categoryAccent(task.category)} border-l-2 hover:bg-slate-50 cursor-pointer`}
-                onClick={() => onSelect(task)}
+                onClick={() => onSelect(task, 'view')}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task, 'view') }}
               >
                 <div onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}>
                   <StatusBadge status={task.status} />

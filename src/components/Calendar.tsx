@@ -15,7 +15,7 @@ interface Props {
   onStatusChange: (id: string, status: TaskStatus) => void
   onUpdate: (id: string, updates: { title?: string; category_id?: string | null }) => void
   onDelete: (id: string) => void
-  onSelect: (task: Task) => void
+  onSelect: (task: Task, mode: 'view' | 'edit') => void
 }
 
 export function Calendar({
@@ -39,9 +39,10 @@ export function Calendar({
   }
 
   const today = new Date()
+  const todayFull = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   const todayStr =
     today.getFullYear() === year && today.getMonth() === month
-      ? `${year}-${String(month + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      ? todayFull
       : null
 
   const cells: (number | null)[] = [
@@ -144,7 +145,9 @@ export function Calendar({
                 ))}
               </div>
 
-              <AddTaskInline date={dateStr} onAdd={onAdd} categories={categories} />
+              {dateStr >= todayFull && (
+                <AddTaskInline date={dateStr} onAdd={onAdd} categories={categories} />
+              )}
             </div>
           )
         })}

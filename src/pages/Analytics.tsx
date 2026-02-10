@@ -101,18 +101,31 @@ export default function Analytics() {
               <div className="text-center py-12 text-sm text-slate-400">No data yet</div>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <Pie
                       data={statusChartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
+                      innerRadius={55}
+                      outerRadius={80}
                       paddingAngle={3}
                       dataKey="value"
+                      label={({
+                        cx, cy, midAngle, outerRadius: or, percent, name,
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      label={((props: any) => `${props.name} ${((props.percent ?? 0) * 100).toFixed(0)}%`) as any}
+                      }: any) => {
+                        if ((percent ?? 0) === 0) return null
+                        const RADIAN = Math.PI / 180
+                        const radius = (or ?? 90) + 18
+                        const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                        const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                        return (
+                          <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11} fill="#64748b">
+                            {`${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                          </text>
+                        )
+                      }}
                       labelLine={false}
                     >
                       {statusChartData.map((entry, index) => (
