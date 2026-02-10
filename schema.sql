@@ -34,6 +34,28 @@ values
   ('Agentic AI', 'agentic-ai', 'bg-violet-100 text-violet-700', 'border-l-violet-400', 'AI')
 on conflict (slug) do nothing;
 
+-- Row Level Security: only authenticated users can access data
+alter table tasks enable row level security;
+alter table categories enable row level security;
+
+create policy "Authenticated users can read tasks"
+  on tasks for select to authenticated using (true);
+create policy "Authenticated users can insert tasks"
+  on tasks for insert to authenticated with check (true);
+create policy "Authenticated users can update tasks"
+  on tasks for update to authenticated using (true) with check (true);
+create policy "Authenticated users can delete tasks"
+  on tasks for delete to authenticated using (true);
+
+create policy "Authenticated users can read categories"
+  on categories for select to authenticated using (true);
+create policy "Authenticated users can insert categories"
+  on categories for insert to authenticated with check (true);
+create policy "Authenticated users can update categories"
+  on categories for update to authenticated using (true) with check (true);
+create policy "Authenticated users can delete categories"
+  on categories for delete to authenticated using (true);
+
 -- Migration from old boolean completed column (run once if upgrading):
 -- alter table tasks add column if not exists status text not null default 'todo' check (status in ('todo', 'inprogress', 'done'));
 -- update tasks set status = 'done' where completed = true;

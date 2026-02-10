@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X, LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { signOut } = useAuth()
 
   return (
     <>
@@ -68,7 +70,13 @@ export function Sidebar() {
         </nav>
 
         <div className="p-4 border-t border-slate-200">
-          <div className="text-[10px] text-slate-400 text-center">Tasky v1.0</div>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
         </div>
       </aside>
     </>
