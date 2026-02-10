@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: 'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth transitions for interactive elements */
+button, input, select {
+  transition: all 0.15s ease;
+}
+
+/* Custom scrollbar for task lists inside cells */
+.task-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.task-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.task-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 3px;
+}
+.task-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Pulse animation for loading */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 1.5s ease-in-out infinite;
+}
+
+/* Fade-in for calendar cells */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Slide-down for inline forms */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out;
+}
