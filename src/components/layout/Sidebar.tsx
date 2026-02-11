@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 
 const NAV_ITEMS = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare },
   { path: '/categories', label: 'Categories', icon: Tag },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
@@ -53,7 +53,7 @@ export function Sidebar() {
             <NavLink
               key={path}
               to={path}
-              end={path === '/'}
+              end={path === '/dashboard'}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-all ${

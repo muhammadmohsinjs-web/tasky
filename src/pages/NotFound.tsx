@@ -21,7 +21,7 @@ export default function NotFound() {
             Go back
           </button>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-500 rounded-xl hover:bg-indigo-600 shadow-sm cursor-pointer transition-colors"
           >
             <Home className="w-4 h-4" />

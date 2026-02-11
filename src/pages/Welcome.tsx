@@ -16,7 +16,7 @@ export default function Welcome() {
   const [shake, setShake] = useState(false)
 
   if (!loading && authenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   const handleSubmit = (e: React.FormEvent) => {

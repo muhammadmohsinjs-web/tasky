@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AppLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
+import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Categories from './pages/Categories'
@@ -14,11 +15,12 @@ export default function App() {
     <>
     <Toaster position="bottom-right" richColors />
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/welcome" element={<Welcome />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/analytics" element={<Analytics />} />
