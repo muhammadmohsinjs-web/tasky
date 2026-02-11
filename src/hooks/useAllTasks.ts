@@ -11,7 +11,7 @@ export function useAllTasks() {
     const { data, error } = await supabase
       .from('tasks')
       .select('id,title,description,notes,category_id,date,status,created_at, category:categories(id,name,slug,color,accent,short_label,created_at)')
-      .order('date', { ascending: false })
+      .order('date', { ascending: false, nullsFirst: false })
 
     if (error) {
       console.error('Failed to fetch all tasks:', error)

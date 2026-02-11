@@ -56,6 +56,10 @@ create policy "Authenticated users can update categories"
 create policy "Authenticated users can delete categories"
   on categories for delete to authenticated using (true);
 
+-- Migration: Make date nullable to support backlog tasks (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ALTER COLUMN date DROP NOT NULL;
+-- CREATE INDEX IF NOT EXISTS idx_tasks_backlog ON tasks (created_at) WHERE date IS NULL;
+
 -- Migration from old boolean completed column (run once if upgrading):
 -- alter table tasks add column if not exists status text not null default 'todo' check (status in ('todo', 'inprogress', 'done'));
 -- update tasks set status = 'done' where completed = true;

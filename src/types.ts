@@ -17,7 +17,7 @@ export interface Task {
   notes?: string | null
   category_id: string | null
   category?: Category | null
-  date: string // ISO date string (YYYY-MM-DD)
+  date: string | null // ISO date string (YYYY-MM-DD) or null for backlog tasks
   status: TaskStatus
   created_at: string
 }

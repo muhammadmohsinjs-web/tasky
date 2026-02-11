@@ -15,7 +15,7 @@ interface Props {
     description?: string | null
     notes?: string | null
     category_id?: string | null
-    date?: string
+    date?: string | null
     status?: TaskStatus
   }) => void
   onDelete: (id: string) => void
@@ -42,7 +42,7 @@ export function TaskDetailPanel({
     setTitle(task.title)
     setDescription(task.description ?? '')
     setNotes(task.notes ?? '')
-    setDate(task.date)
+    setDate(task.date ?? '')
     setCategoryId(task.category_id)
     setStatus(task.status)
   }, [task])
@@ -55,7 +55,7 @@ export function TaskDetailPanel({
       title: title.trim() || task.title,
       description: description?.trim() || null,
       notes: notes?.trim() || null,
-      date,
+      date: date || null,
       category_id: categoryId,
       status,
     })
@@ -63,7 +63,8 @@ export function TaskDetailPanel({
   }
 
   const formattedDate = (() => {
-    const [y, m, d] = (task.date ?? '').split('-')
+    if (!task.date) return 'Unscheduled'
+    const [y, m, d] = task.date.split('-')
     if (!y) return task.date
     const dt = new Date(Number(y), Number(m) - 1, Number(d))
     return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -213,12 +214,26 @@ export function TaskDetailPanel({
 
         <div>
           <label className="text-[11px] font-medium text-slate-500">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
-          />
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+            />
+            {date && (
+              <button
+                onClick={() => setDate('')}
+                className="text-xs px-2.5 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 rounded-lg cursor-pointer"
+                title="Move to backlog"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {!date && (
+            <p className="text-[10px] text-slate-400 mt-1">No date — task will be in backlog</p>
+          )}
         </div>
 
         <div>

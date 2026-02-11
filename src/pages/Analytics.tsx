@@ -52,6 +52,7 @@ export default function Analytics() {
     }
 
     for (const task of tasks) {
+      if (!task.date) continue // skip backlog tasks
       const key = task.date.slice(0, 7) // YYYY-MM
       if (months[key]) {
         months[key].total++

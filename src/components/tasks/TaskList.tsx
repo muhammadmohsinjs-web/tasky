@@ -11,11 +11,16 @@ interface Props {
 export function TaskList({ tasks, onStatusChange, onSelect }: Props) {
   const tasksByDate: Record<string, Task[]> = {}
   for (const task of tasks) {
-    if (!tasksByDate[task.date]) tasksByDate[task.date] = []
-    tasksByDate[task.date].push(task)
+    const key = task.date ?? 'Unscheduled'
+    if (!tasksByDate[key]) tasksByDate[key] = []
+    tasksByDate[key].push(task)
   }
 
-  const dates = Object.keys(tasksByDate).sort()
+  const dates = Object.keys(tasksByDate).sort((a, b) => {
+    if (a === 'Unscheduled') return 1
+    if (b === 'Unscheduled') return -1
+    return a.localeCompare(b)
+  })
 
   if (tasks.length === 0) {
     return (

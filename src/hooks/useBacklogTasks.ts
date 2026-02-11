@@ -5,51 +5,44 @@ import type { Task, TaskStatus } from '../types'
 
 const TASK_SELECT = 'id,title,description,notes,category_id,date,status,created_at, category:categories(id,name,slug,color,accent,short_label,created_at)'
 
-export function useTasks(year: number, month: number) {
+export function useBacklogTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
-    const endDate =
-      month === 11
-        ? `${year + 1}-01-01`
-        : `${year}-${String(month + 2).padStart(2, '0')}-01`
-
     const { data, error } = await supabase
       .from('tasks')
       .select(TASK_SELECT)
-      .gte('date', startDate)
-      .lt('date', endDate)
-      .order('created_at', { ascending: true })
+      .is('date', null)
+      .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Failed to fetch tasks:', error)
+      console.error('Failed to fetch backlog tasks:', error)
     } else {
       setTasks(data as unknown as Task[])
     }
     setLoading(false)
-  }, [year, month])
+  }, [])
 
   useEffect(() => {
     fetchTasks()
   }, [fetchTasks])
 
-  const addTask = async (title: string, categoryId: string, date: string | null) => {
+  const addTask = async (title: string, categoryId: string) => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId, date, status: 'todo' as TaskStatus })
+      .insert({ title, category_id: categoryId, date: null, status: 'todo' as TaskStatus })
       .select(TASK_SELECT)
       .single()
 
     if (error) {
-      console.error('Failed to add task:', error)
+      console.error('Failed to add backlog task:', error)
       toast.error('Failed to add task')
       return
     }
-    setTasks((prev) => [...prev, data as unknown as Task])
-    toast.success('Task added')
+    setTasks((prev) => [data as unknown as Task, ...prev])
+    toast.success('Task added to backlog')
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
@@ -97,7 +90,8 @@ export function useTasks(year: number, month: number) {
       return
     }
     toast.success('Task saved')
-    if (updates.date || updates.category_id) {
+    // If date was assigned, task leaves backlog — refetch to remove it
+    if (updates.date !== undefined && updates.date !== null) {
       await fetchTasks()
       return
     }
@@ -117,5 +111,5 @@ export function useTasks(year: number, month: number) {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask }
+  return { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
 }

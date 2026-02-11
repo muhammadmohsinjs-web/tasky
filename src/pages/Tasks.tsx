@@ -2,18 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { Calendar } from '../components/tasks/Calendar'
 import { TaskDetailPanel } from '../components/tasks/TaskDetailPanel'
 import { TaskList } from '../components/tasks/TaskList'
+import { BacklogList } from '../components/tasks/BacklogList'
 import { useTasks } from '../hooks/useTasks'
+import { useBacklogTasks } from '../hooks/useBacklogTasks'
 import { useCategories } from '../hooks/useCategories'
 import { categoryDot } from '../lib/categoryUtils'
 import { MONTH_NAMES } from '../lib/constants'
-import { ChevronLeft, ChevronRight, Search, CalendarDays, List } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox } from 'lucide-react'
 import type { Task } from '../types'
 
 export default function Tasks() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
-  const [view, setView] = useState<'calendar' | 'list'>('calendar')
+  const [view, setView] = useState<'calendar' | 'list' | 'backlog'>('calendar')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
   const [search, setSearch] = useState('')
@@ -21,6 +23,15 @@ export default function Tasks() {
   const { categories, loading: categoriesLoading } = useCategories()
   const { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask } =
     useTasks(year, month)
+  const {
+    tasks: backlogTasks,
+    loading: backlogLoading,
+    addTask: addBacklogTask,
+    updateTaskStatus: updateBacklogStatus,
+    updateTask: updateBacklogTask,
+    deleteTask: deleteBacklogTask,
+    refetch: refetchBacklog,
+  } = useBacklogTasks()
 
   useEffect(() => {
     if (!selectedTask) return
@@ -170,13 +181,29 @@ export default function Tasks() {
               <List className="w-4 h-4" />
               List
             </button>
+            <button
+              onClick={() => setView('backlog')}
+              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
+                view === 'backlog' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Backlog
+              {backlogTasks.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  view === 'backlog' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {backlogTasks.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </header>
 
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1">
-          {loading || categoriesLoading ? (
+          {(view === 'backlog' ? backlogLoading : loading) || categoriesLoading ? (
             <div className="flex flex-col items-center justify-center py-32 gap-3">
               <div className="flex gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse-soft" style={{ animationDelay: '0ms' }} />
@@ -185,6 +212,15 @@ export default function Tasks() {
               </div>
               <span className="text-xs text-slate-400">Loading tasks...</span>
             </div>
+          ) : view === 'backlog' ? (
+            <BacklogList
+              tasks={backlogTasks}
+              categories={categories}
+              onAdd={addBacklogTask}
+              onStatusChange={updateBacklogStatus}
+              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
+              onDelete={deleteBacklogTask}
+            />
           ) : view === 'calendar' ? (
             <Calendar
               year={year}
@@ -212,8 +248,31 @@ export default function Tasks() {
           mode={panelMode}
           onModeChange={setPanelMode}
           onClose={() => setSelectedTask(null)}
-          onUpdate={updateTask}
-          onDelete={(id) => { deleteTask(id); setSelectedTask(null) }}
+          onUpdate={async (id, updates) => {
+            const isBacklogTask = selectedTask?.date === null
+            if (isBacklogTask) {
+              await updateBacklogTask(id, updates)
+              // If a date was assigned, the task leaves backlog — also refetch calendar tasks
+              if (updates.date) {
+                await refetchBacklog()
+              }
+            } else {
+              await updateTask(id, updates)
+              // If date was cleared, task moves to backlog — refetch backlog
+              if (updates.date === null) {
+                await refetchBacklog()
+              }
+            }
+          }}
+          onDelete={(id) => {
+            const isBacklogTask = selectedTask?.date === null
+            if (isBacklogTask) {
+              deleteBacklogTask(id)
+            } else {
+              deleteTask(id)
+            }
+            setSelectedTask(null)
+          }}
         />
       </div>
     </div>

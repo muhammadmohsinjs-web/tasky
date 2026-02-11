@@ -96,7 +96,7 @@ export default function Dashboard() {
                     <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
                       {task.title}
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{task.date}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">{task.date ?? 'Unscheduled'}</div>
                   </div>
                   <CategoryBadge category={task.category} />
                 </div>

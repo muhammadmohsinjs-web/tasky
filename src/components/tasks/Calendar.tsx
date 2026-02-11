@@ -34,6 +34,7 @@ export function Calendar({
 
   const tasksByDate: Record<string, Task[]> = {}
   for (const task of tasks) {
+    if (!task.date) continue
     if (!tasksByDate[task.date]) tasksByDate[task.date] = []
     tasksByDate[task.date].push(task)
   }
