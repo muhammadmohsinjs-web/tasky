@@ -1,8 +1,8 @@
-import type { Task, Category, TaskStatus } from '../types'
+import type { Task, Category, TaskStatus } from '../../types'
 import { TaskItem } from './TaskItem'
 import { AddTaskInline } from './AddTaskInline'
 import { CheckCircle2 } from 'lucide-react'
-import { STATUS_CONFIG } from '../lib/constants'
+import { STATUS_CONFIG } from '../../lib/constants'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 

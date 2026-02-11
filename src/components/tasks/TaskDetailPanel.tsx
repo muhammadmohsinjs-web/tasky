@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { Category, Task, TaskStatus } from '../types'
-import { categoryStyle, categoryLabel } from './categoryUtils'
-import { STATUS_CONFIG } from '../lib/constants'
+import type { Category, Task, TaskStatus } from '../../types'
+import { categoryStyle, categoryLabel } from '../../lib/categoryUtils'
+import { STATUS_CONFIG } from '../../lib/constants'
 import { X, Trash2, Pencil } from 'lucide-react'
 
 interface Props {

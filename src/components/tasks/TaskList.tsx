@@ -1,6 +1,6 @@
-import type { Task, TaskStatus } from '../types'
-import { categoryAccent, categoryLabel, categoryStyle } from './categoryUtils'
-import { StatusBadge, nextStatus } from './ui/StatusBadge'
+import type { Task, TaskStatus } from '../../types'
+import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
+import { StatusBadge, nextStatus } from '../ui/StatusBadge'
 
 interface Props {
   tasks: Task[]

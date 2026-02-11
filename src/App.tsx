@@ -1,7 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AppLayout } from './components/layout/AppLayout'
-import { ProtectedRoute } from './components/ProtectedRoute'
+import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Categories from './pages/Categories'

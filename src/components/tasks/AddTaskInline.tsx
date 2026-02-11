@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Plus, CalendarDays } from 'lucide-react'
-import type { Category } from '../types'
+import type { Category } from '../../types'
 
 interface Props {
   date: string

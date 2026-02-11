@@ -1,5 +1,5 @@
 import type { Category } from '../../types'
-import { categoryStyle, categoryLabel } from '../categoryUtils'
+import { categoryStyle, categoryLabel } from '../../lib/categoryUtils'
 
 interface Props {
   category?: Category | null

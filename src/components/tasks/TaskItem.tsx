@@ -1,7 +1,7 @@
-import type { Task, Category, TaskStatus } from '../types'
-import { categoryAccent } from './categoryUtils'
-import { nextStatus } from './ui/StatusBadge'
-import { STATUS_CONFIG } from '../lib/constants'
+import type { Task, Category, TaskStatus } from '../../types'
+import { categoryAccent } from '../../lib/categoryUtils'
+import { nextStatus } from '../ui/StatusBadge'
+import { STATUS_CONFIG } from '../../lib/constants'
 import { Circle, Clock, CheckCircle2, Eye, Pencil, Trash2 } from 'lucide-react'
 
 const STATUS_ICONS = {
