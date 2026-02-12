@@ -23,7 +23,7 @@ export default function Tasks() {
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [bulkAddOpen, setBulkAddOpen] = useState(false)
   const { categories, loading: categoriesLoading } = useCategories()
-  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: refetchCalendar } =
+  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkReschedule, bulkMoveToBacklog, bulkDelete, refetch: refetchCalendar } =
     useTasks(year, month)
   const {
     tasks: backlogTasks,
@@ -254,6 +254,16 @@ export default function Tasks() {
               tasks={filteredTasks}
               onStatusChange={updateTaskStatus}
               onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
+              onBulkStatusChange={bulkUpdateStatus}
+              onBulkReschedule={async (ids, date) => {
+                await bulkReschedule(ids, date)
+                await refetchCalendar()
+              }}
+              onBulkMoveToBacklog={async (ids) => {
+                await bulkMoveToBacklog(ids)
+                await refetchBacklog()
+              }}
+              onBulkDelete={bulkDelete}
             />
           )}
         </div>

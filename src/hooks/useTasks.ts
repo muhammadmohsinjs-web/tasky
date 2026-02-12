@@ -139,5 +139,76 @@ export function useTasks(year: number, month: number) {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
+  const bulkUpdateStatus = async (ids: string[], status: TaskStatus) => {
+    const oldTasks = tasks.filter((t) => ids.includes(t.id))
+    setTasks((prev) =>
+      prev.map((t) => (ids.includes(t.id) ? { ...t, status } : t))
+    )
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status })
+      .in('id', ids)
+
+    if (error) {
+      console.error('Failed to bulk update status:', error)
+      toast.error('Failed to update tasks')
+      setTasks((prev) =>
+        prev.map((t) => {
+          const old = oldTasks.find((o) => o.id === t.id)
+          return old ? { ...t, status: old.status } : t
+        })
+      )
+      return
+    }
+    const label = status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do'
+    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} marked as ${label}`)
+  }
+
+  const bulkReschedule = async (ids: string[], date: string) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ date })
+      .in('id', ids)
+
+    if (error) {
+      console.error('Failed to bulk reschedule:', error)
+      toast.error('Failed to reschedule tasks')
+      return
+    }
+    await fetchTasks()
+    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} rescheduled`)
+  }
+
+  const bulkMoveToBacklog = async (ids: string[]) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ date: null })
+      .in('id', ids)
+
+    if (error) {
+      console.error('Failed to move tasks to backlog:', error)
+      toast.error('Failed to move tasks to backlog')
+      return
+    }
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} moved to backlog`)
+  }
+
+  const bulkDelete = async (ids: string[]) => {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', ids)
+
+    if (error) {
+      console.error('Failed to bulk delete tasks:', error)
+      toast.error('Failed to delete tasks')
+      return
+    }
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
+  }
+
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkReschedule, bulkMoveToBacklog, bulkDelete, refetch: fetchTasks }
 }
