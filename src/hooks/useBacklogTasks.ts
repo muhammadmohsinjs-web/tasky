@@ -45,6 +45,28 @@ export function useBacklogTasks() {
     toast.success('Task added to backlog')
   }
 
+  const addTasks = async (items: { title: string; categoryId: string }[]) => {
+    const rows = items.map((t) => ({
+      title: t.title,
+      category_id: t.categoryId,
+      date: null,
+      status: 'todo' as TaskStatus,
+    }))
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert(rows)
+      .select(TASK_SELECT)
+
+    if (error) {
+      console.error('Failed to add backlog tasks:', error)
+      toast.error('Failed to add tasks')
+      return
+    }
+    setTasks((prev) => [...(data as unknown as Task[]), ...prev])
+    toast.success(`${items.length} tasks added to backlog`)
+  }
+
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
@@ -111,5 +133,5 @@ export function useBacklogTasks() {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
 }

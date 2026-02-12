@@ -3,12 +3,13 @@ import { Calendar } from '../components/tasks/Calendar'
 import { TaskDetailPanel } from '../components/tasks/TaskDetailPanel'
 import { TaskList } from '../components/tasks/TaskList'
 import { BacklogList } from '../components/tasks/BacklogList'
+import { BulkAddModal } from '../components/tasks/BulkAddModal'
 import { useTasks } from '../hooks/useTasks'
 import { useBacklogTasks } from '../hooks/useBacklogTasks'
 import { useCategories } from '../hooks/useCategories'
 import { categoryDot } from '../lib/categoryUtils'
 import { MONTH_NAMES } from '../lib/constants'
-import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox, Plus } from 'lucide-react'
 import type { Task } from '../types'
 
 export default function Tasks() {
@@ -20,13 +21,15 @@ export default function Tasks() {
   const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
+  const [bulkAddOpen, setBulkAddOpen] = useState(false)
   const { categories, loading: categoriesLoading } = useCategories()
-  const { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask } =
+  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask } =
     useTasks(year, month)
   const {
     tasks: backlogTasks,
     loading: backlogLoading,
     addTask: addBacklogTask,
+    addTasks: addBacklogTasks,
     updateTaskStatus: updateBacklogStatus,
     updateTask: updateBacklogTask,
     deleteTask: deleteBacklogTask,
@@ -96,6 +99,14 @@ export default function Tasks() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setBulkAddOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Bulk Add
+            </button>
+
             {totalTasks > 0 && (
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-medium bg-slate-50 px-3 py-1.5 rounded-lg">
                 <span>{doneTasks}/{totalTasks} done</span>
@@ -275,6 +286,14 @@ export default function Tasks() {
           }}
         />
       </div>
+
+      <BulkAddModal
+        open={bulkAddOpen}
+        onClose={() => setBulkAddOpen(false)}
+        categories={categories}
+        onAddToDate={addTasks}
+        onAddToBacklog={addBacklogTasks}
+      />
     </div>
   )
 }

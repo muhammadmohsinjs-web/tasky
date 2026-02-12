@@ -52,6 +52,28 @@ export function useTasks(year: number, month: number) {
     toast.success('Task added')
   }
 
+  const addTasks = async (items: { title: string; categoryId: string; date: string }[]) => {
+    const rows = items.map((t) => ({
+      title: t.title,
+      category_id: t.categoryId,
+      date: t.date,
+      status: 'todo' as TaskStatus,
+    }))
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert(rows)
+      .select(TASK_SELECT)
+
+    if (error) {
+      console.error('Failed to add tasks:', error)
+      toast.error('Failed to add tasks')
+      return
+    }
+    setTasks((prev) => [...prev, ...(data as unknown as Task[])])
+    toast.success(`${items.length} tasks added`)
+  }
+
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
@@ -117,5 +139,5 @@ export function useTasks(year: number, month: number) {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, updateTaskStatus, updateTask, deleteTask }
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask }
 }
