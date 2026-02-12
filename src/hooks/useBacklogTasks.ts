@@ -133,5 +133,20 @@ export function useBacklogTasks() {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
+  const scheduleTasks = async (ids: string[], date: string) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ date })
+      .in('id', ids)
+
+    if (error) {
+      console.error('Failed to schedule tasks:', error)
+      toast.error('Failed to schedule tasks')
+      return
+    }
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} scheduled`)
+  }
+
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, scheduleTasks, refetch: fetchTasks }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Inbox, Trash2 } from 'lucide-react'
+import { Plus, Inbox, Trash2, CalendarDays, X } from 'lucide-react'
 import type { Task, Category, TaskStatus } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
@@ -11,17 +11,30 @@ interface Props {
   onStatusChange: (id: string, status: TaskStatus) => void
   onSelect: (task: Task, mode: 'view' | 'edit') => void
   onDelete: (id: string) => void
+  onSchedule: (ids: string[], date: string) => Promise<void>
 }
 
-export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect, onDelete }: Props) {
+export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect, onDelete, onSchedule }: Props) {
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduling, setScheduling] = useState(false)
 
   useEffect(() => {
     if (!categoryId && categories[0]?.id) {
       setCategoryId(categories[0].id)
     }
   }, [categories, categoryId])
+
+  // Clear selection when tasks change (e.g. after scheduling removes them)
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const taskIds = new Set(tasks.map((t) => t.id))
+      const next = new Set([...prev].filter((id) => taskIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [tasks])
 
   const handleSubmit = () => {
     const trimmed = title.trim()
@@ -33,6 +46,43 @@ export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSubmit()
   }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === tasks.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(tasks.map((t) => t.id)))
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setScheduleDate('')
+  }
+
+  const handleSchedule = async () => {
+    if (selectedIds.size === 0 || !scheduleDate) return
+    setScheduling(true)
+    try {
+      await onSchedule([...selectedIds], scheduleDate)
+      setSelectedIds(new Set())
+      setScheduleDate('')
+    } finally {
+      setScheduling(false)
+    }
+  }
+
+  const hasSelection = selectedIds.size > 0
+  const allSelected = tasks.length > 0 && selectedIds.size === tasks.length
 
   return (
     <div className="animate-fade-in">
@@ -78,47 +128,105 @@ export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${hasSelection ? 'mb-20' : ''}`}>
           <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-600">Unscheduled</span>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-600">Unscheduled</span>
+            </div>
             <span className="text-xs text-slate-400">{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`group flex items-center gap-3 px-4 py-3 ${categoryAccent(task.category)} border-l-2 hover:bg-slate-50 cursor-pointer`}
-                onClick={() => onSelect(task, 'view')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task, 'view') }}
-              >
-                <div onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}>
-                  <StatusBadge status={task.status} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                    {task.title}
-                  </div>
-                  {task.description && (
-                    <div className="text-xs text-slate-400 mt-0.5 truncate">
-                      {task.description}
-                    </div>
-                  )}
-                </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
-                  {categoryLabel(task.category)}
-                </span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Delete"
+            {tasks.map((task) => {
+              const isSelected = selectedIds.has(task.id)
+              return (
+                <div
+                  key={task.id}
+                  className={`group flex items-center gap-3 px-4 py-3 ${categoryAccent(task.category)} border-l-2 hover:bg-slate-50 cursor-pointer ${
+                    isSelected ? 'bg-indigo-50/50' : ''
+                  }`}
+                  onClick={() => onSelect(task, 'view')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task, 'view') }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(task.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer shrink-0"
+                  />
+                  <div onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}>
+                    <StatusBadge status={task.status} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                      {task.title}
+                    </div>
+                    {task.description && (
+                      <div className="text-xs text-slate-400 mt-0.5 truncate">
+                        {task.description}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
+                    {categoryLabel(task.category)}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
+        </div>
+      )}
+
+      {/* Floating action bar */}
+      {hasSelection && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 px-5 py-3 flex items-center gap-4 animate-fade-in">
+          <span className="text-sm font-semibold text-slate-700">
+            {selectedIds.size} selected
+          </span>
+
+          <div className="h-5 w-px bg-slate-200" />
+
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              value={scheduleDate}
+              onChange={(e) => setScheduleDate(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+            />
+          </div>
+
+          <button
+            onClick={handleSchedule}
+            disabled={!scheduleDate || scheduling}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CalendarDays className="w-4 h-4" />
+            {scheduling ? 'Scheduling...' : 'Schedule'}
+          </button>
+
+          <button
+            onClick={clearSelection}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+            title="Clear selection"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

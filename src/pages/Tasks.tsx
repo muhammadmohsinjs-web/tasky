@@ -23,7 +23,7 @@ export default function Tasks() {
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [bulkAddOpen, setBulkAddOpen] = useState(false)
   const { categories, loading: categoriesLoading } = useCategories()
-  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask } =
+  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: refetchCalendar } =
     useTasks(year, month)
   const {
     tasks: backlogTasks,
@@ -33,6 +33,7 @@ export default function Tasks() {
     updateTaskStatus: updateBacklogStatus,
     updateTask: updateBacklogTask,
     deleteTask: deleteBacklogTask,
+    scheduleTasks: scheduleBacklogTasks,
     refetch: refetchBacklog,
   } = useBacklogTasks()
 
@@ -231,6 +232,10 @@ export default function Tasks() {
               onStatusChange={updateBacklogStatus}
               onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
               onDelete={deleteBacklogTask}
+              onSchedule={async (ids, date) => {
+                await scheduleBacklogTasks(ids, date)
+                await refetchCalendar()
+              }}
             />
           ) : view === 'calendar' ? (
             <Calendar

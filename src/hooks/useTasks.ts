@@ -139,5 +139,5 @@ export function useTasks(year: number, month: number) {
     toast.success('Task deleted')
   }
 
-  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask }
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, refetch: fetchTasks }
 }
