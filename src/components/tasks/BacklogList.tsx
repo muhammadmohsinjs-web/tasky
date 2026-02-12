@@ -1,25 +1,30 @@
 import { useEffect, useState } from 'react'
-import { Plus, Inbox, Trash2, CalendarDays, X } from 'lucide-react'
+import { Plus, Inbox, Trash2, CalendarDays, X, CheckCircle } from 'lucide-react'
 import type { Task, Category, TaskStatus } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
 
 interface Props {
   tasks: Task[]
+  totalCount?: number
   categories: Category[]
   onAdd: (title: string, categoryId: string) => void
   onStatusChange: (id: string, status: TaskStatus) => void
   onSelect: (task: Task, mode: 'view' | 'edit') => void
   onDelete: (id: string) => void
   onSchedule: (ids: string[], date: string) => Promise<void>
+  onBulkStatusChange: (ids: string[], status: TaskStatus) => Promise<void>
+  onBulkDelete: (ids: string[]) => Promise<void>
 }
 
-export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect, onDelete, onSchedule }: Props) {
+export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChange, onSelect, onDelete, onSchedule, onBulkStatusChange, onBulkDelete }: Props) {
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduling, setScheduling] = useState(false)
+  const [bulkStatus, setBulkStatus] = useState<TaskStatus>('done')
+  const [acting, setActing] = useState(false)
 
   useEffect(() => {
     if (!categoryId && categories[0]?.id) {
@@ -139,7 +144,12 @@ export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect
               />
               <span className="text-xs font-semibold text-slate-600">Unscheduled</span>
             </div>
-            <span className="text-xs text-slate-400">{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span>
+            <span className="text-xs text-slate-400">
+              {totalCount !== undefined && totalCount !== tasks.length
+                ? `${tasks.length} of ${totalCount} tasks`
+                : `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`
+              }
+            </span>
           </div>
           <div className="divide-y divide-slate-100">
             {tasks.map((task) => {
@@ -194,32 +204,84 @@ export function BacklogList({ tasks, categories, onAdd, onStatusChange, onSelect
 
       {/* Floating action bar */}
       {hasSelection && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 px-5 py-3 flex items-center gap-4 animate-fade-in">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 px-5 py-3 flex items-center gap-3 animate-fade-in flex-wrap justify-center">
           <span className="text-sm font-semibold text-slate-700">
             {selectedIds.size} selected
           </span>
 
           <div className="h-5 w-px bg-slate-200" />
 
-          <div className="flex items-center gap-2">
+          {/* Status change */}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as TaskStatus)}
+              className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+            >
+              <option value="todo">To Do</option>
+              <option value="inprogress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
+            <button
+              onClick={async () => {
+                if (selectedIds.size === 0) return
+                setActing(true)
+                try {
+                  await onBulkStatusChange([...selectedIds], bulkStatus)
+                  setSelectedIds(new Set())
+                } finally {
+                  setActing(false)
+                }
+              }}
+              disabled={acting}
+              className="px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Apply
+            </button>
+          </div>
+
+          <div className="h-5 w-px bg-slate-200" />
+
+          {/* Schedule */}
+          <div className="flex items-center gap-1.5">
             <CalendarDays className="w-4 h-4 text-slate-400" />
             <input
               type="date"
               value={scheduleDate}
               onChange={(e) => setScheduleDate(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+              className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
             />
+            <button
+              onClick={handleSchedule}
+              disabled={!scheduleDate || scheduling}
+              className="px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {scheduling ? 'Scheduling...' : 'Schedule'}
+            </button>
           </div>
 
+          <div className="h-5 w-px bg-slate-200" />
+
+          {/* Delete */}
           <button
-            onClick={handleSchedule}
-            disabled={!scheduleDate || scheduling}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={async () => {
+              if (selectedIds.size === 0) return
+              setActing(true)
+              try {
+                await onBulkDelete([...selectedIds])
+                setSelectedIds(new Set())
+              } finally {
+                setActing(false)
+              }
+            }}
+            disabled={acting}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <CalendarDays className="w-4 h-4" />
-            {scheduling ? 'Scheduling...' : 'Schedule'}
+            <Trash2 className="w-4 h-4" />
+            Delete
           </button>
 
+          {/* Clear selection */}
           <button
             onClick={clearSelection}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"

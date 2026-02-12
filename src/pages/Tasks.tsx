@@ -33,6 +33,8 @@ export default function Tasks() {
     updateTaskStatus: updateBacklogStatus,
     updateTask: updateBacklogTask,
     deleteTask: deleteBacklogTask,
+    bulkUpdateStatus: bulkUpdateBacklogStatus,
+    bulkDelete: bulkDeleteBacklog,
     scheduleTasks: scheduleBacklogTasks,
     refetch: refetchBacklog,
   } = useBacklogTasks()
@@ -64,8 +66,8 @@ export default function Tasks() {
   const doneTasks = tasks.filter((t) => t.status === 'done').length
   const totalTasks = tasks.length
 
-  const filteredTasks = useMemo(() => {
-    let result = tasks
+  const filterBySearchAndCategory = (list: Task[]) => {
+    let result = list
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category_id === activeCategory)
     }
@@ -78,7 +80,10 @@ export default function Tasks() {
       )
     }
     return result
-  }, [tasks, activeCategory, search])
+  }
+
+  const filteredTasks = useMemo(() => filterBySearchAndCategory(tasks), [tasks, activeCategory, search])
+  const filteredBacklogTasks = useMemo(() => filterBySearchAndCategory(backlogTasks), [backlogTasks, activeCategory, search])
 
   return (
     <div className="p-6 lg:px-10 lg:py-8">
@@ -226,7 +231,8 @@ export default function Tasks() {
             </div>
           ) : view === 'backlog' ? (
             <BacklogList
-              tasks={backlogTasks}
+              tasks={filteredBacklogTasks}
+              totalCount={backlogTasks.length}
               categories={categories}
               onAdd={addBacklogTask}
               onStatusChange={updateBacklogStatus}
@@ -236,6 +242,8 @@ export default function Tasks() {
                 await scheduleBacklogTasks(ids, date)
                 await refetchCalendar()
               }}
+              onBulkStatusChange={bulkUpdateBacklogStatus}
+              onBulkDelete={bulkDeleteBacklog}
             />
           ) : view === 'calendar' ? (
             <Calendar
