@@ -59,6 +59,23 @@ export function TaskDetailPanel({
     fetchAttachments()
   }, [task, fetchAttachments])
 
+  // ESC key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    if (task) {
+      window.addEventListener('keydown', handleKeyDown)
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [task, onClose])
+
   if (!task) return null
   const activeCategory = categories.find((c) => c.id === categoryId) ?? task.category
 
@@ -113,7 +130,7 @@ export function TaskDetailPanel({
 
   if (mode === 'view') {
     return (
-      <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur">
+      <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
         <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <div className="text-[11px] uppercase tracking-wide text-slate-400">Task details</div>
@@ -256,7 +273,7 @@ export function TaskDetailPanel({
   }
 
   return (
-    <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur">
+    <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
       <div className="p-5 border-b border-slate-200 flex items-center justify-between">
         <div>
           <div className="text-[11px] uppercase tracking-wide text-slate-400">Task details</div>

@@ -13,7 +13,7 @@ import NotFound from './pages/NotFound'
 export default function App() {
   return (
     <>
-    <Toaster position="bottom-right" richColors />
+    <Toaster position="bottom-right" richColors visibleToasts={3} />
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/welcome" element={<Welcome />} />

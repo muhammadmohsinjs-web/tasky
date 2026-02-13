@@ -90,7 +90,14 @@ export default function Dashboard() {
               </div>
             ) : (
               recentTasks.map((task) => (
-                <div key={task.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50">
+                <div
+                  key={task.id}
+                  onClick={() => navigate('/tasks')}
+                  className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate('/tasks') }}
+                >
                   <StatusBadge status={task.status} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
@@ -99,6 +106,7 @@ export default function Dashboard() {
                     <div className="text-[11px] text-slate-400 mt-0.5">{task.date ?? 'Unscheduled'}</div>
                   </div>
                   <CategoryBadge category={task.category} />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               ))
             )}

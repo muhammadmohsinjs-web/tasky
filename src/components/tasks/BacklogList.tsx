@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Inbox, Trash2, CalendarDays, X, CheckCircle, Link as LinkIcon } from 'lucide-react'
+import { Plus, Inbox, Trash2, CalendarDays, X, CheckCircle, Link as LinkIcon, Loader2 } from 'lucide-react'
 import type { Task, Category, TaskStatus, TaskPriority } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
@@ -138,11 +138,19 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
 
       {/* Backlog tasks */}
       {tasks.length === 0 ? (
-        <div className="text-center py-16 flex flex-col items-center gap-3">
-          <Inbox className="w-10 h-10 text-slate-300" />
+        <div className="text-center py-20 flex flex-col items-center gap-4">
+          <div className="bg-indigo-50 p-4 rounded-full">
+            <Inbox className="w-10 h-10 text-indigo-400" />
+          </div>
           <div>
-            <p className="text-sm text-slate-400">No backlog tasks</p>
-            <p className="text-xs text-slate-300 mt-1">Add tasks without a date to build your backlog.</p>
+            <h3 className="text-base font-semibold text-slate-700 mb-1">Your backlog is empty</h3>
+            <p className="text-sm text-slate-400">Add unscheduled tasks above to organize your work</p>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-lg">
+              <span className="font-medium text-slate-500">Tip:</span>
+              <span>Use the input above to quickly add tasks</span>
+            </div>
           </div>
         </div>
       ) : (
@@ -222,6 +230,11 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
       {/* Floating action bar */}
       {hasSelection && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 px-5 py-3 flex items-center gap-3 animate-fade-in flex-wrap justify-center">
+          {(acting || scheduling) && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+              <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+            </div>
+          )}
           <span className="text-sm font-semibold text-slate-700">
             {selectedIds.size} selected
           </span>

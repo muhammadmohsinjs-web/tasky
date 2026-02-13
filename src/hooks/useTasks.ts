@@ -9,7 +9,7 @@ export function useTasks(year: number, month: number) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const endDate =
@@ -23,6 +23,10 @@ export function useTasks(year: number, month: number) {
       .gte('date', startDate)
       .lt('date', endDate)
       .order('created_at', { ascending: true })
+      .abortSignal(signal)
+
+    // Don't update state if request was aborted
+    if (signal?.aborted) return
 
     if (error) {
       console.error('Failed to fetch tasks:', error)
@@ -33,7 +37,12 @@ export function useTasks(year: number, month: number) {
   }, [year, month])
 
   useEffect(() => {
-    fetchTasks()
+    const abortController = new AbortController()
+    fetchTasks(abortController.signal)
+
+    return () => {
+      abortController.abort()
+    }
   }, [fetchTasks])
 
   const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium') => {
@@ -78,7 +87,8 @@ export function useTasks(year: number, month: number) {
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
-    const oldStatus = task.status
+    // Deep clone the entire task object for proper rollback
+    const oldTask = JSON.parse(JSON.stringify(task))
 
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
@@ -92,8 +102,9 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to update task status:', error)
       toast.error('Failed to update task status')
+      // Rollback to the full old task state
       setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: oldStatus } : t))
+        prev.map((t) => (t.id === id ? oldTask : t))
       )
     }
   }
@@ -142,7 +153,8 @@ export function useTasks(year: number, month: number) {
   }
 
   const bulkUpdateStatus = async (ids: string[], status: TaskStatus) => {
-    const oldTasks = tasks.filter((t) => ids.includes(t.id))
+    // Deep clone affected tasks for proper rollback
+    const oldTasks = JSON.parse(JSON.stringify(tasks.filter((t) => ids.includes(t.id))))
     setTasks((prev) =>
       prev.map((t) => (ids.includes(t.id) ? { ...t, status } : t))
     )
@@ -155,10 +167,11 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk update status:', error)
       toast.error('Failed to update tasks')
+      // Rollback to the full old task states
       setTasks((prev) =>
         prev.map((t) => {
-          const old = oldTasks.find((o) => o.id === t.id)
-          return old ? { ...t, status: old.status } : t
+          const old = oldTasks.find((o: Task) => o.id === t.id)
+          return old || t
         })
       )
       return

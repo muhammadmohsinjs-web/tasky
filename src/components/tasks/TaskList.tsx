@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, Inbox, Trash2, X, Link as LinkIcon } from 'lucide-react'
+import { CalendarDays, Inbox, Trash2, X, Link as LinkIcon, Loader2 } from 'lucide-react'
 import type { Task, TaskStatus } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
@@ -196,6 +196,11 @@ export function TaskList({ tasks, onStatusChange, onSelect, onBulkStatusChange, 
       {/* Floating action bar */}
       {hasSelection && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 px-5 py-3 flex items-center gap-3 animate-fade-in flex-wrap justify-center">
+          {acting && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+              <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+            </div>
+          )}
           <span className="text-sm font-semibold text-slate-700">
             {selectedIds.size} selected
           </span>

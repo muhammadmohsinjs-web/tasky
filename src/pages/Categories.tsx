@@ -272,19 +272,28 @@ export default function Categories() {
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 {deleteConfirm === cat.id ? (
-                  <div className="flex items-center gap-1 ml-1">
-                    <button
-                      onClick={() => handleDelete(cat.id)}
-                      className="text-[10px] px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 cursor-pointer"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="text-[10px] px-2 py-1 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      Cancel
-                    </button>
+                  <div className="flex flex-col gap-1.5 ml-1 bg-red-50 p-2 rounded-lg border border-red-200 -mr-2 -mb-2 mt-1">
+                    <p className="text-[10px] text-red-600 font-medium">
+                      {breakdown.total > 0 ? (
+                        <>Delete category? {breakdown.total} task{breakdown.total !== 1 ? 's' : ''} will lose this category.</>
+                      ) : (
+                        'Delete this category?'
+                      )}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(cat.id)}
+                        className="text-[10px] px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 cursor-pointer font-medium"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="text-[10px] px-2 py-1 text-slate-500 hover:text-slate-700 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <button

@@ -20,6 +20,7 @@ export default function Tasks() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [bulkAddOpen, setBulkAddOpen] = useState(false)
   const { categories, loading: categoriesLoading } = useCategories()
@@ -38,6 +39,15 @@ export default function Tasks() {
     scheduleTasks: scheduleBacklogTasks,
     refetch: refetchBacklog,
   } = useBacklogTasks()
+
+  // Debounce search input with 300ms delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [search])
 
   useEffect(() => {
     if (!selectedTask) return
@@ -71,8 +81,8 @@ export default function Tasks() {
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category_id === activeCategory)
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase()
       result = result.filter((t) =>
         t.title.toLowerCase().includes(q) ||
         (t.description ?? '').toLowerCase().includes(q) ||
@@ -82,8 +92,8 @@ export default function Tasks() {
     return result
   }
 
-  const filteredTasks = useMemo(() => filterBySearchAndCategory(tasks), [tasks, activeCategory, search])
-  const filteredBacklogTasks = useMemo(() => filterBySearchAndCategory(backlogTasks), [backlogTasks, activeCategory, search])
+  const filteredTasks = useMemo(() => filterBySearchAndCategory(tasks), [tasks, activeCategory, debouncedSearch])
+  const filteredBacklogTasks = useMemo(() => filterBySearchAndCategory(backlogTasks), [backlogTasks, activeCategory, debouncedSearch])
 
   return (
     <div className="p-6 lg:px-10 lg:py-8">
