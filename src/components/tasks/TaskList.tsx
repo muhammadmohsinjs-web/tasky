@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, Inbox, Trash2, X } from 'lucide-react'
+import { CalendarDays, Inbox, Trash2, X, Link as LinkIcon } from 'lucide-react'
 import type { Task, TaskStatus } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
+import { PriorityBadge } from '../ui/PriorityBadge'
 
 interface Props {
   tasks: Task[]
@@ -177,6 +178,10 @@ export function TaskList({ tasks, onStatusChange, onSelect, onBulkStatusChange, 
                         </div>
                       )}
                     </div>
+                    <PriorityBadge priority={task.priority} />
+                    {task.links && task.links.length > 0 && (
+                      <LinkIcon className="w-3.5 h-3.5 text-indigo-400" title={`${task.links.length} link(s)`} />
+                    )}
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
                       {categoryLabel(task.category)}
                     </span>

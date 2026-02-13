@@ -1,4 +1,4 @@
-import type { TaskStatus } from '../types'
+import type { TaskStatus, TaskPriority } from '../types'
 
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -29,6 +29,36 @@ export const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; d
   },
 }
 
+export const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; icon: string }> = {
+  low: {
+    label: 'Low',
+    color: 'text-slate-400',
+    icon: 'flag',
+  },
+  medium: {
+    label: 'Medium',
+    color: 'text-blue-500',
+    icon: 'flag',
+  },
+  high: {
+    label: 'High',
+    color: 'text-orange-500',
+    icon: 'flag',
+  },
+  urgent: {
+    label: 'Urgent',
+    color: 'text-red-500',
+    icon: 'flag',
+  },
+}
+
+export const CATEGORY_ICONS = [
+  'tag', 'code', 'cloud', 'brain', 'database', 'globe',
+  'server', 'layers', 'package', 'cpu', 'terminal', 'git-branch',
+  'book', 'lightbulb', 'rocket', 'shield', 'zap', 'heart',
+  'star', 'target'
+] as const
+
 export const CATEGORY_PALETTE = [
   { name: 'Blue', color: 'bg-blue-100 text-blue-700', accent: 'border-l-blue-400', hex: '#3b82f6' },
   { name: 'Amber', color: 'bg-amber-100 text-amber-700', accent: 'border-l-amber-400', hex: '#f59e0b' },
@@ -38,4 +68,10 @@ export const CATEGORY_PALETTE = [
   { name: 'Cyan', color: 'bg-cyan-100 text-cyan-700', accent: 'border-l-cyan-400', hex: '#06b6d4' },
   { name: 'Orange', color: 'bg-orange-100 text-orange-700', accent: 'border-l-orange-400', hex: '#f97316' },
   { name: 'Pink', color: 'bg-pink-100 text-pink-700', accent: 'border-l-pink-400', hex: '#ec4899' },
+  { name: 'Indigo', color: 'bg-indigo-100 text-indigo-700', accent: 'border-l-indigo-400', hex: '#6366f1' },
+  { name: 'Teal', color: 'bg-teal-100 text-teal-700', accent: 'border-l-teal-400', hex: '#14b8a6' },
+  { name: 'Purple', color: 'bg-purple-100 text-purple-700', accent: 'border-l-purple-400', hex: '#a855f7' },
+  { name: 'Lime', color: 'bg-lime-100 text-lime-700', accent: 'border-l-lime-400', hex: '#84cc16' },
+  { name: 'Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700', accent: 'border-l-fuchsia-400', hex: '#d946ef' },
+  { name: 'Sky', color: 'bg-sky-100 text-sky-700', accent: 'border-l-sky-400', hex: '#0ea5e9' },
 ]

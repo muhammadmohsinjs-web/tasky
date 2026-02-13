@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Plus, Inbox, CalendarDays } from 'lucide-react'
-import type { Category } from '../../types'
+import type { Category, TaskPriority } from '../../types'
 
 type Destination = 'backlog' | 'date'
 
@@ -9,13 +9,14 @@ interface Props {
   open: boolean
   onClose: () => void
   categories: Category[]
-  onAddToDate: (items: { title: string; categoryId: string; date: string }[]) => Promise<void>
-  onAddToBacklog: (items: { title: string; categoryId: string }[]) => Promise<void>
+  onAddToDate: (items: { title: string; categoryId: string; date: string; priority?: TaskPriority }[]) => Promise<void>
+  onAddToBacklog: (items: { title: string; categoryId: string; priority?: TaskPriority }[]) => Promise<void>
 }
 
 export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBacklog }: Props) {
   const [text, setText] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [priority, setPriority] = useState<TaskPriority>('medium')
   const [destination, setDestination] = useState<Destination>('backlog')
   const [date, setDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -39,12 +40,13 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
     setSubmitting(true)
     try {
       if (destination === 'backlog') {
-        await onAddToBacklog(titles.map((title) => ({ title, categoryId })))
+        await onAddToBacklog(titles.map((title) => ({ title, categoryId, priority })))
       } else {
-        await onAddToDate(titles.map((title) => ({ title, categoryId, date })))
+        await onAddToDate(titles.map((title) => ({ title, categoryId, date, priority })))
       }
       setText('')
       setDate('')
+      setPriority('medium')
       setDestination('backlog')
       onClose()
     } finally {
@@ -120,6 +122,21 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1.5">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
               </select>
             </div>
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Plus, CalendarDays } from 'lucide-react'
-import type { Category } from '../../types'
+import type { Category, TaskPriority } from '../../types'
 
 interface Props {
   date: string
-  onAdd: (title: string, categoryId: string, date: string) => void
+  onAdd: (title: string, categoryId: string, date: string, priority?: TaskPriority) => void
   categories: Category[]
 }
 
@@ -17,6 +17,7 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState<string>('')
+  const [priority, setPriority] = useState<TaskPriority>('medium')
 
   useEffect(() => {
     if (!categoryId && categories[0]?.id) {
@@ -33,8 +34,9 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
   const handleSubmit = () => {
     const trimmed = title.trim()
     if (!trimmed || !categoryId) return
-    onAdd(trimmed, categoryId, date)
+    onAdd(trimmed, categoryId, date, priority)
     setTitle('')
+    setPriority('medium')
     setOpen(false)
   }
 
@@ -119,6 +121,20 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1.5">Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
                   </select>
                 </div>
 

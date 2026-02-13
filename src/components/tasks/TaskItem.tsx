@@ -2,6 +2,7 @@ import type { Task, Category, TaskStatus } from '../../types'
 import { categoryAccent } from '../../lib/categoryUtils'
 import { nextStatus } from '../ui/StatusBadge'
 import { STATUS_CONFIG } from '../../lib/constants'
+import { PriorityBadge } from '../ui/PriorityBadge'
 import { Circle, Clock, CheckCircle2, Eye, Pencil, Trash2 } from 'lucide-react'
 
 const STATUS_ICONS = {
@@ -44,6 +45,8 @@ export function TaskItem({ task, onStatusChange, onDelete, onSelect }: Props) {
           'text-slate-300'
         }`} />
       </button>
+
+      <PriorityBadge priority={task.priority} size="sm" />
 
       <span
         className={`text-xs leading-snug flex-1 min-w-0 truncate ${

@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Plus, Inbox, Trash2, CalendarDays, X, CheckCircle } from 'lucide-react'
-import type { Task, Category, TaskStatus } from '../../types'
+import { Plus, Inbox, Trash2, CalendarDays, X, CheckCircle, Link as LinkIcon } from 'lucide-react'
+import type { Task, Category, TaskStatus, TaskPriority } from '../../types'
 import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/categoryUtils'
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
+import { PriorityBadge } from '../ui/PriorityBadge'
 
 interface Props {
   tasks: Task[]
   totalCount?: number
   categories: Category[]
-  onAdd: (title: string, categoryId: string) => void
+  onAdd: (title: string, categoryId: string, priority?: TaskPriority) => void
   onStatusChange: (id: string, status: TaskStatus) => void
   onSelect: (task: Task, mode: 'view' | 'edit') => void
   onDelete: (id: string) => void
@@ -20,6 +21,7 @@ interface Props {
 export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChange, onSelect, onDelete, onSchedule, onBulkStatusChange, onBulkDelete }: Props) {
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [priority, setPriority] = useState<TaskPriority>('medium')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduling, setScheduling] = useState(false)
@@ -44,8 +46,9 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
   const handleSubmit = () => {
     const trimmed = title.trim()
     if (!trimmed || !categoryId) return
-    onAdd(trimmed, categoryId)
+    onAdd(trimmed, categoryId, priority)
     setTitle('')
+    setPriority('medium')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -111,6 +114,16 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
+            </select>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as TaskPriority)}
+              className="px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
             </select>
             <button
               onClick={handleSubmit}
@@ -185,6 +198,10 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
                       </div>
                     )}
                   </div>
+                  <PriorityBadge priority={task.priority} />
+                  {task.links && task.links.length > 0 && (
+                    <LinkIcon className="w-3.5 h-3.5 text-indigo-400" title={`${task.links.length} link(s)`} />
+                  )}
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
                     {categoryLabel(task.category)}
                   </span>

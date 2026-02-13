@@ -60,6 +60,32 @@ create policy "Authenticated users can delete categories"
 -- ALTER TABLE tasks ALTER COLUMN date DROP NOT NULL;
 -- CREATE INDEX IF NOT EXISTS idx_tasks_backlog ON tasks (created_at) WHERE date IS NULL;
 
+-- Migration: Add priority support (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ADD COLUMN priority text DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent'));
+
+-- Migration: Add links support (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ADD COLUMN links jsonb DEFAULT '[]';
+
+-- Migration: Add task attachments table (run once in Supabase SQL Editor):
+-- CREATE TABLE IF NOT EXISTS task_attachments (
+--   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+--   task_id uuid REFERENCES tasks(id) ON DELETE CASCADE NOT NULL,
+--   file_name text NOT NULL,
+--   file_url text NOT NULL,
+--   file_type text NOT NULL,
+--   file_size bigint NOT NULL,
+--   created_at timestamptz DEFAULT now()
+-- );
+-- CREATE INDEX IF NOT EXISTS idx_attachments_task ON task_attachments (task_id);
+-- ALTER TABLE task_attachments ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Authenticated users can read attachments" ON task_attachments FOR SELECT TO authenticated USING (true);
+-- CREATE POLICY "Authenticated users can insert attachments" ON task_attachments FOR INSERT TO authenticated WITH CHECK (true);
+-- CREATE POLICY "Authenticated users can delete attachments" ON task_attachments FOR DELETE TO authenticated USING (true);
+
+-- Migration: Add categories icon and sort_order (run once in Supabase SQL Editor):
+-- ALTER TABLE categories ADD COLUMN icon text DEFAULT 'tag';
+-- ALTER TABLE categories ADD COLUMN sort_order int DEFAULT 0;
+
 -- Migration from old boolean completed column (run once if upgrading):
 -- alter table tasks add column if not exists status text not null default 'todo' check (status in ('todo', 'inprogress', 'done'));
 -- update tasks set status = 'done' where completed = true;

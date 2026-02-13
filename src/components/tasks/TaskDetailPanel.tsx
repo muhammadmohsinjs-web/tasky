@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { Category, Task, TaskStatus } from '../../types'
+import type { Category, Task, TaskStatus, TaskPriority, TaskLink } from '../../types'
 import { categoryStyle, categoryLabel } from '../../lib/categoryUtils'
-import { STATUS_CONFIG } from '../../lib/constants'
-import { X, Trash2, Pencil } from 'lucide-react'
+import { STATUS_CONFIG, PRIORITY_CONFIG } from '../../lib/constants'
+import { useTaskAttachments } from '../../hooks/useTaskAttachments'
+import { X, Trash2, Pencil, Link as LinkIcon, ExternalLink, Plus, Paperclip, FileIcon, Image as ImageIcon, Upload } from 'lucide-react'
 
 interface Props {
   task: Task | null
@@ -17,6 +18,8 @@ interface Props {
     category_id?: string | null
     date?: string | null
     status?: TaskStatus
+    priority?: TaskPriority
+    links?: TaskLink[]
   }) => void
   onDelete: (id: string) => void
 }
@@ -36,6 +39,12 @@ export function TaskDetailPanel({
   const [date, setDate] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [status, setStatus] = useState<TaskStatus>('todo')
+  const [priority, setPriority] = useState<TaskPriority>('medium')
+  const [links, setLinks] = useState<TaskLink[]>([])
+  const [newLinkUrl, setNewLinkUrl] = useState('')
+  const [newLinkLabel, setNewLinkLabel] = useState('')
+
+  const { attachments, uploading, fetchAttachments, uploadFile, deleteAttachment } = useTaskAttachments(task?.id || null)
 
   useEffect(() => {
     if (!task) return
@@ -45,10 +54,40 @@ export function TaskDetailPanel({
     setDate(task.date ?? '')
     setCategoryId(task.category_id)
     setStatus(task.status)
-  }, [task])
+    setPriority(task.priority)
+    setLinks(task.links ?? [])
+    fetchAttachments()
+  }, [task, fetchAttachments])
 
   if (!task) return null
   const activeCategory = categories.find((c) => c.id === categoryId) ?? task.category
+
+  const addLink = () => {
+    if (!newLinkUrl.trim()) return
+    setLinks([...links, { url: newLinkUrl.trim(), label: newLinkLabel.trim() || undefined }])
+    setNewLinkUrl('')
+    setNewLinkLabel('')
+  }
+
+  const removeLink = (index: number) => {
+    setLinks(links.filter((_, i) => i !== index))
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    for (let i = 0; i < files.length; i++) {
+      await uploadFile(files[i])
+    }
+    e.target.value = '' // Reset input
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
 
   const handleSave = () => {
     onUpdate(task.id, {
@@ -58,6 +97,8 @@ export function TaskDetailPanel({
       date: date || null,
       category_id: categoryId,
       status,
+      priority,
+      links,
     })
     onModeChange('view')
   }
@@ -121,6 +162,13 @@ export function TaskDetailPanel({
             <p className="mt-1 text-sm text-slate-600">{formattedDate}</p>
           </div>
 
+          <div>
+            <label className="text-[11px] font-medium text-slate-400">Priority</label>
+            <p className={`mt-1 text-sm font-medium ${PRIORITY_CONFIG[task.priority].color}`}>
+              {PRIORITY_CONFIG[task.priority].label}
+            </p>
+          </div>
+
           {task.description && (
             <div>
               <label className="text-[11px] font-medium text-slate-400">Description</label>
@@ -132,6 +180,57 @@ export function TaskDetailPanel({
             <div>
               <label className="text-[11px] font-medium text-slate-400">Notes</label>
               <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{task.notes}</p>
+            </div>
+          )}
+
+          {task.links && task.links.length > 0 && (
+            <div>
+              <label className="text-[11px] font-medium text-slate-400">Links</label>
+              <div className="mt-1 space-y-1.5">
+                {task.links.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 group"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{link.label || link.url}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {attachments.length > 0 && (
+            <div>
+              <label className="text-[11px] font-medium text-slate-400">Attachments</label>
+              <div className="mt-1 space-y-1.5">
+                {attachments.map((attachment) => {
+                  const isImage = attachment.file_type.startsWith('image/')
+                  return (
+                    <div key={attachment.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg group">
+                      {isImage ? (
+                        <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
+                      ) : (
+                        <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <a
+                          href={attachment.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-slate-700 hover:text-indigo-600 truncate block"
+                        >
+                          {attachment.file_name}
+                        </a>
+                        <div className="text-[10px] text-slate-400">{formatFileSize(attachment.file_size)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -237,6 +336,19 @@ export function TaskDetailPanel({
         </div>
 
         <div>
+          <label className="text-[11px] font-medium text-slate-500">Priority</label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as TaskPriority)}
+            className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+          >
+            {(Object.keys(PRIORITY_CONFIG) as TaskPriority[]).map((p) => (
+              <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="text-[11px] font-medium text-slate-500">Description</label>
           <textarea
             value={description ?? ''}
@@ -256,6 +368,101 @@ export function TaskDetailPanel({
             className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100 resize-none"
             placeholder="Links, snippets, or next steps..."
           />
+        </div>
+
+        <div>
+          <label className="text-[11px] font-medium text-slate-500">Links</label>
+          <div className="mt-1 space-y-2">
+            {links.map((link, index) => (
+              <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-slate-600 truncate">{link.label || link.url}</div>
+                  {link.label && <div className="text-[10px] text-slate-400 truncate">{link.url}</div>}
+                </div>
+                <button
+                  onClick={() => removeLink(index)}
+                  className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
+                  title="Remove link"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="https://..."
+                value={newLinkUrl}
+                onChange={(e) => setNewLinkUrl(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+              />
+              <input
+                type="text"
+                placeholder="Label (optional)"
+                value={newLinkLabel}
+                onChange={(e) => setNewLinkLabel(e.target.value)}
+                className="w-32 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
+              />
+              <button
+                onClick={addLink}
+                disabled={!newLinkUrl.trim()}
+                className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-medium text-slate-500">Attachments</label>
+          <div className="mt-1 space-y-2">
+            {attachments.map((attachment) => {
+              const isImage = attachment.file_type.startsWith('image/')
+              return (
+                <div key={attachment.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                  {isImage ? (
+                    <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
+                  ) : (
+                    <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-slate-600 truncate">{attachment.file_name}</div>
+                    <div className="text-[10px] text-slate-400">{formatFileSize(attachment.file_size)}</div>
+                  </div>
+                  <button
+                    onClick={() => deleteAttachment(attachment.id, attachment.file_url)}
+                    className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
+                    title="Delete attachment"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+            <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/50 cursor-pointer transition-colors">
+              <input
+                type="file"
+                multiple
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.txt"
+              />
+              {uploading ? (
+                <>
+                  <Upload className="w-4 h-4 text-slate-400 animate-pulse" />
+                  <span className="text-sm text-slate-500">Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Paperclip className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm text-slate-500">Upload files</span>
+                </>
+              )}
+            </label>
+          </div>
         </div>
       </div>
 

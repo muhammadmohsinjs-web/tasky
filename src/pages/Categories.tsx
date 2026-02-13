@@ -1,18 +1,26 @@
 import { useState } from 'react'
 import { useCategories } from '../hooks/useCategories'
 import { useAllTasks } from '../hooks/useAllTasks'
-import { CATEGORY_PALETTE } from '../lib/constants'
-import { Plus, Pencil, Trash2, X, Tag } from 'lucide-react'
+import { CATEGORY_PALETTE, CATEGORY_ICONS } from '../lib/constants'
+import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target } from 'lucide-react'
 import type { Category } from '../types'
+
+const ICON_MAP = {
+  tag: Tag, code: Code, cloud: Cloud, brain: Brain, database: Database, globe: Globe,
+  server: Server, layers: Layers, package: Package, cpu: Cpu, terminal: Terminal, 'git-branch': GitBranch,
+  book: Book, lightbulb: Lightbulb, rocket: Rocket, shield: Shield, zap: Zap, heart: Heart,
+  star: Star, target: Target
+} as const
 
 interface CategoryForm {
   name: string
   slug: string
   short_label: string
+  icon: string
   paletteIndex: number
 }
 
-const emptyForm: CategoryForm = { name: '', slug: '', short_label: '', paletteIndex: 0 }
+const emptyForm: CategoryForm = { name: '', slug: '', short_label: '', icon: 'tag', paletteIndex: 0 }
 
 export default function Categories() {
   const { categories, loading, addCategory, updateCategory, deleteCategory } = useCategories()
@@ -23,6 +31,16 @@ export default function Categories() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   const taskCountForCategory = (id: string) => tasks.filter((t) => t.category_id === id).length
+
+  const getStatusBreakdown = (id: string) => {
+    const categoryTasks = tasks.filter((t) => t.category_id === id)
+    return {
+      total: categoryTasks.length,
+      todo: categoryTasks.filter((t) => t.status === 'todo').length,
+      inprogress: categoryTasks.filter((t) => t.status === 'inprogress').length,
+      done: categoryTasks.filter((t) => t.status === 'done').length,
+    }
+  }
 
   const generateSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
@@ -39,6 +57,7 @@ export default function Categories() {
       short_label: form.short_label.trim().toUpperCase(),
       color: palette.color,
       accent: palette.accent,
+      icon: form.icon,
     })
     setForm(emptyForm)
     setShowAdd(false)
@@ -51,6 +70,7 @@ export default function Categories() {
       name: cat.name,
       slug: cat.slug,
       short_label: cat.short_label,
+      icon: cat.icon || 'tag',
       paletteIndex: paletteIdx >= 0 ? paletteIdx : 0,
     })
   }
@@ -64,6 +84,7 @@ export default function Categories() {
       short_label: form.short_label.trim().toUpperCase(),
       color: palette.color,
       accent: palette.accent,
+      icon: form.icon,
     })
     setEditingId(null)
     setForm(emptyForm)
@@ -162,6 +183,29 @@ export default function Categories() {
             </div>
           </div>
 
+          <div className="mb-5">
+            <label className="text-[11px] font-medium text-slate-500">Icon</label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {CATEGORY_ICONS.map((iconName) => {
+                const IconComponent = ICON_MAP[iconName]
+                return (
+                  <button
+                    key={iconName}
+                    onClick={() => setForm((f) => ({ ...f, icon: iconName }))}
+                    className={`p-2 rounded-lg border-2 transition-all cursor-pointer ${
+                      form.icon === iconName
+                        ? 'border-indigo-500 bg-indigo-50 scale-110'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                    title={iconName}
+                  >
+                    <IconComponent className="w-4 h-4 text-slate-600" />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <div className="flex-1">
               <span className="text-[11px] text-slate-400">Preview: </span>
@@ -188,24 +232,38 @@ export default function Categories() {
 
       {/* Category List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((cat) => (
-          <div
-            key={cat.id}
-            className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 ${cat.accent} hover:shadow-md transition-shadow`}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-700">{cat.name}</h3>
+        {categories.map((cat) => {
+          const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Tag
+          const breakdown = getStatusBreakdown(cat.id)
+          return (
+            <div
+              key={cat.id}
+              className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 ${cat.accent} hover:shadow-md transition-shadow`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <IconComponent className="w-4 h-4 text-slate-400" />
+                  <h3 className="text-sm font-semibold text-slate-700">{cat.name}</h3>
+                </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.color}`}>
+                  {cat.short_label}
+                </span>
               </div>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.color}`}>
-                {cat.short_label}
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">{taskCountForCategory(cat.id)} tasks</span>
-              <div className="flex items-center gap-1">
+              <div className="mb-3">
+                <div className="text-xs text-slate-500 mb-1.5">{breakdown.total} tasks</div>
+                {breakdown.total > 0 && (
+                  <div className="flex gap-3 text-[10px]">
+                    <span className="text-slate-400">{breakdown.todo} todo</span>
+                    <span className="text-amber-600">{breakdown.inprogress} in progress</span>
+                    <span className="text-emerald-600">{breakdown.done} done</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex-1" />
+                <div className="flex items-center gap-1">
                 <button
                   onClick={() => startEdit(cat)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 cursor-pointer"
@@ -240,12 +298,22 @@ export default function Categories() {
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {categories.length === 0 && !showAdd && (
-        <div className="text-center py-16 text-slate-400 text-sm">
-          No categories yet. Create one to start organizing your tasks.
+        <div className="text-center py-20">
+          <Tag className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-700 mb-2">No categories yet</h3>
+          <p className="text-sm text-slate-400 mb-6">Create your first category to start organizing your tasks</p>
+          <button
+            onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm) }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 shadow-sm font-medium text-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Add Category
+          </button>
         </div>
       )}
     </div>

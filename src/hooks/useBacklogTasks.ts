@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
-import type { Task, TaskStatus } from '../types'
+import type { Task, TaskStatus, TaskPriority } from '../types'
 
-const TASK_SELECT = 'id,title,description,notes,category_id,date,status,created_at, category:categories(id,name,slug,color,accent,short_label,created_at)'
+const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority,links,created_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
 
 export function useBacklogTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -29,10 +29,10 @@ export function useBacklogTasks() {
     fetchTasks()
   }, [fetchTasks])
 
-  const addTask = async (title: string, categoryId: string) => {
+  const addTask = async (title: string, categoryId: string, priority: TaskPriority = 'medium') => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId, date: null, status: 'todo' as TaskStatus })
+      .insert({ title, category_id: categoryId, date: null, status: 'todo' as TaskStatus, priority })
       .select(TASK_SELECT)
       .single()
 
@@ -45,12 +45,13 @@ export function useBacklogTasks() {
     toast.success('Task added to backlog')
   }
 
-  const addTasks = async (items: { title: string; categoryId: string }[]) => {
+  const addTasks = async (items: { title: string; categoryId: string; priority?: TaskPriority }[]) => {
     const rows = items.map((t) => ({
       title: t.title,
       category_id: t.categoryId,
       date: null,
       status: 'todo' as TaskStatus,
+      priority: t.priority ?? 'medium',
     }))
 
     const { data, error } = await supabase
@@ -99,6 +100,7 @@ export function useBacklogTasks() {
       category_id?: string | null
       date?: string | null
       status?: TaskStatus
+      priority?: TaskPriority
     }
   ) => {
     const { error } = await supabase
