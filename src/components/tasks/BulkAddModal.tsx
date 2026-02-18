@@ -34,7 +34,7 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
   const taskCount = titles.length
 
   const handleSubmit = async () => {
-    if (taskCount === 0 || !categoryId) return
+    if (taskCount === 0) return
     if (destination === 'date' && !date) return
 
     setSubmitting(true)
@@ -87,11 +87,6 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
           </button>
         </div>
 
-        {categories.length === 0 ? (
-          <div className="px-6 pb-6 pt-2 text-sm text-slate-400">
-            Add categories first to create tasks.
-          </div>
-        ) : (
           <div className="px-6 pb-6 pt-2 space-y-4">
             {/* Textarea */}
             <div>
@@ -112,6 +107,7 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
             </div>
 
             {/* Category */}
+            {categories.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1.5">Category</label>
               <select
@@ -119,11 +115,13 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
                 onChange={(e) => setCategoryId(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               >
+                <option value="">Uncategorized</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
+            )}
 
             {/* Priority */}
             <div>
@@ -205,7 +203,6 @@ export function BulkAddModal({ open, onClose, categories, onAddToDate, onAddToBa
               </button>
             </div>
           </div>
-        )}
       </div>
     </div>,
     document.body

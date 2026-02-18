@@ -4,6 +4,7 @@ import { useAllTasks } from '../hooks/useAllTasks'
 import { useCategories } from '../hooks/useCategories'
 import { useProfile } from '../hooks/useProfile'
 import { StatCard } from '../components/ui/StatCard'
+import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
 import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight } from 'lucide-react'
@@ -43,16 +44,7 @@ export default function Dashboard() {
   const greeting = today.getHours() < 12 ? 'Good morning' : today.getHours() < 18 ? 'Good afternoon' : 'Good evening'
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-3">
-        <div className="flex gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse-soft" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse-soft" style={{ animationDelay: '200ms' }} />
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-soft" style={{ animationDelay: '400ms' }} />
-        </div>
-        <span className="text-xs text-slate-400">Loading dashboard...</span>
-      </div>
-    )
+    return <LoadingSpinner message="Loading dashboard..." />
   }
 
   return (

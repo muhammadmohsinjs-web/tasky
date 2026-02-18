@@ -9,6 +9,7 @@ import { useBacklogTasks } from '../hooks/useBacklogTasks'
 import { useCategories } from '../hooks/useCategories'
 import { categoryDot } from '../lib/categoryUtils'
 import { MONTH_NAMES } from '../lib/constants'
+import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox, Plus } from 'lucide-react'
 import type { Task } from '../types'
 
@@ -102,7 +103,7 @@ export default function Tasks() {
           <div className="flex items-center gap-5">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-800">Tasks</h1>
-              <p className="text-sm text-slate-400 mt-1">Manage your learning tasks</p>
+              <p className="text-sm text-slate-400 mt-1">Manage and organize your tasks</p>
             </div>
             <div className="hidden sm:flex items-center gap-4 ml-2 pl-5 border-l border-slate-200">
               {categories.map((cat) => (
@@ -231,14 +232,7 @@ export default function Tasks() {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1">
           {(view === 'backlog' ? backlogLoading : loading) || categoriesLoading ? (
-            <div className="flex flex-col items-center justify-center py-32 gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse-soft" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse-soft" style={{ animationDelay: '200ms' }} />
-                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-soft" style={{ animationDelay: '400ms' }} />
-              </div>
-              <span className="text-xs text-slate-400">Loading tasks...</span>
-            </div>
+            <LoadingSpinner message="Loading tasks..." fullHeight={false} />
           ) : view === 'backlog' ? (
             <BacklogList
               tasks={filteredBacklogTasks}

@@ -10,7 +10,6 @@ import {
   Zap,
   Shield,
   Clock,
-  Star,
   ChevronRight,
 } from 'lucide-react'
 
@@ -24,7 +23,7 @@ const FEATURES = [
   {
     icon: Sparkles,
     title: 'Smart Categories',
-    desc: 'Color-coded categories keep your learning tracks organized — Backend, AI, Cloud, and more.',
+    desc: 'Color-coded categories keep your projects organized — work, personal, side projects, and more.',
     color: 'bg-violet-50 text-violet-600',
   },
   {
@@ -59,47 +58,6 @@ const STEPS = [
   { step: '3', title: 'Track progress', desc: 'Watch your productivity grow' },
 ]
 
-const TESTIMONIALS = [
-  {
-    name: 'Sarah K.',
-    role: 'Full-Stack Developer',
-    text: 'Finally a task app that thinks in calendars, not lists. I can see my entire learning roadmap at a glance.',
-    rating: 5,
-  },
-  {
-    name: 'James R.',
-    role: 'CS Student',
-    text: 'The analytics feature is a game-changer. I can actually see how much I\'m getting done each month.',
-    rating: 5,
-  },
-  {
-    name: 'Priya M.',
-    role: 'DevOps Engineer',
-    text: 'Simple, fast, no bloat. I switched from Notion for my personal learning tasks and never looked back.',
-    rating: 5,
-  },
-]
-
-const PLANS = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    desc: 'For getting started',
-    features: ['50 tasks per month', '3 categories', '30-day analytics', 'Calendar & list views'],
-    cta: 'Get Started',
-    highlighted: false,
-  },
-  {
-    name: 'Pro',
-    price: '$5',
-    period: '/month',
-    desc: 'For serious learners',
-    features: ['Unlimited tasks', 'Unlimited categories', 'Full analytics history', 'Data export (CSV/JSON)', 'Email reminders', 'Priority support'],
-    cta: 'Start Free Trial',
-    highlighted: true,
-  },
-]
 
 export default function Landing() {
   const navigate = useNavigate()
@@ -123,7 +81,6 @@ export default function Landing() {
           <div className="hidden sm:flex items-center gap-8 text-sm text-slate-500">
             <a href="#features" className="hover:text-slate-800 transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-slate-800 transition-colors">How it works</a>
-            <a href="#pricing" className="hover:text-slate-800 transition-colors">Pricing</a>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -150,14 +107,14 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto text-center relative">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-full text-xs font-medium text-indigo-600 mb-6 animate-fade-in">
             <Zap className="w-3 h-3" />
-            The calendar-first task manager for learners
+            The calendar-first task manager
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tight leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
-            Plan what you learn.
+            Plan your work.
             <br />
             <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-              Track what you ship.
+              Track your progress.
             </span>
           </h1>
 
@@ -269,7 +226,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-400">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span>Free forever plan</span>
+            <span>100% free</span>
           </div>
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -295,7 +252,7 @@ export default function Landing() {
               Everything you need. Nothing you don't.
             </h2>
             <p className="text-slate-500 mt-4 max-w-md mx-auto">
-              Built for learners and solopreneurs who want clarity, not complexity.
+              Built for people who want clarity, not complexity.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -344,99 +301,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS ─── */}
-      <section className="py-24 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest mb-3">Testimonials</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-              Loved by learners
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {TESTIMONIALS.map(({ name, role, text, rating }) => (
-              <div key={name} className="p-6 rounded-2xl border border-slate-100 bg-white hover:shadow-lg hover:shadow-slate-100 transition-all duration-300">
-                <div className="flex gap-0.5 mb-4">
-                  {Array.from({ length: rating }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-sm text-slate-600 leading-relaxed mb-5">"{text}"</p>
-                <div>
-                  <div className="text-sm font-semibold text-slate-800">{name}</div>
-                  <div className="text-xs text-slate-400">{role}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── PRICING ─── */}
-      <section id="pricing" className="py-24 px-6 bg-gradient-to-b from-slate-50 to-white">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest mb-3">Pricing</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-              Start free, upgrade when ready
-            </h2>
-            <p className="text-slate-500 mt-4">
-              No hidden fees. No surprise charges. Cancel anytime.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            {PLANS.map(({ name, price, period, desc, features, cta, highlighted }) => (
-              <div
-                key={name}
-                className={`p-7 rounded-2xl border transition-all duration-300 ${
-                  highlighted
-                    ? 'border-indigo-200 bg-gradient-to-b from-indigo-50/50 to-white shadow-xl shadow-indigo-100 ring-1 ring-indigo-100 scale-[1.02]'
-                    : 'border-slate-200 bg-white hover:shadow-lg hover:shadow-slate-100'
-                }`}
-              >
-                {highlighted && (
-                  <div className="inline-block px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded-full uppercase tracking-wide mb-3">
-                    Most Popular
-                  </div>
-                )}
-                <h3 className="text-lg font-bold text-slate-800">{name}</h3>
-                <p className="text-xs text-slate-400 mb-4">{desc}</p>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl font-bold text-slate-900">{price}</span>
-                  <span className="text-sm text-slate-400">{period}</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {features.map((f) => (
-                    <li key={f} className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <CheckCircle2 className={`w-4 h-4 shrink-0 ${highlighted ? 'text-indigo-500' : 'text-emerald-500'}`} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={handleCTA}
-                  className={`w-full py-3 rounded-xl font-medium text-sm cursor-pointer transition-all ${
-                    highlighted
-                      ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-200 hover:from-indigo-600 hover:to-violet-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {cta}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─── FINAL CTA ─── */}
       <section className="py-24 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight mb-4">
-            Ready to take control of your learning?
+            Ready to get organized?
           </h2>
           <p className="text-slate-500 mb-8 max-w-lg mx-auto">
-            Join thousands of developers and learners who plan smarter with Tasky. Free forever, upgrade anytime.
+            Tasky is completely free. Unlimited tasks, unlimited categories, full analytics. No credit card, no catch.
           </p>
           <button
             onClick={handleCTA}

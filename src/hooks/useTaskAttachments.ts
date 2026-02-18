@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import type { TaskAttachment } from '../types'
 
 const BUCKET_NAME = 'task-attachments'
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 export function useTaskAttachments(taskId: string | null) {
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
@@ -31,8 +32,20 @@ export function useTaskAttachments(taskId: string | null) {
 
   const uploadFile = async (file: File): Promise<TaskAttachment | null> => {
     if (!taskId) return null
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(`File too large. Maximum size is 10MB.`)
+      return null
+    }
     setUploading(true)
     try {
+      // Get current user ID from session
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id
+      if (!userId) {
+        toast.error('You must be logged in to upload files')
+        return null
+      }
+
       // Generate unique file name
       const fileExt = file.name.split('.').pop()
       const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
@@ -62,7 +75,7 @@ export function useTaskAttachments(taskId: string | null) {
           file_url: publicUrl,
           file_type: file.type,
           file_size: file.size,
-          user_id: user?.id,
+          user_id: userId,
         })
         .select()
         .single()

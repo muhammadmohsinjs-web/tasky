@@ -75,3 +75,5 @@ export const CATEGORY_PALETTE = [
   { name: 'Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700', accent: 'border-l-fuchsia-400', hex: '#d946ef' },
   { name: 'Sky', color: 'bg-sky-100 text-sky-700', accent: 'border-l-sky-400', hex: '#0ea5e9' },
 ]
+
+export const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority,links,created_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'

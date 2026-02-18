@@ -2,22 +2,24 @@ import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { TASK_SELECT } from '../lib/constants'
 import type { Task, TaskStatus, TaskPriority } from '../types'
-
-const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority,links,created_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
 
 export function useBacklogTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const { user } = useAuth()
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
       .select(TASK_SELECT)
       .is('date', null)
       .order('created_at', { ascending: false })
+      .abortSignal(signal)
+
+    if (signal?.aborted) return
 
     if (error) {
       console.error('Failed to fetch backlog tasks:', error)
@@ -28,13 +30,18 @@ export function useBacklogTasks() {
   }, [])
 
   useEffect(() => {
-    fetchTasks()
+    const abortController = new AbortController()
+    fetchTasks(abortController.signal)
+
+    return () => {
+      abortController.abort()
+    }
   }, [fetchTasks])
 
   const addTask = async (title: string, categoryId: string, priority: TaskPriority = 'medium') => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId, date: null, status: 'todo' as TaskStatus, priority, user_id: user?.id })
+      .insert({ title, category_id: categoryId || null, date: null, status: 'todo' as TaskStatus, priority, user_id: user?.id })
       .select(TASK_SELECT)
       .single()
 
@@ -50,7 +57,7 @@ export function useBacklogTasks() {
   const addTasks = async (items: { title: string; categoryId: string; priority?: TaskPriority }[]) => {
     const rows = items.map((t) => ({
       title: t.title,
-      category_id: t.categoryId,
+      category_id: t.categoryId || null,
       date: null,
       status: 'todo' as TaskStatus,
       priority: t.priority ?? 'medium',
@@ -74,7 +81,7 @@ export function useBacklogTasks() {
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
-    const oldStatus = task.status
+    const oldTask = JSON.parse(JSON.stringify(task))
 
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
@@ -89,7 +96,7 @@ export function useBacklogTasks() {
       console.error('Failed to update task status:', error)
       toast.error('Failed to update task status')
       setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: oldStatus } : t))
+        prev.map((t) => (t.id === id ? oldTask : t))
       )
     }
   }
@@ -118,7 +125,8 @@ export function useBacklogTasks() {
     }
     toast.success('Task saved')
     // If date was assigned, task leaves backlog — refetch to remove it
-    if (updates.date !== undefined && updates.date !== null) {
+    // Also refetch on category changes to get the joined category object
+    if ((updates.date !== undefined && updates.date !== null) || updates.category_id !== undefined) {
       await fetchTasks()
       return
     }

@@ -33,7 +33,7 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
 
   const handleSubmit = () => {
     const trimmed = title.trim()
-    if (!trimmed || !categoryId) return
+    if (!trimmed) return
     onAdd(trimmed, categoryId, date, priority)
     setTitle('')
     setPriority('medium')
@@ -92,17 +92,12 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
               </button>
             </div>
 
-            {categories.length === 0 ? (
-              <div className="px-6 pb-6 pt-2 text-sm text-slate-400">
-                Add categories first to create tasks.
-              </div>
-            ) : (
               <div className="px-6 pb-6 pt-2 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-600 mb-1.5">Title</label>
                   <input
                     type="text"
-                    placeholder="What did you learn?"
+                    placeholder="What's the task?"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -111,6 +106,7 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
                   />
                 </div>
 
+                {categories.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-slate-600 mb-1.5">Category</label>
                   <select
@@ -118,11 +114,13 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
                     onChange={(e) => setCategoryId(e.target.value)}
                     className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                   >
+                    <option value="">Uncategorized</option>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-slate-600 mb-1.5">Priority</label>
@@ -154,7 +152,6 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
                   </button>
                 </div>
               </div>
-            )}
           </div>
         </div>,
         document.body

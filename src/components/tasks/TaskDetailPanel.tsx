@@ -43,6 +43,7 @@ export function TaskDetailPanel({
   const [links, setLinks] = useState<TaskLink[]>([])
   const [newLinkUrl, setNewLinkUrl] = useState('')
   const [newLinkLabel, setNewLinkLabel] = useState('')
+  const [linkError, setLinkError] = useState('')
 
   const { attachments, uploading, fetchAttachments, uploadFile, deleteAttachment } = useTaskAttachments(task?.id || null)
 
@@ -80,8 +81,16 @@ export function TaskDetailPanel({
   const activeCategory = categories.find((c) => c.id === categoryId) ?? task.category
 
   const addLink = () => {
-    if (!newLinkUrl.trim()) return
-    setLinks([...links, { url: newLinkUrl.trim(), label: newLinkLabel.trim() || undefined }])
+    const url = newLinkUrl.trim()
+    if (!url) return
+    try {
+      new URL(url)
+    } catch {
+      setLinkError('Please enter a valid URL (e.g. https://example.com)')
+      return
+    }
+    setLinkError('')
+    setLinks([...links, { url, label: newLinkLabel.trim() || undefined }])
     setNewLinkUrl('')
     setNewLinkLabel('')
   }
@@ -261,7 +270,7 @@ export function TaskDetailPanel({
             Edit Task
           </button>
           <button
-            onClick={() => onDelete(task.id)}
+            onClick={() => { if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id) }}
             className="text-sm px-3 py-2 border border-slate-200 text-slate-500 rounded-lg hover:border-red-200 hover:text-red-500 cursor-pointer flex items-center gap-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -429,6 +438,7 @@ export function TaskDetailPanel({
                 <Plus className="w-4 h-4" />
               </button>
             </div>
+            {linkError && <p className="text-xs text-red-500 mt-1">{linkError}</p>}
           </div>
         </div>
 

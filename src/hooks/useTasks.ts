@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { TASK_SELECT } from '../lib/constants'
 import type { Task, TaskStatus, TaskPriority } from '../types'
-
-const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority,links,created_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
 
 export function useTasks(year: number, month: number) {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -50,7 +49,7 @@ export function useTasks(year: number, month: number) {
   const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium') => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId, date, status: 'todo' as TaskStatus, priority, user_id: user?.id })
+      .insert({ title, category_id: categoryId || null, date, status: 'todo' as TaskStatus, priority, user_id: user?.id })
       .select(TASK_SELECT)
       .single()
 
@@ -66,7 +65,7 @@ export function useTasks(year: number, month: number) {
   const addTasks = async (items: { title: string; categoryId: string; date: string; priority?: TaskPriority }[]) => {
     const rows = items.map((t) => ({
       title: t.title,
-      category_id: t.categoryId,
+      category_id: t.categoryId || null,
       date: t.date,
       status: 'todo' as TaskStatus,
       priority: t.priority ?? 'medium',
@@ -135,7 +134,7 @@ export function useTasks(year: number, month: number) {
       return
     }
     toast.success('Task saved')
-    if (updates.date || updates.category_id) {
+    if (updates.date !== undefined || updates.category_id !== undefined) {
       await fetchTasks()
       return
     }

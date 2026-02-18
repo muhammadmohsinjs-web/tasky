@@ -45,7 +45,7 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
 
   const handleSubmit = () => {
     const trimmed = title.trim()
-    if (!trimmed || !categoryId) return
+    if (!trimmed) return
     onAdd(trimmed, categoryId, priority)
     setTitle('')
     setPriority('medium')
@@ -95,7 +95,6 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
   return (
     <div className="animate-fade-in">
       {/* Add to backlog input */}
-      {categories.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex items-center gap-3">
             <input
@@ -106,15 +105,18 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
               onKeyDown={handleKeyDown}
               className="flex-1 px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white placeholder:text-slate-300"
             />
+            {categories.length > 0 && (
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               className="px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             >
+              <option value="">Uncategorized</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            )}
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as TaskPriority)}
@@ -134,7 +136,6 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
             </button>
           </div>
         </div>
-      )}
 
       {/* Backlog tasks */}
       {tasks.length === 0 ? (
@@ -214,7 +215,7 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
                     {categoryLabel(task.category)}
                   </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
+                    onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id) }}
                     className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Delete"
                   >

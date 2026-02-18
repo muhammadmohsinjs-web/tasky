@@ -119,8 +119,14 @@ export function TaskList({ tasks, onStatusChange, onSelect, onBulkStatusChange, 
 
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-16 text-slate-400 text-sm">
-        No tasks yet. Add one from the calendar view.
+      <div className="text-center py-20 flex flex-col items-center gap-4">
+        <div className="bg-indigo-50 p-4 rounded-full">
+          <Inbox className="w-10 h-10 text-indigo-400" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-slate-700 mb-1">No tasks this month</h3>
+          <p className="text-sm text-slate-400">Switch to calendar view to add tasks, or use Bulk Add above.</p>
+        </div>
       </div>
     )
   }

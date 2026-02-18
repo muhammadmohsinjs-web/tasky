@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { useCategories } from '../hooks/useCategories'
 import { StatCard } from '../components/ui/StatCard'
+import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ListTodo, Circle, Clock, CheckCircle2 } from 'lucide-react'
 import { STATUS_CONFIG, MONTH_NAMES, CATEGORY_PALETTE } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -64,16 +65,7 @@ export default function Analytics() {
   }, [tasks])
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-3">
-        <div className="flex gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse-soft" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse-soft" style={{ animationDelay: '200ms' }} />
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-soft" style={{ animationDelay: '400ms' }} />
-        </div>
-        <span className="text-xs text-slate-400">Loading analytics...</span>
-      </div>
-    )
+    return <LoadingSpinner message="Loading analytics..." />
   }
 
   return (

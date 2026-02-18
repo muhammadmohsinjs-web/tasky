@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -47,8 +48,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Sign out failed:', error)
+        toast.error('Failed to sign out')
+        return
+      }
+      setUser(null)
+    } catch (err) {
+      console.error('Sign out failed:', err)
+      toast.error('Failed to sign out')
+    }
   }
 
   return (

@@ -146,9 +146,7 @@ export function Calendar({
                 ))}
               </div>
 
-              {dateStr >= todayFull && (
-                <AddTaskInline date={dateStr} onAdd={onAdd} categories={categories} />
-              )}
+              <AddTaskInline date={dateStr} onAdd={onAdd} categories={categories} />
             </div>
           )
         })}

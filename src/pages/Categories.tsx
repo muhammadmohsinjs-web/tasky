@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useCategories } from '../hooks/useCategories'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { CATEGORY_PALETTE, CATEGORY_ICONS } from '../lib/constants'
-import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target, Info, Palette, Filter, BarChart3 } from 'lucide-react'
+import { LoadingSpinner } from '../components/ui/LoadingSpinner'
+import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target, Palette, Filter, BarChart3 } from 'lucide-react'
 import type { Category } from '../types'
 
 const ICON_MAP = {
@@ -102,16 +103,7 @@ export default function Categories() {
   }
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-3">
-        <div className="flex gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse-soft" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse-soft" style={{ animationDelay: '200ms' }} />
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-soft" style={{ animationDelay: '400ms' }} />
-        </div>
-        <span className="text-xs text-slate-400">Loading categories...</span>
-      </div>
-    )
+    return <LoadingSpinner message="Loading categories..." />
   }
 
   return (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { TASK_SELECT } from '../lib/constants'
 import type { Task } from '../types'
 
 export function useAllTasks() {
@@ -10,7 +11,7 @@ export function useAllTasks() {
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select('id,title,description,notes,category_id,date,status,created_at, category:categories(id,name,slug,color,accent,short_label,created_at)')
+      .select(TASK_SELECT)
       .order('date', { ascending: false, nullsFirst: false })
 
     if (error) {
