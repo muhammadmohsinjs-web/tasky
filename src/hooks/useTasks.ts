@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
-import type { Task, TaskStatus, TaskPriority } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
 
 export function useTasks(year: number, month: number) {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -46,20 +46,32 @@ export function useTasks(year: number, month: number) {
     }
   }, [fetchTasks])
 
-  const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium') => {
+  const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium', extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId || null, date, status: 'todo' as TaskStatus, priority, user_id: user?.id })
+      .insert({
+        title,
+        category_id: categoryId || null,
+        date,
+        status: extras?.status ?? ('todo' as TaskStatus),
+        priority,
+        user_id: user?.id,
+        description: extras?.description ?? null,
+        notes: extras?.notes ?? null,
+        links: extras?.links ?? [],
+      })
       .select(TASK_SELECT)
       .single()
 
     if (error) {
       console.error('Failed to add task:', error)
       toast.error('Failed to add task')
-      return
+      return null
     }
-    setTasks((prev) => [...prev, data as unknown as Task])
+    const created = data as unknown as Task
+    setTasks((prev) => [...prev, created])
     toast.success('Task added')
+    return created
   }
 
   const addTasks = async (items: { title: string; categoryId: string; date: string; priority?: TaskPriority }[]) => {

@@ -1,4 +1,4 @@
-import type { Task, Category, TaskStatus } from '../../types'
+import type { Task, Category, TaskStatus, TaskPriority, TaskLink } from '../../types'
 import { TaskItem } from './TaskItem'
 import { AddTaskInline } from './AddTaskInline'
 import { CheckCircle2 } from 'lucide-react'
@@ -11,7 +11,7 @@ interface Props {
   month: number
   tasks: Task[]
   categories: Category[]
-  onAdd: (title: string, categoryId: string, date: string) => void
+  onAdd: (title: string, categoryId: string, date: string, priority?: TaskPriority, extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => Promise<Task | null> | void
   onStatusChange: (id: string, status: TaskStatus) => void
   onUpdate: (id: string, updates: { title?: string; category_id?: string | null }) => void
   onDelete: (id: string) => void

@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
-import type { Task, TaskStatus, TaskPriority } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
 
 export function useBacklogTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -38,20 +38,32 @@ export function useBacklogTasks() {
     }
   }, [fetchTasks])
 
-  const addTask = async (title: string, categoryId: string, priority: TaskPriority = 'medium') => {
+  const addTask = async (title: string, categoryId: string, priority: TaskPriority = 'medium', extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId || null, date: null, status: 'todo' as TaskStatus, priority, user_id: user?.id })
+      .insert({
+        title,
+        category_id: categoryId || null,
+        date: null,
+        status: extras?.status ?? ('todo' as TaskStatus),
+        priority,
+        user_id: user?.id,
+        description: extras?.description ?? null,
+        notes: extras?.notes ?? null,
+        links: extras?.links ?? [],
+      })
       .select(TASK_SELECT)
       .single()
 
     if (error) {
       console.error('Failed to add backlog task:', error)
       toast.error('Failed to add task')
-      return
+      return null
     }
-    setTasks((prev) => [data as unknown as Task, ...prev])
+    const created = data as unknown as Task
+    setTasks((prev) => [created, ...prev])
     toast.success('Task added to backlog')
+    return created
   }
 
   const addTasks = async (items: { title: string; categoryId: string; priority?: TaskPriority }[]) => {
