@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import type { Task, TaskStatus, TaskPriority } from '../types'
 
 const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority,links,created_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
@@ -8,6 +9,7 @@ const TASK_SELECT = 'id,title,description,notes,category_id,date,status,priority
 export function useTasks(year: number, month: number) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
 
   const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
@@ -48,7 +50,7 @@ export function useTasks(year: number, month: number) {
   const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium') => {
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ title, category_id: categoryId, date, status: 'todo' as TaskStatus, priority })
+      .insert({ title, category_id: categoryId, date, status: 'todo' as TaskStatus, priority, user_id: user?.id })
       .select(TASK_SELECT)
       .single()
 
@@ -68,6 +70,7 @@ export function useTasks(year: number, month: number) {
       date: t.date,
       status: 'todo' as TaskStatus,
       priority: t.priority ?? 'medium',
+      user_id: user?.id,
     }))
 
     const { data, error } = await supabase

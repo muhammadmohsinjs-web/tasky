@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useProfile } from '../../hooks/useProfile'
+import { UserAvatar } from '../ui/UserAvatar'
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -13,6 +15,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { signOut } = useAuth()
+  const { profile } = useProfile()
 
   return (
     <>
@@ -69,7 +72,18 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="px-4 py-4 border-t border-slate-200/80">
+        <div className="px-4 py-4 border-t border-slate-200/80 space-y-3">
+          <div className="flex items-center gap-3 px-2">
+            <UserAvatar avatarUrl={profile?.avatar_url} displayName={profile?.display_name} size="sm" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-700 truncate">
+                {profile?.display_name || 'User'}
+              </p>
+              <p className="text-[11px] text-slate-400 truncate">
+                {profile?.email}
+              </p>
+            </div>
+          </div>
           <button
             onClick={signOut}
             className="flex items-center gap-3 w-full px-4 py-2.5 text-[15px] font-medium text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"

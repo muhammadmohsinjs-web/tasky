@@ -1,48 +1,58 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 interface AuthContextType {
   authenticated: boolean
   loading: boolean
-  signIn: (pin: string) => boolean
-  signOut: () => void
+  user: User | null
+  signInWithGoogle: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   authenticated: false,
   loading: true,
-  signIn: () => false,
-  signOut: () => {},
+  user: null,
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
 })
 
-const AUTH_KEY = 'tasky_authenticated'
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [authenticated, setAuthenticated] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem(AUTH_KEY)
-    setAuthenticated(stored === 'true')
-    setLoading(false)
+    // Check current session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const signIn = (pin: string): boolean => {
-    const correctPin = import.meta.env.VITE_ADMIN_PIN
-    if (pin === correctPin) {
-      localStorage.setItem(AUTH_KEY, 'true')
-      setAuthenticated(true)
-      return true
-    }
-    return false
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + '/dashboard',
+      },
+    })
   }
 
-  const signOut = () => {
-    localStorage.removeItem(AUTH_KEY)
-    setAuthenticated(false)
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={{ authenticated, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ authenticated: !!user, loading, user, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )

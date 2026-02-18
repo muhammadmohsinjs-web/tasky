@@ -34,27 +34,12 @@ values
   ('Agentic AI', 'agentic-ai', 'bg-violet-100 text-violet-700', 'border-l-violet-400', 'AI')
 on conflict (slug) do nothing;
 
--- Row Level Security: only authenticated users can access data
+-- Row Level Security
 alter table tasks enable row level security;
 alter table categories enable row level security;
 
-create policy "Authenticated users can read tasks"
-  on tasks for select to authenticated using (true);
-create policy "Authenticated users can insert tasks"
-  on tasks for insert to authenticated with check (true);
-create policy "Authenticated users can update tasks"
-  on tasks for update to authenticated using (true) with check (true);
-create policy "Authenticated users can delete tasks"
-  on tasks for delete to authenticated using (true);
-
-create policy "Authenticated users can read categories"
-  on categories for select to authenticated using (true);
-create policy "Authenticated users can insert categories"
-  on categories for insert to authenticated with check (true);
-create policy "Authenticated users can update categories"
-  on categories for update to authenticated using (true) with check (true);
-create policy "Authenticated users can delete categories"
-  on categories for delete to authenticated using (true);
+-- NOTE: Old permissive policies removed. User-scoped policies are defined in the
+-- "User profiles, data isolation & personalization" migration below.
 
 -- Migration: Make date nullable to support backlog tasks (run once in Supabase SQL Editor):
 -- ALTER TABLE tasks ALTER COLUMN date DROP NOT NULL;
@@ -93,3 +78,140 @@ create policy "Authenticated users can delete categories"
 -- alter table tasks drop column if exists completed;
 -- alter table tasks drop constraint if exists tasks_category_id_fkey;
 -- alter table tasks add constraint tasks_category_id_fkey foreign key (category_id) references categories(id) on delete set null;
+
+-- ============================================================
+-- Migration: User profiles, data isolation & personalization
+-- Run this in Supabase SQL Editor
+-- ============================================================
+
+-- 1. Create profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  display_name text,
+  avatar_url text,
+  email text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own profile"
+  ON profiles FOR SELECT TO authenticated
+  USING (id = auth.uid());
+
+CREATE POLICY "Users can update own profile"
+  ON profiles FOR UPDATE TO authenticated
+  USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+
+CREATE POLICY "Users can insert own profile"
+  ON profiles FOR INSERT TO authenticated
+  WITH CHECK (id = auth.uid());
+
+-- 2. Auto-create profile on signup via trigger
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, display_name, avatar_url, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', ''),
+    NEW.email
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 3. Seed profiles for existing users (safe to re-run)
+INSERT INTO profiles (id, display_name, avatar_url, email)
+SELECT
+  id,
+  COALESCE(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', ''),
+  COALESCE(raw_user_meta_data->>'avatar_url', raw_user_meta_data->>'picture', ''),
+  email
+FROM auth.users
+WHERE id NOT IN (SELECT id FROM profiles)
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. Add user_id to tasks, categories, task_attachments
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks (user_id);
+
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_categories_user ON categories (user_id);
+
+ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- 5. IMPORTANT: Backfill existing data before changing RLS policies!
+-- Find your user ID: SELECT id, email FROM auth.users;
+-- Then run:
+-- UPDATE tasks SET user_id = '<YOUR_USER_UUID>' WHERE user_id IS NULL;
+-- UPDATE categories SET user_id = '<YOUR_USER_UUID>' WHERE user_id IS NULL;
+-- UPDATE task_attachments SET user_id = '<YOUR_USER_UUID>' WHERE user_id IS NULL;
+
+-- 6. Drop old permissive RLS policies on tasks
+DROP POLICY IF EXISTS "Authenticated users can read tasks" ON tasks;
+DROP POLICY IF EXISTS "Authenticated users can insert tasks" ON tasks;
+DROP POLICY IF EXISTS "Authenticated users can update tasks" ON tasks;
+DROP POLICY IF EXISTS "Authenticated users can delete tasks" ON tasks;
+
+-- 7. Create user-scoped RLS policies on tasks
+CREATE POLICY "Users can read own tasks"
+  ON tasks FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+CREATE POLICY "Users can insert own tasks"
+  ON tasks FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update own tasks"
+  ON tasks FOR UPDATE TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete own tasks"
+  ON tasks FOR DELETE TO authenticated
+  USING (user_id = auth.uid());
+
+-- 8. Drop old permissive RLS policies on categories
+DROP POLICY IF EXISTS "Authenticated users can read categories" ON categories;
+DROP POLICY IF EXISTS "Authenticated users can insert categories" ON categories;
+DROP POLICY IF EXISTS "Authenticated users can update categories" ON categories;
+DROP POLICY IF EXISTS "Authenticated users can delete categories" ON categories;
+
+-- 9. Create user-scoped RLS policies on categories
+CREATE POLICY "Users can read own categories"
+  ON categories FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+CREATE POLICY "Users can insert own categories"
+  ON categories FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update own categories"
+  ON categories FOR UPDATE TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete own categories"
+  ON categories FOR DELETE TO authenticated
+  USING (user_id = auth.uid());
+
+-- 10. Drop old permissive RLS policies on task_attachments
+DROP POLICY IF EXISTS "Authenticated users can read attachments" ON task_attachments;
+DROP POLICY IF EXISTS "Authenticated users can insert attachments" ON task_attachments;
+DROP POLICY IF EXISTS "Authenticated users can delete attachments" ON task_attachments;
+
+-- 11. Create user-scoped RLS policies on task_attachments
+CREATE POLICY "Users can read own attachments"
+  ON task_attachments FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+CREATE POLICY "Users can insert own attachments"
+  ON task_attachments FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete own attachments"
+  ON task_attachments FOR DELETE TO authenticated
+  USING (user_id = auth.uid());
+
+-- 12. Replace unique constraints on categories for per-user isolation
+ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_name_key;
+ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_slug_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_user_slug ON categories (user_id, slug);

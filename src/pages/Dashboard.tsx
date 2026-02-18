@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { useCategories } from '../hooks/useCategories'
+import { useProfile } from '../hooks/useProfile'
 import { StatCard } from '../components/ui/StatCard'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
@@ -13,6 +14,7 @@ import type { TaskStatus } from '../types'
 export default function Dashboard() {
   const { tasks, loading } = useAllTasks()
   const { categories } = useCategories()
+  const { profile } = useProfile()
   const navigate = useNavigate()
 
   const stats = useMemo(() => {
@@ -57,7 +59,9 @@ export default function Dashboard() {
     <div className="p-6 lg:pl-8 max-w-6xl">
       {/* Welcome */}
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-slate-800">{greeting}!</h1>
+        <h1 className="text-xl font-semibold text-slate-800">
+          {greeting}{profile?.display_name ? `, ${profile.display_name.split(' ')[0]}` : ''}!
+        </h1>
         <p className="text-sm text-slate-400 mt-1">
           {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>

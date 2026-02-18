@@ -1,19 +1,36 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider, useAuth } from '../AuthContext'
 
-// Mock import.meta.env
-vi.stubEnv('VITE_ADMIN_PIN', '123456')
+// Mock supabase
+const mockGetSession = vi.fn()
+const mockSignInWithOAuth = vi.fn()
+const mockSignOut = vi.fn()
+const mockOnAuthStateChange = vi.fn()
+
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: () => mockGetSession(),
+      signInWithOAuth: (opts: unknown) => mockSignInWithOAuth(opts),
+      signOut: () => mockSignOut(),
+      onAuthStateChange: (cb: unknown) => {
+        mockOnAuthStateChange(cb)
+        return { data: { subscription: { unsubscribe: vi.fn() } } }
+      },
+    },
+  },
+}))
 
 function TestConsumer() {
-  const { authenticated, loading, signIn, signOut } = useAuth()
+  const { authenticated, loading, user, signInWithGoogle, signOut } = useAuth()
   return (
     <div>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="authenticated">{String(authenticated)}</span>
-      <button onClick={() => signIn('123456')}>Sign In Correct</button>
-      <button onClick={() => signIn('wrong')}>Sign In Wrong</button>
+      <span data-testid="user">{user?.email ?? 'none'}</span>
+      <button onClick={() => signInWithGoogle()}>Sign In Google</button>
       <button onClick={() => signOut()}>Sign Out</button>
     </div>
   )
@@ -21,43 +38,36 @@ function TestConsumer() {
 
 describe('AuthContext', () => {
   beforeEach(() => {
-    localStorage.clear()
+    vi.clearAllMocks()
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+    mockSignInWithOAuth.mockResolvedValue({ data: {}, error: null })
+    mockSignOut.mockResolvedValue({ error: null })
   })
 
-  it('starts unauthenticated when localStorage is empty', async () => {
+  it('starts unauthenticated when no session exists', async () => {
     render(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
     )
-    // After useEffect runs, loading should be false
     expect(await screen.findByTestId('authenticated')).toHaveTextContent('false')
+    expect(screen.getByTestId('user')).toHaveTextContent('none')
   })
 
-  it('restores authenticated state from localStorage', async () => {
-    localStorage.setItem('tasky_authenticated', 'true')
+  it('restores authenticated state from existing session', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: '1', email: 'test@example.com' } } },
+    })
     render(
       <AuthProvider>
         <TestConsumer />
       </AuthProvider>
     )
     expect(await screen.findByTestId('authenticated')).toHaveTextContent('true')
+    expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
   })
 
-  it('signIn with correct PIN sets authenticated to true', async () => {
-    const user = userEvent.setup()
-    render(
-      <AuthProvider>
-        <TestConsumer />
-      </AuthProvider>
-    )
-    await screen.findByTestId('authenticated') // wait for initial load
-    await user.click(screen.getByText('Sign In Correct'))
-    expect(screen.getByTestId('authenticated')).toHaveTextContent('true')
-    expect(localStorage.getItem('tasky_authenticated')).toBe('true')
-  })
-
-  it('signIn with wrong PIN keeps authenticated false', async () => {
+  it('calls signInWithOAuth with google provider', async () => {
     const user = userEvent.setup()
     render(
       <AuthProvider>
@@ -65,13 +75,18 @@ describe('AuthContext', () => {
       </AuthProvider>
     )
     await screen.findByTestId('authenticated')
-    await user.click(screen.getByText('Sign In Wrong'))
-    expect(screen.getByTestId('authenticated')).toHaveTextContent('false')
+    await user.click(screen.getByText('Sign In Google'))
+    expect(mockSignInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: { redirectTo: expect.stringContaining('/dashboard') },
+    })
   })
 
-  it('signOut clears authentication', async () => {
+  it('signOut calls supabase signOut', async () => {
     const user = userEvent.setup()
-    localStorage.setItem('tasky_authenticated', 'true')
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: '1', email: 'test@example.com' } } },
+    })
     render(
       <AuthProvider>
         <TestConsumer />
@@ -79,7 +94,6 @@ describe('AuthContext', () => {
     )
     await screen.findByTestId('authenticated')
     await user.click(screen.getByText('Sign Out'))
-    expect(screen.getByTestId('authenticated')).toHaveTextContent('false')
-    expect(localStorage.getItem('tasky_authenticated')).toBeNull()
+    expect(mockSignOut).toHaveBeenCalled()
   })
 })

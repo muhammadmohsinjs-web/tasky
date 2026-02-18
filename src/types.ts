@@ -1,6 +1,15 @@
 export type TaskStatus = 'todo' | 'inprogress' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
+export interface Profile {
+  id: string
+  display_name: string | null
+  avatar_url: string | null
+  email: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface TaskLink {
   url: string
   label?: string
@@ -9,6 +18,7 @@ export interface TaskLink {
 export interface TaskAttachment {
   id: string
   task_id: string
+  user_id?: string
   file_name: string
   file_url: string
   file_type: string
@@ -18,6 +28,7 @@ export interface TaskAttachment {
 
 export interface Category {
   id: string
+  user_id?: string
   name: string
   slug: string
   color: string
@@ -30,6 +41,7 @@ export interface Category {
 
 export interface Task {
   id: string
+  user_id?: string
   title: string
   description?: string | null
   notes?: string | null

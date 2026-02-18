@@ -16,8 +16,9 @@ describe('ProtectedRoute', () => {
     mockUseAuth.mockReturnValue({
       authenticated: false,
       loading: true,
-      signIn: () => false,
-      signOut: () => {},
+      user: null,
+      signInWithGoogle: async () => {},
+      signOut: async () => {},
     })
 
     const { container } = render(
@@ -31,7 +32,6 @@ describe('ProtectedRoute', () => {
     )
 
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument()
-    // Loading dots should be visible
     expect(container.querySelector('.animate-pulse-soft')).toBeInTheDocument()
   })
 
@@ -39,8 +39,9 @@ describe('ProtectedRoute', () => {
     mockUseAuth.mockReturnValue({
       authenticated: false,
       loading: false,
-      signIn: () => false,
-      signOut: () => {},
+      user: null,
+      signInWithGoogle: async () => {},
+      signOut: async () => {},
     })
 
     render(
@@ -62,8 +63,9 @@ describe('ProtectedRoute', () => {
     mockUseAuth.mockReturnValue({
       authenticated: true,
       loading: false,
-      signIn: () => true,
-      signOut: () => {},
+      user: { id: '1', email: 'test@example.com' } as any,
+      signInWithGoogle: async () => {},
+      signOut: async () => {},
     })
 
     render(

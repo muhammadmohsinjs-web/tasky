@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEFAULT_CATEGORIES } from '../lib/defaultCategories'
+import { useAuth } from '../contexts/AuthContext'
 import type { Category } from '../types'
 
 export function useCategories() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
 
   const fetchCategories = useCallback(async () => {
     setLoading(true)
@@ -22,9 +24,10 @@ export function useCategories() {
     }
 
     if (!data || data.length === 0) {
+      const seeded = DEFAULT_CATEGORIES.map((c) => ({ ...c, user_id: user?.id }))
       const { data: inserted, error: insertError } = await supabase
         .from('categories')
-        .insert(DEFAULT_CATEGORIES)
+        .insert(seeded)
         .select()
 
       if (insertError) {
@@ -39,7 +42,7 @@ export function useCategories() {
 
     setCategories(data as Category[])
     setLoading(false)
-  }, [])
+  }, [user])
 
   useEffect(() => {
     fetchCategories()
@@ -48,7 +51,7 @@ export function useCategories() {
   const addCategory = async (category: Omit<Category, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
       .from('categories')
-      .insert(category)
+      .insert({ ...category, user_id: user?.id })
       .select()
       .single()
 
