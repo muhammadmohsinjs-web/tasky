@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useCategories } from '../hooks/useCategories'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { CATEGORY_PALETTE, CATEGORY_ICONS } from '../lib/constants'
-import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target, Info, Palette, Filter, BarChart3 } from 'lucide-react'
 import type { Category } from '../types'
 
 const ICON_MAP = {
@@ -312,16 +312,36 @@ export default function Categories() {
       </div>
 
       {categories.length === 0 && !showAdd && (
-        <div className="text-center py-20">
-          <Tag className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <div className="text-center py-16">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center mx-auto mb-5">
+            <Tag className="w-8 h-8 text-indigo-500" />
+          </div>
           <h3 className="text-lg font-semibold text-slate-700 mb-2">No categories yet</h3>
-          <p className="text-sm text-slate-400 mb-6">Create your first category to start organizing your tasks</p>
+          <p className="text-sm text-slate-400 mb-8 max-w-sm mx-auto">
+            Categories help you group and organize your tasks for better focus and tracking.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
+            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
+              <Palette className="w-5 h-5 text-violet-500" />
+              <span className="text-xs text-slate-500 text-center">Color-coded for quick recognition</span>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
+              <Filter className="w-5 h-5 text-amber-500" />
+              <span className="text-xs text-slate-500 text-center">Filter tasks by project or topic</span>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
+              <BarChart3 className="w-5 h-5 text-emerald-500" />
+              <span className="text-xs text-slate-500 text-center">Track progress per category</span>
+            </div>
+          </div>
+
           <button
             onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm) }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 shadow-sm font-medium text-sm cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 shadow-sm font-medium text-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Add Category
+            Create Your First Category
           </button>
         </div>
       )}

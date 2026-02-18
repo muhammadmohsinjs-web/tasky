@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { DEFAULT_CATEGORIES } from '../lib/defaultCategories'
 import { useAuth } from '../contexts/AuthContext'
 import type { Category } from '../types'
 
@@ -19,28 +18,9 @@ export function useCategories() {
     if (error) {
       console.error('Failed to fetch categories:', error)
       setCategories([])
-      setLoading(false)
-      return
+    } else {
+      setCategories((data as Category[]) || [])
     }
-
-    if (!data || data.length === 0) {
-      const seeded = DEFAULT_CATEGORIES.map((c) => ({ ...c, user_id: user?.id }))
-      const { data: inserted, error: insertError } = await supabase
-        .from('categories')
-        .insert(seeded)
-        .select()
-
-      if (insertError) {
-        console.error('Failed to seed categories:', insertError)
-        setCategories([])
-      } else {
-        setCategories(inserted as Category[])
-      }
-      setLoading(false)
-      return
-    }
-
-    setCategories(data as Category[])
     setLoading(false)
   }, [user])
 
