@@ -72,5 +72,5 @@ export interface Task {
   created_at: string
   updated_at?: string
   is_projected?: boolean
-  source_task_id?: string
+  source_task_id?: string | null
 }

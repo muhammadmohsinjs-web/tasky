@@ -15,9 +15,10 @@ interface Props {
   onSelect: (task: Task, mode: 'view' | 'edit') => void
   selectedDate?: string | null
   onDateSelect?: (date: string) => void
+  completionTick?: number
 }
 
-export function Calendar({ year, month, tasks, categories, onAdd, onSelect, selectedDate, onDateSelect }: Props) {
+export function Calendar({ year, month, tasks, categories, onAdd, onSelect, selectedDate, onDateSelect, completionTick = 0 }: Props) {
   const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
     if (typeof window === 'undefined') {
       return false
@@ -142,6 +143,7 @@ export function Calendar({ year, month, tasks, categories, onAdd, onSelect, sele
                   dateKey={dayKey}
                   day={{ ...day, events: [...dayEvents, ...extraDayEvents] }}
                   isSelected={selected}
+                  completionTick={completionTick}
                   visibleEventCount={maxVisibleEvents}
                   categories={categories}
                   onAdd={onAdd}

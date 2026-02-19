@@ -1,15 +1,20 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
+import { enqueueTaskMutation } from '../lib/offlineQueue'
 import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
+
+function isOffline() {
+  return typeof navigator !== 'undefined' && !navigator.onLine
+}
 
 export function useTasks(year: number, month: number) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const queryKey = ['tasks', year, month]
+  const queryKey = useMemo(() => ['tasks', year, month] as const, [year, month])
 
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
   const endDate =
@@ -36,9 +41,33 @@ export function useTasks(year: number, month: number) {
     },
   })
 
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`tasks-month-${year}-${month}-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [year, month, user?.id, queryClient])
+
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey })
-  }, [queryClient, queryKey[0], year, month])
+  }, [queryClient, queryKey])
 
   const addTask = async (
     title: string,
@@ -56,23 +85,39 @@ export function useTasks(year: number, month: number) {
       sort_order?: number
     }
   ) => {
+    const row = {
+      title,
+      category_id: categoryId || null,
+      date,
+      status: extras?.status ?? ('todo' as TaskStatus),
+      priority,
+      user_id: user?.id,
+      description: extras?.description ?? null,
+      notes: extras?.notes ?? null,
+      links: extras?.links ?? [],
+      end_date: extras?.end_date ?? null,
+      recurrence: extras?.recurrence ?? null,
+      source_task_id: extras?.source_task_id ?? null,
+      sort_order: extras?.sort_order ?? 0,
+    }
+
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'insert', payload: row })
+      const optimistic: Task = {
+        id: `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ...row,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        category: null,
+      }
+      queryClient.setQueryData<Task[]>(queryKey, (old) => [...(old ?? []), optimistic])
+      toast.info('Saved offline. Will sync when you reconnect.')
+      return optimistic
+    }
+
     const { data, error } = await supabase
       .from('tasks')
-      .insert({
-        title,
-        category_id: categoryId || null,
-        date,
-        status: extras?.status ?? ('todo' as TaskStatus),
-        priority,
-        user_id: user?.id,
-        description: extras?.description ?? null,
-        notes: extras?.notes ?? null,
-        links: extras?.links ?? [],
-        end_date: extras?.end_date ?? null,
-        recurrence: extras?.recurrence ?? null,
-        source_task_id: extras?.source_task_id ?? null,
-        sort_order: extras?.sort_order ?? 0,
-      })
+      .insert(row)
       .select(TASK_SELECT)
       .single()
 
@@ -97,6 +142,14 @@ export function useTasks(year: number, month: number) {
       user_id: user?.id,
     }))
 
+    if (isOffline()) {
+      for (const row of rows) {
+        await enqueueTaskMutation({ kind: 'insert', payload: row })
+      }
+      toast.info(`${items.length} tasks queued for sync`)
+      return
+    }
+
     const { data, error } = await supabase
       .from('tasks')
       .insert(rows)
@@ -119,6 +172,12 @@ export function useTasks(year: number, month: number) {
     queryClient.setQueryData<Task[]>(queryKey, (old) =>
       (old ?? []).map((t) => (t.id === id ? { ...t, status: newStatus } : t))
     )
+
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'update', payload: { id, updates: { status: newStatus } } })
+      toast.info('Status update queued for sync')
+      return
+    }
 
     const { error } = await supabase
       .from('tasks')
@@ -150,6 +209,15 @@ export function useTasks(year: number, month: number) {
       source_task_id?: string | null
     }
   ) => {
+    if (isOffline()) {
+      queryClient.setQueryData<Task[]>(queryKey, (old) =>
+        (old ?? []).map((t) => (t.id === id ? { ...t, ...updates } : t))
+      )
+      await enqueueTaskMutation({ kind: 'update', payload: { id, updates } })
+      toast.info('Task changes queued for sync')
+      return
+    }
+
     const task = tasks.find((t) => t.id === id)
 
     // Conflict detection: only update if updated_at matches
@@ -183,13 +251,21 @@ export function useTasks(year: number, month: number) {
   }
 
   const deleteTask = async (id: string) => {
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => t.id !== id))
+
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'delete', payload: { id } })
+      toast.info('Task deletion queued for sync')
+      return
+    }
+
     const { error } = await supabase.from('tasks').delete().eq('id', id)
     if (error) {
       console.error('Failed to delete task:', error)
       toast.error('Failed to delete task')
+      invalidate()
       return
     }
-    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => t.id !== id))
     toast.success('Task deleted')
   }
 
@@ -198,6 +274,12 @@ export function useTasks(year: number, month: number) {
     queryClient.setQueryData<Task[]>(queryKey, (old) =>
       (old ?? []).map((t) => (ids.includes(t.id) ? { ...t, status } : t))
     )
+
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'bulk_update', payload: { ids, updates: { status } } })
+      toast.info('Bulk status update queued for sync')
+      return
+    }
 
     const { error } = await supabase
       .from('tasks')
@@ -220,6 +302,12 @@ export function useTasks(year: number, month: number) {
   }
 
   const bulkReschedule = async (ids: string[], date: string) => {
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'bulk_update', payload: { ids, updates: { date } } })
+      toast.info('Reschedule queued for sync')
+      return
+    }
+
     const { error } = await supabase
       .from('tasks')
       .update({ date })
@@ -235,6 +323,13 @@ export function useTasks(year: number, month: number) {
   }
 
   const bulkMoveToBacklog = async (ids: string[]) => {
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'bulk_update', payload: { ids, updates: { date: null } } })
+      queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
+      toast.info('Move to backlog queued for sync')
+      return
+    }
+
     const { error } = await supabase
       .from('tasks')
       .update({ date: null })
@@ -251,6 +346,14 @@ export function useTasks(year: number, month: number) {
   }
 
   const bulkDelete = async (ids: string[]) => {
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
+
+    if (isOffline()) {
+      await enqueueTaskMutation({ kind: 'bulk_delete', payload: { ids } })
+      toast.info('Bulk delete queued for sync')
+      return
+    }
+
     const { error } = await supabase
       .from('tasks')
       .delete()
@@ -259,9 +362,9 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk delete tasks:', error)
       toast.error('Failed to delete tasks')
+      invalidate()
       return
     }
-    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
   }
 
@@ -276,10 +379,26 @@ export function useTasks(year: number, month: number) {
       return updated
     })
 
+    if (isOffline()) {
+      for (const [index, id] of orderedIds.entries()) {
+        await enqueueTaskMutation({ kind: 'update', payload: { id, updates: { sort_order: index } } })
+      }
+      return
+    }
+
     const updates = orderedIds.map((id, index) =>
       supabase.from('tasks').update({ sort_order: index }).eq('id', id)
     )
-    await Promise.all(updates)
+
+    const results = await Promise.all(updates)
+    const hasError = results.some((res) => res.error)
+
+    if (hasError) {
+      console.error('Failed to reorder tasks:', results)
+      toast.error('Failed to reorder tasks')
+      invalidate()
+      return
+    }
   }
 
   return {

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Task, Category, TaskStatus } from '../../types'
 import { categoryAccent } from '../../lib/categoryUtils'
 import { nextStatus } from '../ui/StatusBadge'
@@ -23,6 +24,8 @@ interface Props {
 }
 
 export function TaskItem({ task, onStatusChange, onDelete, onSelect, draggable = false }: Props) {
+  const [showBurst, setShowBurst] = useState(false)
+  const previousStatus = useRef(task.status)
   const StatusIcon = STATUS_ICONS[task.status]
   const statusColor = STATUS_CONFIG[task.status]
 
@@ -35,6 +38,16 @@ export function TaskItem({ task, onStatusChange, onDelete, onSelect, draggable =
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
+
+  useEffect(() => {
+    const changedToDone = previousStatus.current !== 'done' && task.status === 'done'
+    previousStatus.current = task.status
+    if (!changedToDone) return
+
+    setShowBurst(true)
+    const timer = window.setTimeout(() => setShowBurst(false), 420)
+    return () => window.clearTimeout(timer)
+  }, [task.status])
 
   return (
     <div
@@ -67,7 +80,9 @@ export function TaskItem({ task, onStatusChange, onDelete, onSelect, draggable =
 
       <button
         onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}
-        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full cursor-pointer hover:bg-slate-100 transition-colors"
+        className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-full cursor-pointer hover:bg-slate-100 transition-colors relative ${
+          showBurst ? 'animate-complete-pop' : ''
+        }`}
         title={statusColor.label}
         aria-label={`Mark as ${STATUS_CONFIG[nextStatus(task.status)].label}`}
       >
@@ -76,6 +91,7 @@ export function TaskItem({ task, onStatusChange, onDelete, onSelect, draggable =
           task.status === 'inprogress' ? 'text-amber-500' :
           'text-slate-300'
         }`} />
+        {showBurst && <span className="complete-burst" aria-hidden />}
       </button>
 
       <PriorityBadge priority={task.priority} size="sm" />
