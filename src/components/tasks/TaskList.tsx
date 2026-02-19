@@ -186,7 +186,7 @@ export function TaskList({ tasks, onStatusChange, onSelect, onBulkStatusChange, 
                     </div>
                     <PriorityBadge priority={task.priority} />
                     {task.links && task.links.length > 0 && (
-                      <LinkIcon className="w-3.5 h-3.5 text-indigo-400" title={`${task.links.length} link(s)`} />
+                      <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
                     )}
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
                       {categoryLabel(task.category)}

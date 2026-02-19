@@ -9,13 +9,13 @@ interface Props {
 
 export function StatCard({ title, value, icon: Icon, iconColor }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div className="panel p-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-slate-400 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-slate-800 mt-1">{value}</p>
+          <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">{title}</p>
+          <p className="text-[28px] leading-none font-semibold text-slate-900 mt-2">{value}</p>
         </div>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconColor}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-slate-200 ${iconColor}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>

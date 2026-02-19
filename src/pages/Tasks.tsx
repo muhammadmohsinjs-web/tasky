@@ -25,8 +25,20 @@ export default function Tasks() {
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [bulkAddOpen, setBulkAddOpen] = useState(false)
   const { categories, loading: categoriesLoading } = useCategories()
-  const { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkReschedule, bulkMoveToBacklog, bulkDelete, refetch: refetchCalendar } =
-    useTasks(year, month)
+  const {
+    tasks,
+    loading,
+    addTask,
+    addTasks,
+    updateTaskStatus,
+    updateTask,
+    deleteTask,
+    bulkUpdateStatus,
+    bulkReschedule,
+    bulkMoveToBacklog,
+    bulkDelete,
+    refetch: refetchCalendar,
+  } = useTasks(year, month)
   const {
     tasks: backlogTasks,
     loading: backlogLoading,
@@ -41,7 +53,6 @@ export default function Tasks() {
     refetch: refetchBacklog,
   } = useBacklogTasks()
 
-  // Debounce search input with 300ms delay
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search)
@@ -58,13 +69,17 @@ export default function Tasks() {
   }, [tasks, selectedTask])
 
   const goToPrevMonth = () => {
-    if (month === 0) { setMonth(11); setYear((y) => y - 1) }
-    else setMonth((m) => m - 1)
+    if (month === 0) {
+      setMonth(11)
+      setYear((y) => y - 1)
+    } else setMonth((m) => m - 1)
   }
 
   const goToNextMonth = () => {
-    if (month === 11) { setMonth(0); setYear((y) => y + 1) }
-    else setMonth((m) => m + 1)
+    if (month === 11) {
+      setMonth(0)
+      setYear((y) => y + 1)
+    } else setMonth((m) => m + 1)
   }
 
   const goToToday = () => {
@@ -77,33 +92,39 @@ export default function Tasks() {
   const doneTasks = tasks.filter((t) => t.status === 'done').length
   const totalTasks = tasks.length
 
-  const filterBySearchAndCategory = (list: Task[]) => {
-    let result = list
+  const filteredTasks = useMemo(() => {
+    let result = tasks
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category_id === activeCategory)
     }
     if (debouncedSearch.trim()) {
       const q = debouncedSearch.trim().toLowerCase()
-      result = result.filter((t) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.description ?? '').toLowerCase().includes(q) ||
-        (t.notes ?? '').toLowerCase().includes(q)
-      )
+      result = result.filter((t) => t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q))
     }
     return result
-  }
+  }, [tasks, activeCategory, debouncedSearch])
 
-  const filteredTasks = useMemo(() => filterBySearchAndCategory(tasks), [tasks, activeCategory, debouncedSearch])
-  const filteredBacklogTasks = useMemo(() => filterBySearchAndCategory(backlogTasks), [backlogTasks, activeCategory, debouncedSearch])
+  const filteredBacklogTasks = useMemo(() => {
+    let result = backlogTasks
+    if (activeCategory !== 'all') {
+      result = result.filter((t) => t.category_id === activeCategory)
+    }
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase()
+      result = result.filter((t) => t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q))
+    }
+    return result
+  }, [backlogTasks, activeCategory, debouncedSearch])
 
   return (
-    <div className="p-6 lg:px-10 lg:py-8">
-      <header className="mb-8">
+    <div className="content-wrap">
+      <header className="page-header">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-5">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-800">Tasks</h1>
-              <p className="text-sm text-slate-400 mt-1">Manage and organize your tasks</p>
+              <span className="page-kicker">Execution</span>
+              <h1>Tasks</h1>
+              <p className="page-subtitle">Manage your calendar, list view, and backlog in one workflow.</p>
             </div>
             <div className="hidden sm:flex items-center gap-4 ml-2 pl-5 border-l border-slate-200">
               {categories.map((cat) => (
@@ -115,22 +136,15 @@ export default function Tasks() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setBulkAddOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 font-semibold text-sm cursor-pointer shadow-sm"
-            >
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <button onClick={() => setBulkAddOpen(true)} className="btn btn-primary">
               <Plus className="w-4 h-4" />
               Bulk Add
             </button>
 
-            {totalTasks > 0 && (
-              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-medium bg-slate-50 px-3 py-1.5 rounded-lg">
-                <span>{doneTasks}/{totalTasks} done</span>
-              </div>
-            )}
+            {totalTasks > 0 && <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold bg-white border border-slate-200 px-3 py-1.5 rounded-lg">{doneTasks}/{totalTasks} done</div>}
 
-            <div className="flex items-center gap-1.5 bg-white rounded-xl border border-slate-200 shadow-sm px-1.5 py-1.5">
+            <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 shadow-sm px-1.5 py-1.5">
               <button onClick={goToPrevMonth} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer">
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -143,7 +157,7 @@ export default function Tasks() {
             </div>
 
             {!isCurrentMonth && (
-              <button onClick={goToToday} className="text-sm px-4 py-2 bg-indigo-50 text-indigo-600 font-semibold rounded-xl hover:bg-indigo-100 cursor-pointer">
+              <button onClick={goToToday} className="btn btn-secondary">
                 Today
               </button>
             )}
@@ -153,37 +167,17 @@ export default function Tasks() {
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
             <Search className="w-4 h-4 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title, notes..."
-              className="ml-2.5 text-sm w-48 sm:w-64 bg-transparent outline-none text-slate-600 placeholder:text-slate-400"
-            />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by title, notes..." className="ml-2.5 text-sm w-48 sm:w-64 bg-transparent outline-none text-slate-700 placeholder:text-slate-400" />
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <span className="text-xs font-medium text-slate-400">Filter</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Filter</span>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setActiveCategory('all')}
-                className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer font-medium ${
-                  activeCategory === 'all'
-                    ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                    : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                }`}
-              >
+              <button onClick={() => setActiveCategory('all')} className={`tag-filter ${activeCategory === 'all' ? 'active' : ''}`}>
                 All
               </button>
               {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer font-medium ${
-                    activeCategory === cat.id
-                      ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                      : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
-                  }`}
-                >
+                <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className={`tag-filter ${activeCategory === cat.id ? 'active' : ''}`}>
                   {cat.name}
                 </button>
               ))}
@@ -191,36 +185,19 @@ export default function Tasks() {
           </div>
 
           <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-            <button
-              onClick={() => setView('calendar')}
-              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
-                view === 'calendar' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
+            <button onClick={() => setView('calendar')} className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-semibold ${view === 'calendar' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
               <CalendarDays className="w-4 h-4" />
               Calendar
             </button>
-            <button
-              onClick={() => setView('list')}
-              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
-                view === 'list' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
+            <button onClick={() => setView('list')} className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-semibold ${view === 'list' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
               <List className="w-4 h-4" />
               List
             </button>
-            <button
-              onClick={() => setView('backlog')}
-              className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-medium ${
-                view === 'backlog' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
+            <button onClick={() => setView('backlog')} className={`text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer font-semibold ${view === 'backlog' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
               <Inbox className="w-4 h-4" />
               Backlog
               {backlogTasks.length > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                  view === 'backlog' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${view === 'backlog' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   {backlogTasks.length}
                 </span>
               )}
@@ -230,7 +207,7 @@ export default function Tasks() {
       </header>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {(view === 'backlog' ? backlogLoading : loading) || categoriesLoading ? (
             <LoadingSpinner message="Loading tasks..." fullHeight={false} />
           ) : view === 'backlog' ? (
@@ -240,7 +217,10 @@ export default function Tasks() {
               categories={categories}
               onAdd={addBacklogTask}
               onStatusChange={updateBacklogStatus}
-              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
+              onSelect={(task, mode) => {
+                setSelectedTask(task)
+                setPanelMode(mode)
+              }}
               onDelete={deleteBacklogTask}
               onSchedule={async (ids, date) => {
                 await scheduleBacklogTasks(ids, date)
@@ -259,13 +239,19 @@ export default function Tasks() {
               onStatusChange={updateTaskStatus}
               onUpdate={updateTask}
               onDelete={deleteTask}
-              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
+              onSelect={(task, mode) => {
+                setSelectedTask(task)
+                setPanelMode(mode)
+              }}
             />
           ) : (
             <TaskList
               tasks={filteredTasks}
               onStatusChange={updateTaskStatus}
-              onSelect={(task, mode) => { setSelectedTask(task); setPanelMode(mode) }}
+              onSelect={(task, mode) => {
+                setSelectedTask(task)
+                setPanelMode(mode)
+              }}
               onBulkStatusChange={bulkUpdateStatus}
               onBulkReschedule={async (ids, date) => {
                 await bulkReschedule(ids, date)
@@ -290,24 +276,27 @@ export default function Tasks() {
             const isBacklogTask = selectedTask?.date === null
             if (isBacklogTask) {
               await updateBacklogTask(id, updates)
-              // If a date was assigned, the task leaves backlog — also refetch calendar tasks
               if (updates.date) {
                 await refetchBacklog()
               }
             } else {
               await updateTask(id, updates)
-              // If date was cleared, task moves to backlog — refetch backlog
               if (updates.date === null) {
                 await refetchBacklog()
               }
             }
+
+            if (selectedTask) {
+              const updatedTask = { ...selectedTask, ...updates }
+              setSelectedTask(updatedTask)
+            }
           }}
-          onDelete={(id) => {
+          onDelete={async (id) => {
             const isBacklogTask = selectedTask?.date === null
             if (isBacklogTask) {
-              deleteBacklogTask(id)
+              await deleteBacklogTask(id)
             } else {
-              deleteTask(id)
+              await deleteTask(id)
             }
             setSelectedTask(null)
           }}

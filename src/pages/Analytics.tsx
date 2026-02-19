@@ -7,9 +7,18 @@ import { ListTodo, Circle, Clock, CheckCircle2 } from 'lucide-react'
 import { STATUS_CONFIG, MONTH_NAMES, CATEGORY_PALETTE } from '../lib/constants'
 import type { TaskStatus } from '../types'
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  AreaChart,
+  Area,
 } from 'recharts'
 
 export default function Analytics() {
@@ -23,11 +32,14 @@ export default function Analytics() {
     return { total: tasks.length, todo, inprogress, done }
   }, [tasks])
 
-  const statusChartData = useMemo(() => [
-    { name: 'To Do', value: stats.todo, fill: STATUS_CONFIG.todo.hex },
-    { name: 'In Progress', value: stats.inprogress, fill: STATUS_CONFIG.inprogress.hex },
-    { name: 'Done', value: stats.done, fill: STATUS_CONFIG.done.hex },
-  ], [stats])
+  const statusChartData = useMemo(
+    () => [
+      { name: 'To Do', value: stats.todo, fill: STATUS_CONFIG.todo.hex },
+      { name: 'In Progress', value: stats.inprogress, fill: STATUS_CONFIG.inprogress.hex },
+      { name: 'Done', value: stats.done, fill: STATUS_CONFIG.done.hex },
+    ],
+    [stats]
+  )
 
   const categoryChartData = useMemo(() => {
     return categories.map((cat) => {
@@ -44,7 +56,6 @@ export default function Analytics() {
   const monthlyData = useMemo(() => {
     const months: Record<string, { month: string; done: number; total: number }> = {}
 
-    // Get last 6 months
     const now = new Date()
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -53,8 +64,8 @@ export default function Analytics() {
     }
 
     for (const task of tasks) {
-      if (!task.date) continue // skip backlog tasks
-      const key = task.date.slice(0, 7) // YYYY-MM
+      if (!task.date) continue
+      const key = task.date.slice(0, 7)
       if (months[key]) {
         months[key].total++
         if (task.status === 'done') months[key].done++
@@ -69,27 +80,26 @@ export default function Analytics() {
   }
 
   return (
-    <div className="p-6 lg:pl-8 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-slate-800">Analytics</h1>
-        <p className="text-sm text-slate-400 mt-1">Track your task progress and productivity</p>
+    <div className="content-wrap">
+      <div className="page-header">
+        <span className="page-kicker">Insights</span>
+        <h1>Analytics</h1>
+        <p className="page-subtitle">Track task progress and productivity trends across your workspace.</p>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Total Tasks" value={stats.total} icon={ListTodo} iconColor="bg-indigo-50 text-indigo-600" />
-        <StatCard title="To Do" value={stats.todo} icon={Circle} iconColor="bg-slate-100 text-slate-600" />
-        <StatCard title="In Progress" value={stats.inprogress} icon={Clock} iconColor="bg-amber-50 text-amber-600" />
-        <StatCard title="Done" value={stats.done} icon={CheckCircle2} iconColor="bg-emerald-50 text-emerald-600" />
+        <StatCard title="Total Tasks" value={stats.total} icon={ListTodo} iconColor="bg-blue-50 text-blue-700" />
+        <StatCard title="To Do" value={stats.todo} icon={Circle} iconColor="bg-slate-100 text-slate-700" />
+        <StatCard title="In Progress" value={stats.inprogress} icon={Clock} iconColor="bg-amber-50 text-amber-700" />
+        <StatCard title="Done" value={stats.done} icon={CheckCircle2} iconColor="bg-emerald-50 text-emerald-700" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Status Distribution - Donut */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200">
+        <div className="panel overflow-hidden">
+          <div className="panel-header">
             <h2 className="text-sm font-semibold text-slate-700">Status Distribution</h2>
           </div>
-          <div className="p-5">
+          <div className="panel-body">
             {stats.total === 0 ? (
               <div className="text-center py-12 text-sm text-slate-400">No data yet</div>
             ) : (
@@ -104,10 +114,10 @@ export default function Analytics() {
                       outerRadius={80}
                       paddingAngle={3}
                       dataKey="value"
-                      label={({
-                        cx, cy, midAngle, outerRadius: or, percent, name,
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      }: any) => {
+                      label={(
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        { cx, cy, midAngle, outerRadius: or, percent, name }: any
+                      ) => {
                         if ((percent ?? 0) === 0) return null
                         const RADIAN = Math.PI / 180
                         const radius = (or ?? 90) + 18
@@ -125,14 +135,16 @@ export default function Analytics() {
                         <Cell key={index} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                    <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #dbe3ef' }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex justify-center gap-4 mt-2">
                   {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map((s) => (
                     <div key={s} className="flex items-center gap-1.5">
                       <div className={`w-2 h-2 rounded-full ${STATUS_CONFIG[s].dot}`} />
-                      <span className="text-[11px] text-slate-500">{STATUS_CONFIG[s].label}: {stats[s === 'inprogress' ? 'inprogress' : s]}</span>
+                      <span className="text-[11px] text-slate-500">
+                        {STATUS_CONFIG[s].label}: {stats[s === 'inprogress' ? 'inprogress' : s]}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -141,22 +153,21 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Tasks by Category - Bar Chart */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200">
+        <div className="panel overflow-hidden">
+          <div className="panel-header">
             <h2 className="text-sm font-semibold text-slate-700">Tasks by Category</h2>
           </div>
-          <div className="p-5">
+          <div className="panel-body">
             {categoryChartData.length === 0 ? (
               <div className="text-center py-12 text-sm text-slate-400">No data yet</div>
             ) : (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={categoryChartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#edf2fa" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #dbe3ef' }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={((value: any, _name: any, props: any) => [value, props?.payload?.fullName ?? '']) as any}
                   />
@@ -172,43 +183,28 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Completion Over Time - Area Chart */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8">
-        <div className="px-5 py-4 border-b border-slate-200">
+      <div className="panel overflow-hidden mb-8">
+        <div className="panel-header">
           <h2 className="text-sm font-semibold text-slate-700">Activity Over Time (Last 6 Months)</h2>
         </div>
-        <div className="p-5">
+        <div className="panel-body">
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#edf2fa" />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} />
               <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-              <Area
-                type="monotone"
-                dataKey="total"
-                stroke="#818cf8"
-                fill="#eef2ff"
-                strokeWidth={2}
-                name="Total Tasks"
-              />
-              <Area
-                type="monotone"
-                dataKey="done"
-                stroke="#10b981"
-                fill="#ecfdf5"
-                strokeWidth={2}
-                name="Completed"
-              />
+              <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #dbe3ef' }} />
+              <Area type="monotone" dataKey="total" stroke="#2563eb" fill="#dbeafe" strokeWidth={2} name="Total Tasks" />
+              <Area type="monotone" dataKey="done" stroke="#059669" fill="#d1fae5" strokeWidth={2} name="Completed" />
             </AreaChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-3">
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-indigo-400" />
+              <div className="w-2 h-2 rounded-full bg-blue-600" />
               <span className="text-[11px] text-slate-500">Total Tasks</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              <div className="w-2 h-2 rounded-full bg-emerald-600" />
               <span className="text-[11px] text-slate-500">Completed</span>
             </div>
           </div>

@@ -17,7 +17,8 @@ export function useBacklogTasks() {
       .select(TASK_SELECT)
       .is('date', null)
       .order('created_at', { ascending: false })
-      .abortSignal(signal)
+      
+      .abortSignal(signal as AbortSignal)
 
     if (signal?.aborted) return
 

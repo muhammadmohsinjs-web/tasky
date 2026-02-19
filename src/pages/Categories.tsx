@@ -3,14 +3,55 @@ import { useCategories } from '../hooks/useCategories'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { CATEGORY_PALETTE, CATEGORY_ICONS } from '../lib/constants'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
-import { Plus, Pencil, Trash2, X, Tag, Code, Cloud, Brain, Database, Globe, Server, Layers, Package, Cpu, Terminal, GitBranch, Book, Lightbulb, Rocket, Shield, Zap, Heart, Star, Target, Palette, Filter, BarChart3 } from 'lucide-react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Tag,
+  Code,
+  Cloud,
+  Brain,
+  Database,
+  Globe,
+  Server,
+  Layers,
+  Package,
+  Cpu,
+  Terminal,
+  GitBranch,
+  Book,
+  Lightbulb,
+  Rocket,
+  Shield,
+  Zap,
+  Heart,
+  Star,
+  Target,
+} from 'lucide-react'
 import type { Category } from '../types'
 
 const ICON_MAP = {
-  tag: Tag, code: Code, cloud: Cloud, brain: Brain, database: Database, globe: Globe,
-  server: Server, layers: Layers, package: Package, cpu: Cpu, terminal: Terminal, 'git-branch': GitBranch,
-  book: Book, lightbulb: Lightbulb, rocket: Rocket, shield: Shield, zap: Zap, heart: Heart,
-  star: Star, target: Target
+  tag: Tag,
+  code: Code,
+  cloud: Cloud,
+  brain: Brain,
+  database: Database,
+  globe: Globe,
+  server: Server,
+  layers: Layers,
+  package: Package,
+  cpu: Cpu,
+  terminal: Terminal,
+  'git-branch': GitBranch,
+  book: Book,
+  lightbulb: Lightbulb,
+  rocket: Rocket,
+  shield: Shield,
+  zap: Zap,
+  heart: Heart,
+  star: Star,
+  target: Target,
 } as const
 
 interface CategoryForm {
@@ -30,8 +71,6 @@ export default function Categories() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CategoryForm>(emptyForm)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
-  const taskCountForCategory = (id: string) => tasks.filter((t) => t.category_id === id).length
 
   const getStatusBreakdown = (id: string) => {
     const categoryTasks = tasks.filter((t) => t.category_id === id)
@@ -107,67 +146,61 @@ export default function Categories() {
   }
 
   return (
-    <div className="p-6 lg:pl-8 max-w-4xl">
-      <div className="flex items-center justify-between mb-8">
+    <div className="content-wrap max-w-6xl">
+      <div className="page-header flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Categories</h1>
-          <p className="text-sm text-slate-400 mt-1">Organize your tasks into categories</p>
+          <span className="page-kicker">Configuration</span>
+          <h1>Categories</h1>
+          <p className="page-subtitle">Create category taxonomy for tasks, priorities, and reporting.</p>
         </div>
         <button
-          onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm) }}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 shadow-sm font-medium text-sm cursor-pointer"
+          onClick={() => {
+            setShowAdd(true)
+            setEditingId(null)
+            setForm(emptyForm)
+          }}
+          className="btn btn-primary"
         >
           <Plus className="w-4 h-4" />
           Add Category
         </button>
       </div>
 
-      {/* Add / Edit Form */}
       {(showAdd || editingId) && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6 animate-fade-in">
+        <div className="panel p-5 mb-6 animate-fade-in">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-700">
-              {editingId ? 'Edit Category' : 'New Category'}
-            </h3>
-            <button onClick={cancelEdit} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+            <h3 className="text-sm font-semibold text-slate-700">{editingId ? 'Edit Category' : 'New Category'}</h3>
+            <button onClick={cancelEdit} className="btn btn-ghost !p-2">
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-[11px] font-medium text-slate-500">Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Frontend"
-                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100"
-              />
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Name</label>
+              <input type="text" value={form.name} onChange={(e) => handleNameChange(e.target.value)} placeholder="e.g. Frontend" className="input-base mt-1" />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-slate-500">Short Label (badge)</label>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Short Label</label>
               <input
                 type="text"
                 value={form.short_label}
                 onChange={(e) => setForm((f) => ({ ...f, short_label: e.target.value }))}
                 placeholder="e.g. FE"
                 maxLength={4}
-                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100 uppercase"
+                className="input-base mt-1 uppercase"
               />
             </div>
           </div>
 
           <div className="mb-5">
-            <label className="text-[11px] font-medium text-slate-500">Color</label>
+            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Color</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {CATEGORY_PALETTE.map((p, idx) => (
                 <button
                   key={p.name}
                   onClick={() => setForm((f) => ({ ...f, paletteIndex: idx }))}
-                  className={`w-8 h-8 rounded-lg border-2 transition-all cursor-pointer ${
-                    form.paletteIndex === idx ? 'border-indigo-500 scale-110' : 'border-transparent'
-                  }`}
+                  className={`w-8 h-8 rounded-lg border-2 transition-all cursor-pointer ${form.paletteIndex === idx ? 'border-blue-500 scale-105' : 'border-white/0'}`}
                   style={{ backgroundColor: p.hex }}
                   title={p.name}
                 />
@@ -176,7 +209,7 @@ export default function Categories() {
           </div>
 
           <div className="mb-5">
-            <label className="text-[11px] font-medium text-slate-500">Icon</label>
+            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Icon</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {CATEGORY_ICONS.map((iconName) => {
                 const IconComponent = ICON_MAP[iconName]
@@ -184,10 +217,8 @@ export default function Categories() {
                   <button
                     key={iconName}
                     onClick={() => setForm((f) => ({ ...f, icon: iconName }))}
-                    className={`p-2 rounded-lg border-2 transition-all cursor-pointer ${
-                      form.icon === iconName
-                        ? 'border-indigo-500 bg-indigo-50 scale-110'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    className={`p-2 rounded-lg border transition-all cursor-pointer ${
+                      form.icon === iconName ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                     title={iconName}
                   >
@@ -205,41 +236,28 @@ export default function Categories() {
                 {form.short_label.toUpperCase() || 'LBL'}
               </span>
             </div>
-            <button
-              onClick={editingId ? handleUpdate : handleAdd}
-              disabled={!form.name.trim() || !form.short_label.trim()}
-              className="px-4 py-2 bg-indigo-500 text-white text-sm rounded-lg hover:bg-indigo-600 font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={editingId ? handleUpdate : handleAdd} disabled={!form.name.trim() || !form.short_label.trim()} className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
               {editingId ? 'Update' : 'Create'}
             </button>
-            <button
-              onClick={cancelEdit}
-              className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 cursor-pointer"
-            >
+            <button onClick={cancelEdit} className="btn btn-secondary">
               Cancel
             </button>
           </div>
         </div>
       )}
 
-      {/* Category List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {categories.map((cat) => {
           const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Tag
           const breakdown = getStatusBreakdown(cat.id)
           return (
-            <div
-              key={cat.id}
-              className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 ${cat.accent} hover:shadow-md transition-shadow`}
-            >
+            <div key={cat.id} className={`panel p-5 border-l-4 ${cat.accent}`}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <IconComponent className="w-4 h-4 text-slate-400" />
-                  <h3 className="text-sm font-semibold text-slate-700">{cat.name}</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">{cat.name}</h3>
                 </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.color}`}>
-                  {cat.short_label}
-                </span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.color}`}>{cat.short_label}</span>
               </div>
 
               <div className="mb-3">
@@ -247,96 +265,35 @@ export default function Categories() {
                 {breakdown.total > 0 && (
                   <div className="flex gap-3 text-[10px]">
                     <span className="text-slate-400">{breakdown.todo} todo</span>
-                    <span className="text-amber-600">{breakdown.inprogress} in progress</span>
-                    <span className="text-emerald-600">{breakdown.done} done</span>
+                    <span className="text-amber-700">{breakdown.inprogress} in progress</span>
+                    <span className="text-emerald-700">{breakdown.done} done</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex-1" />
-                <div className="flex items-center gap-1">
-                <button
-                  onClick={() => startEdit(cat)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 cursor-pointer"
-                  title="Edit"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
+              <div className="flex items-center justify-end gap-1">
+                <button onClick={() => startEdit(cat)} className="btn btn-ghost !p-2" title="Edit category">
+                  <Pencil className="w-4 h-4" />
                 </button>
                 {deleteConfirm === cat.id ? (
-                  <div className="flex flex-col gap-1.5 ml-1 bg-red-50 p-2 rounded-lg border border-red-200 -mr-2 -mb-2 mt-1">
-                    <p className="text-[10px] text-red-600 font-medium">
-                      {breakdown.total > 0 ? (
-                        <>Delete category? {breakdown.total} task{breakdown.total !== 1 ? 's' : ''} will lose this category.</>
-                      ) : (
-                        'Delete this category?'
-                      )}
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleDelete(cat.id)}
-                        className="text-[10px] px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 cursor-pointer font-medium"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(null)}
-                        className="text-[10px] px-2 py-1 text-slate-500 hover:text-slate-700 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                  <>
+                    <button onClick={() => handleDelete(cat.id)} className="btn btn-danger !px-2 !py-1 text-xs">
+                      Confirm
+                    </button>
+                    <button onClick={() => setDeleteConfirm(null)} className="btn btn-secondary !px-2 !py-1 text-xs">
+                      Cancel
+                    </button>
+                  </>
                 ) : (
-                  <button
-                    onClick={() => setDeleteConfirm(cat.id)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
+                  <button onClick={() => setDeleteConfirm(cat.id)} className="btn btn-ghost !p-2 text-red-500 hover:bg-red-50" title="Delete category">
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>
             </div>
-          </div>
           )
         })}
       </div>
-
-      {categories.length === 0 && !showAdd && (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center mx-auto mb-5">
-            <Tag className="w-8 h-8 text-indigo-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">No categories yet</h3>
-          <p className="text-sm text-slate-400 mb-8 max-w-sm mx-auto">
-            Categories help you group and organize your tasks for better focus and tracking.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
-            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
-              <Palette className="w-5 h-5 text-violet-500" />
-              <span className="text-xs text-slate-500 text-center">Color-coded for quick recognition</span>
-            </div>
-            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
-              <Filter className="w-5 h-5 text-amber-500" />
-              <span className="text-xs text-slate-500 text-center">Filter tasks by project or topic</span>
-            </div>
-            <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-slate-100">
-              <BarChart3 className="w-5 h-5 text-emerald-500" />
-              <span className="text-xs text-slate-500 text-center">Track progress per category</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm) }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 shadow-sm font-medium text-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Create Your First Category
-          </button>
-        </div>
-      )}
     </div>
   )
 }

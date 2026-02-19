@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+:root {
+  --bg-canvas: #f4f6fb;
+  --bg-subtle: #eef2f9;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --text-strong: #0f172a;
+  --text: #334155;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --border: #dbe3ef;
+  --border-strong: #c7d3e4;
+  --brand-500: #2563eb;
+  --brand-600: #1d4ed8;
+  --brand-50: #eff6ff;
+  --success-500: #059669;
+  --warning-500: #d97706;
+  --danger-500: #dc2626;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -11,13 +38,216 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-size: 15px;
   line-height: 1.6;
-  color: #1e293b;
+  color: var(--text);
   letter-spacing: -0.01em;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.07), transparent 34%),
+    radial-gradient(circle at 90% 90%, rgba(2, 132, 199, 0.06), transparent 36%),
+    var(--bg-canvas);
 }
 
-/* Smooth transitions for interactive elements */
-button, input, select {
-  transition: all 0.2s ease;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--text-strong);
+  letter-spacing: -0.025em;
+}
+
+h1 { font-size: clamp(1.875rem, 2vw + 1rem, 2.375rem); line-height: 1.1; }
+h2 { font-size: clamp(1.5rem, 1.4vw + 1rem, 1.875rem); line-height: 1.2; }
+h3 { font-size: 1.25rem; line-height: 1.25; }
+
+button,
+input,
+select,
+textarea {
+  transition: all 180ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-500) 70%, white);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  background: transparent;
+}
+
+.content-wrap {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+
+.page-header {
+  margin-bottom: 28px;
+}
+
+.page-kicker {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+.page-subtitle {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.panel {
+  background: color-mix(in srgb, var(--surface) 96%, #f0f6ff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.panel-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-body {
+  padding: 18px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  color: white;
+  background: linear-gradient(160deg, var(--brand-500), #1e40af);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(160deg, var(--brand-600), #1e3a8a);
+  box-shadow: 0 10px 20px rgba(29, 78, 216, 0.28);
+}
+
+.btn-secondary {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:hover {
+  border-color: #afbfda;
+  background: #fcfdff;
+}
+
+.btn-ghost {
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  background: #eef4ff;
+}
+
+.btn-danger {
+  color: var(--danger-500);
+  border-color: color-mix(in srgb, var(--danger-500) 20%, white);
+  background: color-mix(in srgb, var(--danger-500) 8%, white);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--danger-500) 12%, white);
+}
+
+.control,
+.input-base,
+.select-base,
+.textarea-base {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.input-base,
+.select-base,
+.control {
+  padding: 10px 12px;
+}
+
+.textarea-base {
+  padding: 10px 12px;
+  min-height: 96px;
+  resize: vertical;
+}
+
+.input-base::placeholder,
+.textarea-base::placeholder {
+  color: var(--text-faint);
+}
+
+.input-base:focus,
+.select-base:focus,
+.textarea-base:focus,
+.control:focus {
+  outline: none;
+  border-color: #8db3f7;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.tag-filter {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #fff;
+  cursor: pointer;
+}
+
+.tag-filter:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.tag-filter.active {
+  background: var(--brand-50);
+  border-color: #bfdbfe;
+  color: var(--brand-600);
 }
 
 /* Custom scrollbar for task lists inside cells */
@@ -35,7 +265,6 @@ button, input, select {
   background: #94a3b8;
 }
 
-/* Pulse animation for loading */
 @keyframes pulse-soft {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
@@ -44,16 +273,14 @@ button, input, select {
   animation: pulse-soft 1.5s ease-in-out infinite;
 }
 
-/* Fade-in for calendar cells */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
-  animation: fade-in 0.3s ease-out;
+  animation: fade-in 0.28s ease-out;
 }
 
-/* Slide-down for inline forms */
 @keyframes slide-down {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -62,18 +289,22 @@ button, input, select {
   animation: slide-down 0.2s ease-out;
 }
 
-/* Shake for wrong PIN */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-6px); }
   40%, 80% { transform: translateX(6px); }
 }
 
-/* Slide-in from right for detail panel */
 @keyframes slide-in-right {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }
 .animate-slide-in-right {
   animation: slide-in-right 0.25s ease-out;
+}
+
+@media (min-width: 1024px) {
+  .content-wrap {
+    padding: 34px 28px 56px;
+  }
 }

@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
 import type { TaskAttachment } from '../types'
 
 const BUCKET_NAME = 'task-attachments'
@@ -10,7 +9,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 export function useTaskAttachments(taskId: string | null) {
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const [loading, setLoading] = useState(false)
-  const { user } = useAuth()
   const [uploading, setUploading] = useState(false)
 
   const fetchAttachments = useCallback(async () => {

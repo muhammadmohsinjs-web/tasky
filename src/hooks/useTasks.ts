@@ -24,7 +24,8 @@ export function useTasks(year: number, month: number) {
       .gte('date', startDate)
       .lt('date', endDate)
       .order('created_at', { ascending: true })
-      .abortSignal(signal)
+      
+      .abortSignal(signal as AbortSignal)
 
     // Don't update state if request was aborted
     if (signal?.aborted) return
