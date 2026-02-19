@@ -7,7 +7,7 @@ import { StatCard } from '../components/ui/StatCard'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -68,6 +68,21 @@ export default function Dashboard() {
         <StatCard title="To Do" value={stats.todo} icon={Circle} iconColor="bg-slate-100 text-slate-700" />
         <StatCard title="In Progress" value={stats.inprogress} icon={Clock} iconColor="bg-amber-50 text-amber-700" />
         <StatCard title="Done" value={stats.done} icon={CheckCircle2} iconColor="bg-emerald-50 text-emerald-700" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <StatCard
+          title="Current Streak"
+          value={profile?.streak?.current ?? 0}
+          icon={Flame}
+          iconColor="bg-orange-50 text-orange-700"
+        />
+        <StatCard
+          title="Longest Streak"
+          value={profile?.streak?.longest ?? 0}
+          icon={Flame}
+          iconColor="bg-rose-50 text-rose-700"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

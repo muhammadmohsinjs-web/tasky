@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Calendar } from '../components/tasks/Calendar'
+import { MobileWeekStrip } from '../components/tasks/MobileWeekStrip'
 import { TaskDetailPanel } from '../components/tasks/TaskDetailPanel'
 import { TaskList } from '../components/tasks/TaskList'
 import { BacklogList } from '../components/tasks/BacklogList'
 import { BulkAddModal } from '../components/tasks/BulkAddModal'
+import { CommandPalette } from '../components/tasks/CommandPalette'
 import { useTasks } from '../hooks/useTasks'
 import { useBacklogTasks } from '../hooks/useBacklogTasks'
 import { useCategories } from '../hooks/useCategories'
+import { useCalendarProjection } from '../hooks/useCalendarProjection'
+import { useProfile } from '../hooks/useProfile'
 import { categoryDot } from '../lib/categoryUtils'
 import { MONTH_NAMES } from '../lib/constants'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { EmptyState } from '../components/ui/EmptyState'
-import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox, Plus, Command } from 'lucide-react'
 import type { Task } from '../types'
 
 export default function Tasks() {
@@ -26,6 +30,15 @@ export default function Tasks() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [bulkAddOpen, setBulkAddOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+  const { updateStreak } = useProfile()
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
   const { categories, loading: categoriesLoading } = useCategories()
   const {
     tasks,
@@ -91,11 +104,14 @@ export default function Tasks() {
 
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
 
-  const doneTasks = tasks.filter((t) => t.status === 'done').length
-  const totalTasks = tasks.length
+  // Project recurring tasks into virtual instances for the visible month
+  const projectedTasks = useCalendarProjection(tasks, year, month)
+
+  const doneTasks = projectedTasks.filter((t) => t.status === 'done').length
+  const totalTasks = projectedTasks.length
 
   const filteredTasks = useMemo(() => {
-    let result = tasks
+    let result = projectedTasks
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category_id === activeCategory)
     }
@@ -104,7 +120,7 @@ export default function Tasks() {
       result = result.filter((t) => t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q))
     }
     return result
-  }, [tasks, activeCategory, debouncedSearch])
+  }, [projectedTasks, activeCategory, debouncedSearch])
 
   const filteredBacklogTasks = useMemo(() => {
     let result = backlogTasks
@@ -148,6 +164,94 @@ export default function Tasks() {
   const hasSearch = debouncedSearch.trim().length > 0
   const hasFilter = activeCategory !== 'all'
   const isFiltered = hasSearch || hasFilter
+
+  const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  const handleStatusChange = async (id: string, newStatus: 'todo' | 'inprogress' | 'done') => {
+    const projectedTask = projectedTasks.find((t) => t.id === id && t.is_projected)
+    if (projectedTask) {
+      await addTask(
+        projectedTask.title,
+        projectedTask.category_id ?? '',
+        projectedTask.date,
+        projectedTask.priority,
+        {
+          description: projectedTask.description ?? null,
+          notes: projectedTask.notes ?? null,
+          status: newStatus,
+          links: projectedTask.links ?? [],
+          end_date: projectedTask.end_date ?? null,
+          source_task_id: projectedTask.source_task_id ?? null,
+        }
+      )
+      if (newStatus === 'done') {
+        await updateStreak(todayDateStr)
+      }
+      return
+    }
+
+    const monthTask = tasks.find((t) => t.id === id)
+    if (monthTask) {
+      const wasDone = monthTask.status === 'done'
+      await updateTaskStatus(id, newStatus)
+      if (!wasDone && newStatus === 'done') {
+        await updateStreak(todayDateStr)
+      }
+      return
+    }
+
+    const backlogTask = backlogTasks.find((t) => t.id === id)
+    if (backlogTask) {
+      const wasDone = backlogTask.status === 'done'
+      await updateBacklogStatus(id, newStatus)
+      if (!wasDone && newStatus === 'done') {
+        await updateStreak(todayDateStr)
+      }
+    }
+  }
+
+  const commandActions = [
+    {
+      id: 'bulk-add',
+      label: 'Open Bulk Add',
+      hint: 'Create multiple tasks at once',
+      run: () => setBulkAddOpen(true),
+    },
+    {
+      id: 'view-calendar',
+      label: 'Switch to Calendar View',
+      hint: 'Execution calendar',
+      run: () => setView('calendar'),
+    },
+    {
+      id: 'view-list',
+      label: 'Switch to List View',
+      hint: 'List with bulk actions',
+      run: () => setView('list'),
+    },
+    {
+      id: 'view-backlog',
+      label: 'Switch to Backlog View',
+      hint: 'Unscheduled tasks',
+      run: () => setView('backlog'),
+    },
+    {
+      id: 'jump-today',
+      label: 'Jump to Today',
+      hint: 'Go to current month',
+      run: () => goToToday(),
+    },
+    {
+      id: 'open-today-drawer',
+      label: "Open Today's Tasks",
+      hint: 'Select current date in calendar',
+      run: () => {
+        setView('calendar')
+        setSelectedTask(null)
+        setSelectedDate(todayDateStr)
+      },
+    },
+  ]
 
   return (
     <div className="content-wrap">
@@ -252,6 +356,15 @@ export default function Tasks() {
               )}
             </button>
           </div>
+
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="btn btn-secondary !px-2.5 !py-2 hidden sm:flex"
+            title="Open Command Palette"
+          >
+            <Command className="w-4 h-4" />
+            <span className="text-[11px] font-semibold ml-1">K</span>
+          </button>
         </div>
       </header>
 
@@ -294,16 +407,49 @@ export default function Tasks() {
                 onClearSearch={hasSearch ? () => setSearch('') : undefined}
                 onShowAll={hasFilter ? () => setActiveCategory('all') : undefined}
               />
+            ) : isMobile ? (
+              <div className="space-y-4">
+                <MobileWeekStrip
+                  year={year}
+                  month={month}
+                  tasks={filteredTasks}
+                  selectedDate={selectedDate}
+                  onDateSelect={handleDateSelect}
+                />
+                {selectedDate && selectedDateTasks.length > 0 && (
+                  <div className="space-y-1.5">
+                    {selectedDateTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        onClick={() => handleTaskSelect(task, 'view')}
+                        className="bg-white rounded-lg border border-slate-200 px-3 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-slate-50"
+                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, task.status === 'done' ? 'todo' : task.status === 'todo' ? 'inprogress' : 'done') }}
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            task.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' :
+                            task.status === 'inprogress' ? 'border-amber-400 bg-amber-50' :
+                            'border-slate-300'
+                          }`}
+                        >
+                          {task.status === 'done' && <span className="text-[10px]">✓</span>}
+                        </button>
+                        <span className={`text-sm flex-1 truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                          {task.title}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedDate && selectedDateTasks.length === 0 && (
+                  <div className="text-center py-8 text-sm text-slate-400">No tasks for this day</div>
+                )}
+              </div>
             ) : (
               <Calendar
                 year={year}
                 month={month}
                 tasks={filteredTasks}
-                categories={categories}
-                onAdd={addTask}
-                onStatusChange={updateTaskStatus}
-                onUpdate={updateTask}
-                onDelete={deleteTask}
                 onSelect={(task, mode) => handleTaskSelect(task, mode)}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}
@@ -321,7 +467,7 @@ export default function Tasks() {
             ) : (
               <TaskList
                 tasks={filteredTasks}
-                onStatusChange={updateTaskStatus}
+                onStatusChange={handleStatusChange}
                 onSelect={(task, mode) => handleTaskSelect(task, mode)}
                 onBulkStatusChange={bulkUpdateStatus}
                 onBulkReschedule={async (ids, date) => {
@@ -376,7 +522,7 @@ export default function Tasks() {
             selectedDate={selectedDate}
             selectedDateTasks={selectedDateTasks}
             onTaskSelect={(task, mode) => handleTaskSelect(task, mode)}
-            onStatusChange={updateTaskStatus}
+            onStatusChange={handleStatusChange}
             onTaskDelete={deleteTask}
           />
         )}
@@ -388,6 +534,12 @@ export default function Tasks() {
         categories={categories}
         onAddToDate={addTasks}
         onAddToBacklog={addBacklogTasks}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        actions={commandActions}
       />
     </div>
   )

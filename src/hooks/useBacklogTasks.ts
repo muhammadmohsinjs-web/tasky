@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -6,40 +7,35 @@ import { TASK_SELECT } from '../lib/constants'
 import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
 
 export function useBacklogTasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const { user } = useAuth()
+  const queryKey = ['tasks', 'backlog']
 
-  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('tasks')
-      .select(TASK_SELECT)
-      .is('date', null)
-      .order('created_at', { ascending: false })
-      
-      .abortSignal(signal as AbortSignal)
+  const { data: tasks = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(TASK_SELECT)
+        .is('date', null)
+        .order('created_at', { ascending: false })
+        .abortSignal(signal)
 
-    if (signal?.aborted) return
+      if (error) throw error
+      return data as unknown as Task[]
+    },
+  })
 
-    if (error) {
-      console.error('Failed to fetch backlog tasks:', error)
-    } else {
-      setTasks(data as unknown as Task[])
-    }
-    setLoading(false)
-  }, [])
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey })
+  }, [queryClient])
 
-  useEffect(() => {
-    const abortController = new AbortController()
-    fetchTasks(abortController.signal)
-
-    return () => {
-      abortController.abort()
-    }
-  }, [fetchTasks])
-
-  const addTask = async (title: string, categoryId: string, priority: TaskPriority = 'medium', extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => {
+  const addTask = async (
+    title: string,
+    categoryId: string,
+    priority: TaskPriority = 'medium',
+    extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }
+  ) => {
     const { data, error } = await supabase
       .from('tasks')
       .insert({
@@ -62,7 +58,7 @@ export function useBacklogTasks() {
       return null
     }
     const created = data as unknown as Task
-    setTasks((prev) => [created, ...prev])
+    queryClient.setQueryData<Task[]>(queryKey, (old) => [created, ...(old ?? [])])
     toast.success('Task added to backlog')
     return created
   }
@@ -87,7 +83,7 @@ export function useBacklogTasks() {
       toast.error('Failed to add tasks')
       return
     }
-    setTasks((prev) => [...(data as unknown as Task[]), ...prev])
+    queryClient.setQueryData<Task[]>(queryKey, (old) => [...(data as unknown as Task[]), ...(old ?? [])])
     toast.success(`${items.length} tasks added to backlog`)
   }
 
@@ -96,8 +92,8 @@ export function useBacklogTasks() {
     if (!task) return
     const oldTask = JSON.parse(JSON.stringify(task))
 
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (t.id === id ? { ...t, status: newStatus } : t))
     )
 
     const { error } = await supabase
@@ -108,8 +104,8 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to update task status:', error)
       toast.error('Failed to update task status')
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? oldTask : t))
+      queryClient.setQueryData<Task[]>(queryKey, (old) =>
+        (old ?? []).map((t) => (t.id === id ? oldTask : t))
       )
     }
   }
@@ -137,14 +133,12 @@ export function useBacklogTasks() {
       return
     }
     toast.success('Task saved')
-    // If date was assigned, task leaves backlog — refetch to remove it
-    // Also refetch on category changes to get the joined category object
     if ((updates.date !== undefined && updates.date !== null) || updates.category_id !== undefined) {
-      await fetchTasks()
+      invalidate()
       return
     }
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (t.id === id ? { ...t, ...updates } : t))
     )
   }
 
@@ -155,7 +149,7 @@ export function useBacklogTasks() {
       toast.error('Failed to delete task')
       return
     }
-    setTasks((prev) => prev.filter((t) => t.id !== id))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => t.id !== id))
     toast.success('Task deleted')
   }
 
@@ -170,8 +164,8 @@ export function useBacklogTasks() {
       toast.error('Failed to update tasks')
       return
     }
-    setTasks((prev) =>
-      prev.map((t) => (ids.includes(t.id) ? { ...t, status: newStatus } : t))
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (ids.includes(t.id) ? { ...t, status: newStatus } : t))
     )
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} updated`)
   }
@@ -187,7 +181,7 @@ export function useBacklogTasks() {
       toast.error('Failed to delete tasks')
       return
     }
-    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
   }
 
@@ -202,9 +196,10 @@ export function useBacklogTasks() {
       toast.error('Failed to schedule tasks')
       return
     }
-    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} scheduled`)
   }
 
-  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkDelete, scheduleTasks, refetch: fetchTasks }
+  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkDelete, scheduleTasks, refetch: invalidate }
 }

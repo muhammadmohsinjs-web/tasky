@@ -1,32 +1,26 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Category } from '../types'
 
 export function useCategories() {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const { user } = useAuth()
+  const queryKey = ['categories']
 
-  const fetchCategories = useCallback(async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('created_at', { ascending: true })
+  const { data: categories = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('created_at', { ascending: true })
 
-    if (error) {
-      console.error('Failed to fetch categories:', error)
-      setCategories([])
-    } else {
-      setCategories((data as Category[]) || [])
-    }
-    setLoading(false)
-  }, [user])
-
-  useEffect(() => {
-    fetchCategories()
-  }, [fetchCategories])
+      if (error) throw error
+      return (data as Category[]) || []
+    },
+    enabled: !!user,
+  })
 
   const addCategory = async (category: Omit<Category, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
@@ -39,7 +33,7 @@ export function useCategories() {
       console.error('Failed to add category:', error)
       return null
     }
-    setCategories((prev) => [...prev, data as Category])
+    queryClient.setQueryData<Category[]>(queryKey, (old) => [...(old ?? []), data as Category])
     return data as Category
   }
 
@@ -49,7 +43,9 @@ export function useCategories() {
       console.error('Failed to update category:', error)
       return false
     }
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))
+    queryClient.setQueryData<Category[]>(queryKey, (old) =>
+      (old ?? []).map((c) => (c.id === id ? { ...c, ...updates } : c))
+    )
     return true
   }
 
@@ -59,9 +55,16 @@ export function useCategories() {
       console.error('Failed to delete category:', error)
       return false
     }
-    setCategories((prev) => prev.filter((c) => c.id !== id))
+    queryClient.setQueryData<Category[]>(queryKey, (old) => (old ?? []).filter((c) => c.id !== id))
     return true
   }
 
-  return { categories, loading, refetch: fetchCategories, addCategory, updateCategory, deleteCategory }
+  return {
+    categories,
+    loading,
+    refetch: () => queryClient.invalidateQueries({ queryKey }),
+    addCategory,
+    updateCategory,
+    deleteCategory,
+  }
 }

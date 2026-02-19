@@ -1,53 +1,61 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
-import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
 
 export function useTasks(year: number, month: number) {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const { user } = useAuth()
+  const queryKey = ['tasks', year, month]
 
-  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true)
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
-    const endDate =
-      month === 11
-        ? `${year + 1}-01-01`
-        : `${year}-${String(month + 2).padStart(2, '0')}-01`
+  const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const endDate =
+    month === 11
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 2).padStart(2, '0')}-01`
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .select(TASK_SELECT)
-      .gte('date', startDate)
-      .lt('date', endDate)
-      .order('created_at', { ascending: true })
-      
-      .abortSignal(signal as AbortSignal)
+  const { data: tasks = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(TASK_SELECT)
+        .not('date', 'is', null)
+        .lt('date', endDate)
+        .or(`end_date.is.null,end_date.gte.${startDate}`)
+        .gte('date', startDate)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .abortSignal(signal)
 
-    // Don't update state if request was aborted
-    if (signal?.aborted) return
+      if (error) throw error
+      return data as unknown as Task[]
+    },
+  })
 
-    if (error) {
-      console.error('Failed to fetch tasks:', error)
-    } else {
-      setTasks(data as unknown as Task[])
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey })
+  }, [queryClient, queryKey[0], year, month])
+
+  const addTask = async (
+    title: string,
+    categoryId: string,
+    date: string | null,
+    priority: TaskPriority = 'medium',
+    extras?: {
+      description?: string | null
+      notes?: string | null
+      status?: TaskStatus
+      links?: TaskLink[]
+      end_date?: string | null
+      recurrence?: RecurrenceRule | null
+      source_task_id?: string | null
+      sort_order?: number
     }
-    setLoading(false)
-  }, [year, month])
-
-  useEffect(() => {
-    const abortController = new AbortController()
-    fetchTasks(abortController.signal)
-
-    return () => {
-      abortController.abort()
-    }
-  }, [fetchTasks])
-
-  const addTask = async (title: string, categoryId: string, date: string | null, priority: TaskPriority = 'medium', extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => {
+  ) => {
     const { data, error } = await supabase
       .from('tasks')
       .insert({
@@ -60,6 +68,10 @@ export function useTasks(year: number, month: number) {
         description: extras?.description ?? null,
         notes: extras?.notes ?? null,
         links: extras?.links ?? [],
+        end_date: extras?.end_date ?? null,
+        recurrence: extras?.recurrence ?? null,
+        source_task_id: extras?.source_task_id ?? null,
+        sort_order: extras?.sort_order ?? 0,
       })
       .select(TASK_SELECT)
       .single()
@@ -70,7 +82,7 @@ export function useTasks(year: number, month: number) {
       return null
     }
     const created = data as unknown as Task
-    setTasks((prev) => [...prev, created])
+    queryClient.setQueryData<Task[]>(queryKey, (old) => [...(old ?? []), created])
     toast.success('Task added')
     return created
   }
@@ -95,18 +107,17 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to add tasks')
       return
     }
-    setTasks((prev) => [...prev, ...(data as unknown as Task[])])
+    queryClient.setQueryData<Task[]>(queryKey, (old) => [...(old ?? []), ...(data as unknown as Task[])])
     toast.success(`${items.length} tasks added`)
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
-    // Deep clone the entire task object for proper rollback
     const oldTask = JSON.parse(JSON.stringify(task))
 
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (t.id === id ? { ...t, status: newStatus } : t))
     )
 
     const { error } = await supabase
@@ -117,9 +128,8 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to update task status:', error)
       toast.error('Failed to update task status')
-      // Rollback to the full old task state
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? oldTask : t))
+      queryClient.setQueryData<Task[]>(queryKey, (old) =>
+        (old ?? []).map((t) => (t.id === id ? oldTask : t))
       )
     }
   }
@@ -132,27 +142,43 @@ export function useTasks(year: number, month: number) {
       notes?: string | null
       category_id?: string | null
       date?: string | null
+      end_date?: string | null
       status?: TaskStatus
       priority?: TaskPriority
+      sort_order?: number
+      recurrence?: RecurrenceRule | null
+      source_task_id?: string | null
     }
   ) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id)
+    const task = tasks.find((t) => t.id === id)
+
+    // Conflict detection: only update if updated_at matches
+    let query = supabase.from('tasks').update(updates).eq('id', id)
+    if (task?.updated_at) {
+      query = query.eq('updated_at', task.updated_at)
+    }
+
+    const { data, error } = await query.select(TASK_SELECT)
 
     if (error) {
       console.error('Failed to update task:', error)
       toast.error('Failed to save task')
       return
     }
-    toast.success('Task saved')
-    if (updates.date !== undefined || updates.category_id !== undefined) {
-      await fetchTasks()
+
+    if (!data || data.length === 0) {
+      toast.error('This task was modified elsewhere. Refreshing...')
+      invalidate()
       return
     }
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+
+    toast.success('Task saved')
+    if (updates.date !== undefined || updates.category_id !== undefined) {
+      invalidate()
+      return
+    }
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (t.id === id ? (data[0] as unknown as Task) : t))
     )
   }
 
@@ -163,15 +189,14 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to delete task')
       return
     }
-    setTasks((prev) => prev.filter((t) => t.id !== id))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => t.id !== id))
     toast.success('Task deleted')
   }
 
   const bulkUpdateStatus = async (ids: string[], status: TaskStatus) => {
-    // Deep clone affected tasks for proper rollback
     const oldTasks = JSON.parse(JSON.stringify(tasks.filter((t) => ids.includes(t.id))))
-    setTasks((prev) =>
-      prev.map((t) => (ids.includes(t.id) ? { ...t, status } : t))
+    queryClient.setQueryData<Task[]>(queryKey, (old) =>
+      (old ?? []).map((t) => (ids.includes(t.id) ? { ...t, status } : t))
     )
 
     const { error } = await supabase
@@ -182,11 +207,10 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk update status:', error)
       toast.error('Failed to update tasks')
-      // Rollback to the full old task states
-      setTasks((prev) =>
-        prev.map((t) => {
-          const old = oldTasks.find((o: Task) => o.id === t.id)
-          return old || t
+      queryClient.setQueryData<Task[]>(queryKey, (old) =>
+        (old ?? []).map((t) => {
+          const old_ = oldTasks.find((o: Task) => o.id === t.id)
+          return old_ || t
         })
       )
       return
@@ -206,7 +230,7 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to reschedule tasks')
       return
     }
-    await fetchTasks()
+    invalidate()
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} rescheduled`)
   }
 
@@ -221,7 +245,8 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to move tasks to backlog')
       return
     }
-    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'backlog'] })
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} moved to backlog`)
   }
 
@@ -236,9 +261,40 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to delete tasks')
       return
     }
-    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)))
+    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
   }
 
-  return { tasks, loading, addTask, addTasks, updateTaskStatus, updateTask, deleteTask, bulkUpdateStatus, bulkReschedule, bulkMoveToBacklog, bulkDelete, refetch: fetchTasks }
+  const reorderTasks = async (_dateStr: string, orderedIds: string[]) => {
+    queryClient.setQueryData<Task[]>(queryKey, (old) => {
+      if (!old) return []
+      const updated = [...old]
+      orderedIds.forEach((id, index) => {
+        const task = updated.find((t) => t.id === id)
+        if (task) task.sort_order = index
+      })
+      return updated
+    })
+
+    const updates = orderedIds.map((id, index) =>
+      supabase.from('tasks').update({ sort_order: index }).eq('id', id)
+    )
+    await Promise.all(updates)
+  }
+
+  return {
+    tasks,
+    loading,
+    addTask,
+    addTasks,
+    updateTaskStatus,
+    updateTask,
+    deleteTask,
+    bulkUpdateStatus,
+    bulkReschedule,
+    bulkMoveToBacklog,
+    bulkDelete,
+    reorderTasks,
+    refetch: invalidate,
+  }
 }

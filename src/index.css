@@ -68,6 +68,39 @@
   --shadow-modal: 0 20px 40px rgba(15, 23, 42, 0.12), 0 8px 16px rgba(15, 23, 42, 0.06);
   --shadow-dropdown: 0 4px 16px rgba(15, 23, 42, 0.10);
   --shadow-fab: 0 8px 24px rgba(15, 23, 42, 0.16);
+
+  /* Month calendar */
+  --calendar-cell-bg: #ffffff;
+  --calendar-cell-muted: #f8fafc;
+  --calendar-cell-hover: #f9fafb;
+  --calendar-grid-border: #e5e7eb;
+  --calendar-header-bg: #ffffff;
+  --calendar-weekday-text: #6b7280;
+  --calendar-date-text: #6b7280;
+  --calendar-overflow-text: #6b7280;
+  --calendar-overflow-text-hover: #4b5563;
+  --calendar-today-bg: #111827;
+  --calendar-selected-ring: #d1d5db;
+
+  --calendar-work-bg: #dbeafe;
+  --calendar-work-text: #1e40af;
+  --calendar-work-dot: #1d4ed8;
+
+  --calendar-meeting-bg: #ede9fe;
+  --calendar-meeting-text: #5b21b6;
+  --calendar-meeting-dot: #6d28d9;
+
+  --calendar-personal-bg: #d1fae5;
+  --calendar-personal-text: #065f46;
+  --calendar-personal-dot: #047857;
+
+  --calendar-finance-bg: #fef3c7;
+  --calendar-finance-text: #92400e;
+  --calendar-finance-dot: #b45309;
+
+  --calendar-important-bg: #fce7f3;
+  --calendar-important-text: #9d174d;
+  --calendar-important-dot: #be185d;
 }
 
 html {

@@ -51,6 +51,10 @@ alter table categories enable row level security;
 -- Migration: Add links support (run once in Supabase SQL Editor):
 -- ALTER TABLE tasks ADD COLUMN links jsonb DEFAULT '[]';
 
+-- Migration: Add recurring instance source linkage (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ADD COLUMN source_task_id uuid REFERENCES tasks(id) ON DELETE SET NULL;
+-- CREATE INDEX IF NOT EXISTS idx_tasks_source_task ON tasks (source_task_id);
+
 -- Migration: Add task attachments table (run once in Supabase SQL Editor):
 -- CREATE TABLE IF NOT EXISTS task_attachments (
 --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,

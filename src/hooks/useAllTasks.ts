@@ -1,30 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { TASK_SELECT } from '../lib/constants'
 import type { Task } from '../types'
 
 export function useAllTasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const queryKey = ['tasks', 'all']
 
-  const fetchAllTasks = useCallback(async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('tasks')
-      .select(TASK_SELECT)
-      .order('date', { ascending: false, nullsFirst: false })
+  const { data: tasks = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(TASK_SELECT)
+        .order('date', { ascending: false, nullsFirst: false })
 
-    if (error) {
-      console.error('Failed to fetch all tasks:', error)
-    } else {
-      setTasks(data as unknown as Task[])
-    }
-    setLoading(false)
-  }, [])
+      if (error) throw error
+      return data as unknown as Task[]
+    },
+  })
 
-  useEffect(() => {
-    fetchAllTasks()
-  }, [fetchAllTasks])
-
-  return { tasks, loading, refetch: fetchAllTasks }
+  return { tasks, loading, refetch: () => queryClient.invalidateQueries({ queryKey }) }
 }
