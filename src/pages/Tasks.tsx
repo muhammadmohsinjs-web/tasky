@@ -76,13 +76,6 @@ export default function Tasks() {
     return () => clearTimeout(timer)
   }, [search])
 
-  useEffect(() => {
-    if (!selectedTask) return
-    const next = tasks.find((t) => t.id === selectedTask.id)
-    if (next) setSelectedTask(next)
-    else setSelectedTask(null)
-  }, [tasks, selectedTask])
-
   const goToPrevMonth = () => {
     if (month === 0) {
       setMonth(11)
@@ -106,6 +99,22 @@ export default function Tasks() {
 
   // Project recurring tasks into virtual instances for the visible month
   const projectedTasks = useCalendarProjection(tasks, year, month)
+
+  useEffect(() => {
+    if (!selectedTask) return
+
+    const next =
+      tasks.find((t) => t.id === selectedTask.id) ??
+      backlogTasks.find((t) => t.id === selectedTask.id) ??
+      projectedTasks.find((t) => t.id === selectedTask.id)
+
+    if (next) {
+      setSelectedTask(next)
+      return
+    }
+
+    setSelectedTask(null)
+  }, [tasks, backlogTasks, projectedTasks, selectedTask])
 
   const doneTasks = projectedTasks.filter((t) => t.status === 'done').length
   const totalTasks = projectedTasks.length
@@ -141,19 +150,16 @@ export default function Tasks() {
   }, [filteredTasks, selectedDate])
 
   const handleDateSelect = (date: string) => {
-    if (selectedDate === date) {
-      // Deselect if clicking the same date
-      setSelectedDate(null)
-      setSelectedTask(null)
-    } else {
-      setSelectedDate(date)
-      setSelectedTask(null)
-    }
+    // Keep date-drawer opening idempotent so repeated clicks on "more…"
+    // do not remount/toggle the sidebar unexpectedly.
+    if (selectedDate === date && selectedTask === null) return
+    setSelectedDate(date)
+    setSelectedTask(null)
   }
 
   const handleTaskSelect = (task: Task, mode: 'view' | 'edit') => {
     setSelectedTask(task)
-    setPanelMode(mode)
+    setPanelMode(task.is_projected && mode === 'edit' ? 'view' : mode)
     setSelectedDate(null)
   }
 
@@ -450,6 +456,8 @@ export default function Tasks() {
                 year={year}
                 month={month}
                 tasks={filteredTasks}
+                categories={categories}
+                onAdd={addTask}
                 onSelect={(task, mode) => handleTaskSelect(task, mode)}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}

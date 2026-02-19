@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Task } from '../../types'
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus } from '../../types'
 import { MONTH_NAMES } from '../../lib/constants'
 import { CalendarCell } from './month-view/CalendarCell'
 import type { CalendarDay, CalendarEvent, CalendarEventType } from './month-view/types'
@@ -10,12 +10,14 @@ interface Props {
   year: number
   month: number
   tasks: Task[]
+  categories: Category[]
+  onAdd: (title: string, categoryId: string, date: string, priority?: TaskPriority, extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => Promise<Task | null> | void
   onSelect: (task: Task, mode: 'view' | 'edit') => void
   selectedDate?: string | null
   onDateSelect?: (date: string) => void
 }
 
-export function Calendar({ year, month, tasks, onSelect, selectedDate, onDateSelect }: Props) {
+export function Calendar({ year, month, tasks, categories, onAdd, onSelect, selectedDate, onDateSelect }: Props) {
   const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
     if (typeof window === 'undefined') {
       return false
@@ -47,8 +49,8 @@ export function Calendar({ year, month, tasks, onSelect, selectedDate, onDateSel
         continue
       }
 
-      const start = new Date(task.date)
-      const end = task.end_date && task.end_date > task.date ? new Date(task.end_date) : start
+      const start = parseLocalDate(task.date)
+      const end = task.end_date && task.end_date > task.date ? parseLocalDate(task.end_date) : start
       const cursor = new Date(start)
 
       while (cursor <= end) {
@@ -137,9 +139,12 @@ export function Calendar({ year, month, tasks, onSelect, selectedDate, onDateSel
               return (
                 <CalendarCell
                   key={dayKey}
+                  dateKey={dayKey}
                   day={{ ...day, events: [...dayEvents, ...extraDayEvents] }}
                   isSelected={selected}
                   visibleEventCount={maxVisibleEvents}
+                  categories={categories}
+                  onAdd={onAdd}
                   onOpenDay={handleOpenDay}
                   onEventClick={handleEventClick}
                 />
@@ -206,4 +211,17 @@ function getTaskEventType(task: Task): CalendarEventType {
   }
 
   return 'work'
+}
+
+function parseLocalDate(value: string): Date {
+  const [yearPart, monthPart, dayPart] = value.split('-')
+  const yearValue = Number(yearPart)
+  const monthValue = Number(monthPart)
+  const dayValue = Number(dayPart)
+
+  if (!yearValue || !monthValue || !dayValue) {
+    return new Date(value)
+  }
+
+  return new Date(yearValue, monthValue - 1, dayValue)
 }

@@ -1,15 +1,29 @@
+import { AddTaskInline } from '../AddTaskInline'
 import type { CalendarDay, CalendarEvent } from './types'
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus } from '../../../types'
 import { EventPill } from './EventPill'
 
 interface CalendarCellProps {
   day: CalendarDay
+  dateKey: string
   isSelected?: boolean
   visibleEventCount: number
+  categories: Category[]
+  onAdd: (title: string, categoryId: string, date: string, priority?: TaskPriority, extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => Promise<Task | null> | void
   onOpenDay: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
 }
 
-export function CalendarCell({ day, isSelected = false, visibleEventCount, onOpenDay, onEventClick }: CalendarCellProps) {
+export function CalendarCell({
+  day,
+  dateKey,
+  isSelected = false,
+  visibleEventCount,
+  categories,
+  onAdd,
+  onOpenDay,
+  onEventClick,
+}: CalendarCellProps) {
   const visibleEvents = day.events.slice(0, visibleEventCount)
   const hiddenEventCount = Math.max(day.events.length - visibleEventCount, 0)
   const dayNumber = day.date.getDate()
@@ -51,6 +65,12 @@ export function CalendarCell({ day, isSelected = false, visibleEventCount, onOpe
           </button>
         )}
       </div>
+
+      {day.isCurrentMonth && (
+        <div className="mt-1.5">
+          <AddTaskInline date={dateKey} onAdd={onAdd} categories={categories} />
+        </div>
+      )}
     </div>
   )
 }

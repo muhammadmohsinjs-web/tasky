@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Task } from '../../types'
 import { MONTH_NAMES } from '../../lib/constants'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -20,22 +20,47 @@ function formatDateStr(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
-export function MobileWeekStrip({ tasks, selectedDate, onDateSelect }: Props) {
+function parseDateStr(value: string): Date | null {
+  const [y, m, d] = value.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d)
+}
+
+export function MobileWeekStrip({ year, month, tasks, selectedDate, onDateSelect }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
   const touchStartX = useRef(0)
 
   const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth()
+  const todayDay = today.getDate()
   const todayStr = formatDateStr(today)
+  const anchorDate = useMemo(() => {
+    if (selectedDate) {
+      const parsed = parseDateStr(selectedDate)
+      if (parsed) return parsed
+    }
+
+    if (todayYear === year && todayMonth === month) {
+      return new Date(todayYear, todayMonth, todayDay)
+    }
+
+    return new Date(year, month, 1)
+  }, [selectedDate, todayDay, todayMonth, todayYear, year, month])
+
+  useEffect(() => {
+    setWeekOffset(0)
+  }, [anchorDate])
 
   const weekDays = useMemo(() => {
-    const startOfWeek = new Date(today)
-    startOfWeek.setDate(today.getDate() - today.getDay() + weekOffset * 7)
+    const startOfWeek = new Date(anchorDate)
+    startOfWeek.setDate(anchorDate.getDate() - anchorDate.getDay() + weekOffset * 7)
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startOfWeek)
       d.setDate(startOfWeek.getDate() + i)
       return d
     })
-  }, [weekOffset])
+  }, [anchorDate, weekOffset])
 
   const taskCountByDate = useMemo(() => {
     const counts: Record<string, number> = {}
