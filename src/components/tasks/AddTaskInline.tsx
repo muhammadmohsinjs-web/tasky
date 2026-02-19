@@ -107,9 +107,10 @@ export function AddTaskInline({ date, onAdd, categories }: Props) {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (!files) return
-    setPendingFiles((prev) => [...prev, ...Array.from(files)])
+    if (!files || files.length === 0) return
+    const fileArray = Array.from(files)
     e.target.value = ''
+    setPendingFiles((prev) => [...prev, ...fileArray])
   }
 
   const removePendingFile = (index: number) => {
