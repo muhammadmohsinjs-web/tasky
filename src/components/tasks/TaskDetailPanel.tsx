@@ -1,9 +1,21 @@
 import { useEffect, useState } from 'react'
 import type { Category, Task, TaskStatus, TaskPriority, TaskLink } from '../../types'
-import { categoryStyle, categoryLabel } from '../../lib/categoryUtils'
+import { categoryStyle, categoryLabel, categoryAccent } from '../../lib/categoryUtils'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '../../lib/constants'
 import { useTaskAttachments } from '../../hooks/useTaskAttachments'
-import { X, Trash2, Pencil, Link as LinkIcon, ExternalLink, Plus, Paperclip, FileIcon, Image as ImageIcon, Upload } from 'lucide-react'
+import { nextStatus } from '../ui/StatusBadge'
+import { PriorityBadge } from '../ui/PriorityBadge'
+import {
+  X, Trash2, Pencil, Link as LinkIcon, ExternalLink, Plus,
+  Paperclip, FileIcon, Image as ImageIcon, Upload,
+  Circle, Clock, CheckCircle2, Eye,
+} from 'lucide-react'
+
+const STATUS_ICONS = {
+  todo: Circle,
+  inprogress: Clock,
+  done: CheckCircle2,
+} as const
 
 interface Props {
   task: Task | null
@@ -22,6 +34,12 @@ interface Props {
     links?: TaskLink[]
   }) => void
   onDelete: (id: string) => void
+  // Date-list drawer mode props
+  selectedDate?: string | null
+  selectedDateTasks?: Task[]
+  onTaskSelect?: (task: Task, mode: 'view' | 'edit') => void
+  onStatusChange?: (id: string, status: TaskStatus) => void
+  onTaskDelete?: (id: string) => void
 }
 
 export function TaskDetailPanel({
@@ -32,6 +50,11 @@ export function TaskDetailPanel({
   onClose,
   onUpdate,
   onDelete,
+  selectedDate,
+  selectedDateTasks = [],
+  onTaskSelect,
+  onStatusChange,
+  onTaskDelete,
 }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState<string | null>('')
@@ -44,6 +67,8 @@ export function TaskDetailPanel({
   const [newLinkUrl, setNewLinkUrl] = useState('')
   const [newLinkLabel, setNewLinkLabel] = useState('')
   const [linkError, setLinkError] = useState('')
+  const [drawerSort, setDrawerSort] = useState<'priority' | 'status' | 'title'>('priority')
+  const [drawerStatusFilter, setDrawerStatusFilter] = useState<TaskStatus | 'all'>('all')
 
   const { attachments, uploading, fetchAttachments, uploadFile, deleteAttachment } = useTaskAttachments(task?.id || null)
 
@@ -68,14 +93,198 @@ export function TaskDetailPanel({
       }
     }
 
-    if (task) {
+    if (task || selectedDate) {
       window.addEventListener('keydown', handleKeyDown)
     }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [task, onClose])
+  }, [task, selectedDate, onClose])
+
+  // --- Date-list drawer mode ---
+  if (!task && selectedDate) {
+    const formattedDate = (() => {
+      const [y, m, d] = selectedDate.split('-')
+      if (!y) return selectedDate
+      const dt = new Date(Number(y), Number(m) - 1, Number(d))
+      return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    })()
+
+    const priorityOrder: Record<TaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+    const statusOrder: Record<TaskStatus, number> = { todo: 0, inprogress: 1, done: 2 }
+
+    let sortedTasks = [...selectedDateTasks]
+
+    // Filter
+    if (drawerStatusFilter !== 'all') {
+      sortedTasks = sortedTasks.filter((t) => t.status === drawerStatusFilter)
+    }
+
+    // Sort
+    if (drawerSort === 'priority') {
+      sortedTasks.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+    } else if (drawerSort === 'status') {
+      sortedTasks.sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
+    } else {
+      sortedTasks.sort((a, b) => a.title.localeCompare(b.title))
+    }
+
+    const doneCount = selectedDateTasks.filter((t) => t.status === 'done').length
+    const statusFilters: Array<{ key: TaskStatus | 'all'; label: string }> = [
+      { key: 'all', label: 'All' },
+      { key: 'todo', label: 'To Do' },
+      { key: 'inprogress', label: 'In Progress' },
+      { key: 'done', label: 'Done' },
+    ]
+
+    return (
+      <aside className="w-full lg:w-[380px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-200">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">Date Tasks</div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              aria-label="Close drawer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="text-sm font-semibold text-slate-700">{formattedDate}</div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            {selectedDateTasks.length} task{selectedDateTasks.length !== 1 ? 's' : ''}
+            {doneCount > 0 && ` · ${doneCount} done`}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="px-5 pt-4 pb-2 space-y-3">
+          {/* Status filter pills */}
+          <div className="flex gap-1.5 flex-wrap">
+            {statusFilters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setDrawerStatusFilter(f.key)}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
+                  drawerStatusFilter === f.key
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 font-medium">Sort</span>
+            <select
+              value={drawerSort}
+              onChange={(e) => setDrawerSort(e.target.value as typeof drawerSort)}
+              className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-300"
+            >
+              <option value="priority">Priority</option>
+              <option value="status">Status</option>
+              <option value="title">Title A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Task list */}
+        <div className="px-5 pb-5 space-y-1 overflow-y-auto max-h-[calc(100vh-320px)]">
+          {sortedTasks.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-slate-400">No tasks match the filter.</p>
+              {drawerStatusFilter !== 'all' && (
+                <button
+                  onClick={() => setDrawerStatusFilter('all')}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
+          ) : (
+            sortedTasks.map((t) => {
+              const StatusIcon = STATUS_ICONS[t.status]
+              return (
+                <div
+                  key={t.id}
+                  className={`group flex items-center gap-2.5 py-2.5 px-3 rounded-xl border-l-2 ${categoryAccent(t.category)} transition-all cursor-pointer ${
+                    t.status === 'done' ? 'opacity-60' : 'hover:bg-slate-50'
+                  }`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onTaskSelect?.(t, 'view')}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTaskSelect?.(t, 'view') } }}
+                >
+                  {/* Status toggle */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onStatusChange?.(t.id, nextStatus(t.status)) }}
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
+                    aria-label={`Mark as ${STATUS_CONFIG[nextStatus(t.status)].label}`}
+                  >
+                    <StatusIcon className={`w-4 h-4 ${
+                      t.status === 'done' ? 'text-emerald-500' :
+                      t.status === 'inprogress' ? 'text-amber-500' :
+                      'text-slate-300'
+                    }`} />
+                  </button>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-sm leading-snug block truncate ${
+                      t.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'
+                    }`}>
+                      {t.title}
+                    </span>
+                    {t.category && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full inline-block mt-0.5 ${categoryStyle(t.category)}`}>
+                        {categoryLabel(t.category)}
+                      </span>
+                    )}
+                  </div>
+
+                  <PriorityBadge priority={t.priority} size="sm" />
+
+                  {/* Actions on hover */}
+                  <div className="hidden group-hover:flex items-center gap-0.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onTaskSelect?.(t, 'view') }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 cursor-pointer"
+                      title="View"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onTaskSelect?.(t, 'edit') }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 cursor-pointer"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm(`Delete "${t.title}"?`)) onTaskDelete?.(t.id)
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </aside>
+    )
+  }
 
   if (!task) return null
   const activeCategory = categories.find((c) => c.id === categoryId) ?? task.category
@@ -139,10 +348,10 @@ export function TaskDetailPanel({
 
   if (mode === 'view') {
     return (
-      <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
+      <aside className="w-full lg:w-[380px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
         <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-wide text-slate-400">Task details</div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">Task details</div>
             <div className="text-sm font-semibold text-slate-700">Overview</div>
           </div>
           <div className="flex items-center gap-1">
@@ -164,7 +373,7 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto max-h-[calc(100vh-280px)]">
           <div className="flex items-center gap-2">
             <span className={`text-xs px-2 py-1 rounded-lg border border-slate-200 ${
               task.status === 'done' ? 'text-emerald-600 bg-emerald-50' :
@@ -282,10 +491,10 @@ export function TaskDetailPanel({
   }
 
   return (
-    <aside className="w-full lg:w-[360px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
+    <aside className="w-full lg:w-[380px] shrink-0 border-l border-slate-200 bg-white/70 backdrop-blur animate-slide-in-right">
       <div className="p-5 border-b border-slate-200 flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-slate-400">Task details</div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">Task details</div>
           <div className="text-sm font-semibold text-slate-700">Edit and refine</div>
         </div>
         <button
@@ -297,7 +506,7 @@ export function TaskDetailPanel({
         </button>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-4 overflow-y-auto max-h-[calc(100vh-280px)]">
         <div className="flex items-center gap-2">
           <select
             value={status}

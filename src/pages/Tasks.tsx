@@ -10,6 +10,7 @@ import { useCategories } from '../hooks/useCategories'
 import { categoryDot } from '../lib/categoryUtils'
 import { MONTH_NAMES } from '../lib/constants'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
+import { EmptyState } from '../components/ui/EmptyState'
 import { ChevronLeft, ChevronRight, Search, CalendarDays, List, Inbox, Plus } from 'lucide-react'
 import type { Task } from '../types'
 
@@ -20,6 +21,7 @@ export default function Tasks() {
   const [view, setView] = useState<'calendar' | 'list' | 'backlog'>('calendar')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
@@ -116,6 +118,37 @@ export default function Tasks() {
     return result
   }, [backlogTasks, activeCategory, debouncedSearch])
 
+  // Tasks for the selected date (used by the drawer in date-list mode)
+  const selectedDateTasks = useMemo(() => {
+    if (!selectedDate) return []
+    return filteredTasks.filter((t) => t.date === selectedDate)
+  }, [filteredTasks, selectedDate])
+
+  const handleDateSelect = (date: string) => {
+    if (selectedDate === date) {
+      // Deselect if clicking the same date
+      setSelectedDate(null)
+      setSelectedTask(null)
+    } else {
+      setSelectedDate(date)
+      setSelectedTask(null)
+    }
+  }
+
+  const handleTaskSelect = (task: Task, mode: 'view' | 'edit') => {
+    setSelectedTask(task)
+    setPanelMode(mode)
+    setSelectedDate(null)
+  }
+
+  // Determine whether to show the panel
+  const showDrawer = selectedTask !== null || selectedDate !== null
+
+  // Compute empty state conditions
+  const hasSearch = debouncedSearch.trim().length > 0
+  const hasFilter = activeCategory !== 'all'
+  const isFiltered = hasSearch || hasFilter
+
   return (
     <div className="content-wrap">
       <header className="page-header">
@@ -164,6 +197,22 @@ export default function Tasks() {
           </div>
         </div>
 
+        {/* Month progress bar */}
+        {view === 'calendar' && totalTasks > 0 && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Monthly progress</span>
+              <span className="text-[11px] font-bold text-slate-500">{Math.round((doneTasks / totalTasks) * 100)}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${(doneTasks / totalTasks) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
             <Search className="w-4 h-4 text-slate-400" />
@@ -211,96 +260,126 @@ export default function Tasks() {
           {(view === 'backlog' ? backlogLoading : loading) || categoriesLoading ? (
             <LoadingSpinner message="Loading tasks..." fullHeight={false} />
           ) : view === 'backlog' ? (
-            <BacklogList
-              tasks={filteredBacklogTasks}
-              totalCount={backlogTasks.length}
-              categories={categories}
-              onAdd={addBacklogTask}
-              onStatusChange={updateBacklogStatus}
-              onSelect={(task, mode) => {
-                setSelectedTask(task)
-                setPanelMode(mode)
-              }}
-              onDelete={deleteBacklogTask}
-              onSchedule={async (ids, date) => {
-                await scheduleBacklogTasks(ids, date)
-                await refetchCalendar()
-              }}
-              onBulkStatusChange={bulkUpdateBacklogStatus}
-              onBulkDelete={bulkDeleteBacklog}
-            />
+            filteredBacklogTasks.length === 0 ? (
+              <EmptyState
+                type={isFiltered ? (hasSearch ? 'no-search-results' : 'no-filter-results') : 'no-tasks-month'}
+                searchQuery={hasSearch ? debouncedSearch : undefined}
+                categoryName={hasFilter ? categories.find(c => c.id === activeCategory)?.name : undefined}
+                onClearSearch={hasSearch ? () => setSearch('') : undefined}
+                onShowAll={hasFilter ? () => setActiveCategory('all') : undefined}
+              />
+            ) : (
+              <BacklogList
+                tasks={filteredBacklogTasks}
+                totalCount={backlogTasks.length}
+                categories={categories}
+                onAdd={addBacklogTask}
+                onStatusChange={updateBacklogStatus}
+                onSelect={(task, mode) => handleTaskSelect(task, mode)}
+                onDelete={deleteBacklogTask}
+                onSchedule={async (ids, date) => {
+                  await scheduleBacklogTasks(ids, date)
+                  await refetchCalendar()
+                }}
+                onBulkStatusChange={bulkUpdateBacklogStatus}
+                onBulkDelete={bulkDeleteBacklog}
+              />
+            )
           ) : view === 'calendar' ? (
-            <Calendar
-              year={year}
-              month={month}
-              tasks={filteredTasks}
-              categories={categories}
-              onAdd={addTask}
-              onStatusChange={updateTaskStatus}
-              onUpdate={updateTask}
-              onDelete={deleteTask}
-              onSelect={(task, mode) => {
-                setSelectedTask(task)
-                setPanelMode(mode)
-              }}
-            />
+            isFiltered && filteredTasks.length === 0 ? (
+              <EmptyState
+                type={hasSearch ? 'no-search-results' : 'no-filter-results'}
+                searchQuery={hasSearch ? debouncedSearch : undefined}
+                categoryName={hasFilter ? categories.find(c => c.id === activeCategory)?.name : undefined}
+                onClearSearch={hasSearch ? () => setSearch('') : undefined}
+                onShowAll={hasFilter ? () => setActiveCategory('all') : undefined}
+              />
+            ) : (
+              <Calendar
+                year={year}
+                month={month}
+                tasks={filteredTasks}
+                categories={categories}
+                onAdd={addTask}
+                onStatusChange={updateTaskStatus}
+                onUpdate={updateTask}
+                onDelete={deleteTask}
+                onSelect={(task, mode) => handleTaskSelect(task, mode)}
+                selectedDate={selectedDate}
+                onDateSelect={handleDateSelect}
+              />
+            )
           ) : (
-            <TaskList
-              tasks={filteredTasks}
-              onStatusChange={updateTaskStatus}
-              onSelect={(task, mode) => {
-                setSelectedTask(task)
-                setPanelMode(mode)
-              }}
-              onBulkStatusChange={bulkUpdateStatus}
-              onBulkReschedule={async (ids, date) => {
-                await bulkReschedule(ids, date)
-                await refetchCalendar()
-              }}
-              onBulkMoveToBacklog={async (ids) => {
-                await bulkMoveToBacklog(ids)
-                await refetchBacklog()
-              }}
-              onBulkDelete={bulkDelete}
-            />
+            filteredTasks.length === 0 ? (
+              <EmptyState
+                type={isFiltered ? (hasSearch ? 'no-search-results' : 'no-filter-results') : 'no-tasks-month'}
+                searchQuery={hasSearch ? debouncedSearch : undefined}
+                categoryName={hasFilter ? categories.find(c => c.id === activeCategory)?.name : undefined}
+                onClearSearch={hasSearch ? () => setSearch('') : undefined}
+                onShowAll={hasFilter ? () => setActiveCategory('all') : undefined}
+              />
+            ) : (
+              <TaskList
+                tasks={filteredTasks}
+                onStatusChange={updateTaskStatus}
+                onSelect={(task, mode) => handleTaskSelect(task, mode)}
+                onBulkStatusChange={bulkUpdateStatus}
+                onBulkReschedule={async (ids, date) => {
+                  await bulkReschedule(ids, date)
+                  await refetchCalendar()
+                }}
+                onBulkMoveToBacklog={async (ids) => {
+                  await bulkMoveToBacklog(ids)
+                  await refetchBacklog()
+                }}
+                onBulkDelete={bulkDelete}
+              />
+            )
           )}
         </div>
 
-        <TaskDetailPanel
-          task={selectedTask}
-          categories={categories}
-          mode={panelMode}
-          onModeChange={setPanelMode}
-          onClose={() => setSelectedTask(null)}
-          onUpdate={async (id, updates) => {
-            const isBacklogTask = selectedTask?.date === null
-            if (isBacklogTask) {
-              await updateBacklogTask(id, updates)
-              if (updates.date) {
-                await refetchBacklog()
+        {showDrawer && (
+          <TaskDetailPanel
+            task={selectedTask}
+            categories={categories}
+            mode={panelMode}
+            onModeChange={setPanelMode}
+            onClose={() => { setSelectedTask(null); setSelectedDate(null) }}
+            onUpdate={async (id, updates) => {
+              const isBacklogTask = selectedTask?.date === null
+              if (isBacklogTask) {
+                await updateBacklogTask(id, updates)
+                if (updates.date) {
+                  await refetchBacklog()
+                }
+              } else {
+                await updateTask(id, updates)
+                if (updates.date === null) {
+                  await refetchBacklog()
+                }
               }
-            } else {
-              await updateTask(id, updates)
-              if (updates.date === null) {
-                await refetchBacklog()
-              }
-            }
 
-            if (selectedTask) {
-              const updatedTask = { ...selectedTask, ...updates }
-              setSelectedTask(updatedTask)
-            }
-          }}
-          onDelete={async (id) => {
-            const isBacklogTask = selectedTask?.date === null
-            if (isBacklogTask) {
-              await deleteBacklogTask(id)
-            } else {
-              await deleteTask(id)
-            }
-            setSelectedTask(null)
-          }}
-        />
+              if (selectedTask) {
+                const updatedTask = { ...selectedTask, ...updates }
+                setSelectedTask(updatedTask)
+              }
+            }}
+            onDelete={async (id) => {
+              const isBacklogTask = selectedTask?.date === null
+              if (isBacklogTask) {
+                await deleteBacklogTask(id)
+              } else {
+                await deleteTask(id)
+              }
+              setSelectedTask(null)
+            }}
+            selectedDate={selectedDate}
+            selectedDateTasks={selectedDateTasks}
+            onTaskSelect={(task, mode) => handleTaskSelect(task, mode)}
+            onStatusChange={updateTaskStatus}
+            onTaskDelete={deleteTask}
+          />
+        )}
       </div>
 
       <BulkAddModal
