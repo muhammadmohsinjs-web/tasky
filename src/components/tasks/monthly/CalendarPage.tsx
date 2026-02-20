@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
 import { useCategories } from '../../../hooks/useCategories';
@@ -68,6 +69,7 @@ function formatTimeLabel(value: string | null | undefined): string {
 }
 
 export default function CalendarPage() {
+  const queryClient = useQueryClient();
   const [monthDate, setMonthDate] = useState(initialMonth);
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,6 +78,7 @@ export default function CalendarPage() {
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -119,11 +122,15 @@ export default function CalendarPage() {
 
   const handleViewTask = (taskId: string) => {
     setSelectedTaskId(taskId);
+    setEditingTaskId(taskId);
+    setModalMode('view');
+    setIsAddModalOpen(true);
   };
 
   const handleEditTask = (taskId: string) => {
     setSelectedTaskId(taskId);
     setEditingTaskId(taskId);
+    setModalMode('edit');
     setIsAddModalOpen(true);
   };
 
@@ -252,6 +259,7 @@ export default function CalendarPage() {
               type="button"
               onClick={() => {
                 setEditingTaskId(null);
+                setModalMode('create');
                 setIsAddModalOpen(true);
               }}
               className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
@@ -335,6 +343,7 @@ export default function CalendarPage() {
                   onSelectTask={setSelectedTaskId}
                   onOpenAddTask={() => {
                     setEditingTaskId(null);
+                    setModalMode('create');
                     setIsAddModalOpen(true);
                   }}
                   onViewTask={handleViewTask}
@@ -428,6 +437,7 @@ export default function CalendarPage() {
               onSelectTask={setSelectedTaskId}
               onOpenAddTask={() => {
                 setEditingTaskId(null);
+                setModalMode('create');
                 setIsAddModalOpen(true);
               }}
               onClose={() => setIsMobileSidebarOpen(false)}
@@ -442,12 +452,14 @@ export default function CalendarPage() {
 
       <AddTaskModal
         isOpen={isAddModalOpen}
+        mode={modalMode}
         defaultDateISO={selectedDateISO}
         task={editingTask}
         categories={categories}
         onClose={() => {
           setIsAddModalOpen(false);
           setEditingTaskId(null);
+          setModalMode('create');
         }}
         onSubmit={async payload => {
           const dbStatus = CALENDAR_TO_DB_STATUS[payload.status];
@@ -473,6 +485,7 @@ export default function CalendarPage() {
 
             if (payload.files.length > 0) {
               await uploadFilesForTask(editingTask.id, payload.files);
+              await queryClient.invalidateQueries({ queryKey: ['tasks'] });
             }
 
             if (payload.dateISO) {
@@ -514,6 +527,7 @@ export default function CalendarPage() {
 
           if (payload.files.length > 0) {
             await uploadFilesForTask(created.id, payload.files);
+            await queryClient.invalidateQueries({ queryKey: ['tasks'] });
           }
 
           if (payload.dateISO) {

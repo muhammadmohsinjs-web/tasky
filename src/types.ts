@@ -70,6 +70,7 @@ export interface Task {
   priority: TaskPriority
   sort_order?: number
   links?: TaskLink[]
+  attachments?: TaskAttachment[]
   created_at: string
   updated_at?: string
   is_projected?: boolean

@@ -76,4 +76,4 @@ export const CATEGORY_PALETTE = [
   { name: 'Sky', color: 'bg-sky-100 text-sky-700', accent: 'border-l-sky-400', hex: '#0ea5e9' },
 ]
 
-export const TASK_SELECT = 'id,title,description,notes,time,category_id,date,end_date,recurrence,source_task_id,status,priority,sort_order,links,created_at,updated_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
+export const TASK_SELECT = 'id,title,description,notes,time,category_id,date,end_date,recurrence,source_task_id,status,priority,sort_order,links,created_at,updated_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at), attachments:task_attachments(id,task_id,user_id,file_name,file_url,file_type,file_size,created_at)'

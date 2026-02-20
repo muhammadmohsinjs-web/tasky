@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
+import { ExternalLink, FileIcon, Image as ImageIcon, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
 import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
 import type { TaskStatus } from './types';
@@ -19,6 +19,7 @@ interface TaskFormPayload {
 
 interface AddTaskModalProps {
   isOpen: boolean;
+  mode: 'create' | 'edit' | 'view';
   defaultDateISO: string;
   task: Task | null;
   categories: Category[];
@@ -32,8 +33,9 @@ function dbToCalendarStatus(status: DbTaskStatus): TaskStatus {
   return 'pending';
 }
 
-export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose, onSubmit }: AddTaskModalProps) {
-  const isEditMode = Boolean(task);
+export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, onClose, onSubmit }: AddTaskModalProps) {
+  const isViewMode = mode === 'view';
+  const isEditMode = mode === 'edit';
   const [submitting, setSubmitting] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -48,8 +50,12 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
   const [newLinkLabel, setNewLinkLabel] = useState('');
   const [linkError, setLinkError] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const existingAttachments = task?.attachments ?? [];
 
-  const heading = useMemo(() => (isEditMode ? 'Edit Task' : 'Create Task'), [isEditMode]);
+  const heading = useMemo(() => {
+    if (isViewMode) return 'Task Details';
+    return isEditMode ? 'Edit Task' : 'Create Task';
+  }, [isEditMode, isViewMode]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -113,8 +119,15 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isViewMode) return;
     const normalizedTitle = title.trim();
     if (!normalizedTitle || submitting) return;
 
@@ -158,6 +171,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               onChange={event => setTitle(event.target.value)}
               type="text"
               required
+              disabled={isViewMode}
               className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               placeholder="Task title"
             />
@@ -169,6 +183,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               <select
                 value={status}
                 onChange={event => setStatus(event.target.value as TaskStatus)}
+                disabled={isViewMode}
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                 <option value="in_progress">In Progress</option>
                 <option value="pending">Pending</option>
@@ -181,6 +196,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               <select
                 value={priority}
                 onChange={event => setPriority(event.target.value as TaskPriority)}
+                disabled={isViewMode}
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                 {(Object.keys(PRIORITY_CONFIG) as TaskPriority[]).map(value => (
                   <option key={value} value={value}>
@@ -195,6 +211,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               <select
                 value={categoryId}
                 onChange={event => setCategoryId(event.target.value)}
+                disabled={isViewMode}
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                 <option value="">Uncategorized</option>
                 {categories.map(category => (
@@ -214,9 +231,10 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
                   value={dateISO}
                   onChange={event => setDateISO(event.target.value)}
                   type="date"
+                  disabled={isViewMode}
                   className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 />
-                {dateISO ? (
+                {dateISO && !isViewMode ? (
                   <button
                     type="button"
                     onClick={() => setDateISO('')}
@@ -234,6 +252,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
                 value={time}
                 onChange={event => setTime(event.target.value)}
                 type="time"
+                disabled={isViewMode}
                 className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               />
             </label>
@@ -245,6 +264,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               value={description}
               onChange={event => setDescription(event.target.value)}
               rows={3}
+              readOnly={isViewMode}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               placeholder="Task description"
             />
@@ -256,6 +276,7 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               value={notes}
               onChange={event => setNotes(event.target.value)}
               rows={3}
+              readOnly={isViewMode}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               placeholder="Additional notes"
             />
@@ -268,56 +289,89 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
                 <div key={`${link.url}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
                   <LinkIcon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                   <span className="truncate text-sm text-slate-700">{link.label || link.url}</span>
-                  <button type="button" onClick={() => removeLink(index)} className="ml-auto p-1 text-slate-500 hover:text-red-500">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  {!isViewMode ? (
+                    <button type="button" onClick={() => removeLink(index)} className="ml-auto p-1 text-slate-500 hover:text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
               ))}
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_180px_auto]">
-                <input
-                  value={newLinkUrl}
-                  onChange={event => setNewLinkUrl(event.target.value)}
-                  type="url"
-                  className="h-11 rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  placeholder="https://example.com"
-                />
-                <input
-                  value={newLinkLabel}
-                  onChange={event => setNewLinkLabel(event.target.value)}
-                  type="text"
-                  className="h-11 rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  placeholder="Label (optional)"
-                />
-                <button
-                  type="button"
-                  onClick={addLink}
-                  disabled={!newLinkUrl.trim()}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-3 text-white disabled:cursor-not-allowed disabled:opacity-50">
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
+              {!isViewMode ? (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_180px_auto]">
+                  <input
+                    value={newLinkUrl}
+                    onChange={event => setNewLinkUrl(event.target.value)}
+                    type="url"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    placeholder="https://example.com"
+                  />
+                  <input
+                    value={newLinkLabel}
+                    onChange={event => setNewLinkLabel(event.target.value)}
+                    type="text"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    placeholder="Label (optional)"
+                  />
+                  <button
+                    type="button"
+                    onClick={addLink}
+                    disabled={!newLinkUrl.trim()}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-3 text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
               {linkError ? <p className="text-xs text-red-500">{linkError}</p> : null}
             </div>
           </div>
 
           <div>
-            <span className="mb-1 block text-sm font-medium text-slate-700">Upload file</span>
+            <span className="mb-1 block text-sm font-medium text-slate-700">Documents</span>
             <div className="space-y-2 rounded-xl border border-dashed border-slate-300 p-3">
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                <Paperclip className="h-4 w-4" />
-                Select file(s)
-                <input type="file" multiple className="hidden" onChange={handleFilesSelected} />
-              </label>
+              {!isViewMode ? (
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                  <Paperclip className="h-4 w-4" />
+                  Select file(s)
+                  <input type="file" multiple className="hidden" onChange={handleFilesSelected} />
+                </label>
+              ) : null}
+
+              {existingAttachments.map((attachment) => {
+                const isImage = attachment.file_type.startsWith('image/');
+                return (
+                  <a
+                    key={attachment.id}
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-700 hover:bg-slate-100"
+                  >
+                    {isImage ? <ImageIcon className="h-3.5 w-3.5 shrink-0 text-indigo-500" /> : <FileIcon className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{attachment.file_name}</div>
+                      <div className="text-[10px] text-slate-500">{formatFileSize(attachment.file_size)}</div>
+                    </div>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  </a>
+                );
+              })}
+
               {files.map((file, index) => (
                 <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
                   <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                   <span className="truncate text-sm text-slate-700">{file.name}</span>
-                  <button type="button" onClick={() => removeFile(index)} className="ml-auto p-1 text-slate-500 hover:text-red-500">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  {!isViewMode ? (
+                    <button type="button" onClick={() => removeFile(index)} className="ml-auto p-1 text-slate-500 hover:text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
               ))}
+
+              {existingAttachments.length === 0 && files.length === 0 ? (
+                <p className="text-xs text-slate-500">No documents attached.</p>
+              ) : null}
             </div>
           </div>
 
@@ -327,14 +381,16 @@ export function AddTaskModal({ isOpen, defaultDateISO, task, categories, onClose
               onClick={onClose}
               disabled={submitting}
               className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
-              Cancel
+              {isViewMode ? 'Close' : 'Cancel'}
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {submitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Task'}
-            </button>
+            {!isViewMode ? (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {submitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Task'}
+              </button>
+            ) : null}
           </div>
         </form>
       </section>
