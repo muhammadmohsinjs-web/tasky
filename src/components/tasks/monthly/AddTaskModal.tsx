@@ -33,6 +33,13 @@ function dbToCalendarStatus(status: DbTaskStatus): TaskStatus {
   return 'pending';
 }
 
+function getCurrentTimeValue() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
 export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, onClose, onSubmit }: AddTaskModalProps) {
   const isViewMode = mode === 'view';
   const isEditMode = mode === 'edit';
@@ -49,6 +56,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkLabel, setNewLinkLabel] = useState('');
   const [linkError, setLinkError] = useState('');
+  const [titleError, setTitleError] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const existingAttachments = task?.attachments ?? [];
 
@@ -64,7 +72,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setDescription(task?.description ?? '');
     setNotes(task?.notes ?? '');
     setDateISO(task?.date ?? defaultDateISO ?? '');
-    setTime(task?.time ?? '');
+    setTime(task?.time ?? (mode === 'create' ? getCurrentTimeValue() : ''));
     setStatus(task ? dbToCalendarStatus(task.status) : 'pending');
     setPriority(task?.priority ?? 'medium');
     setCategoryId(task?.category_id ?? categories[0]?.id ?? '');
@@ -72,9 +80,10 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setNewLinkUrl('');
     setNewLinkLabel('');
     setLinkError('');
+    setTitleError('');
     setFiles([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultDateISO, isOpen, task]);
+  }, [defaultDateISO, isOpen, mode, task]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -129,9 +138,14 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     event.preventDefault();
     if (isViewMode) return;
     const normalizedTitle = title.trim();
-    if (!normalizedTitle || submitting) return;
+    if (!normalizedTitle) {
+      setTitleError('Title is required');
+      return;
+    }
+    if (submitting) return;
 
     setSubmitting(true);
+    setTitleError('');
     try {
       await onSubmit({
         title: normalizedTitle,
@@ -168,13 +182,22 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
             <span className="mb-1 block text-sm font-medium text-slate-700">Title</span>
             <input
               value={title}
-              onChange={event => setTitle(event.target.value)}
+              onChange={event => {
+                setTitle(event.target.value);
+                if (titleError && event.target.value.trim()) {
+                  setTitleError('');
+                }
+              }}
               type="text"
               required
               disabled={isViewMode}
-              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-invalid={Boolean(titleError)}
+              className={`h-11 w-full rounded-xl px-3 text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                titleError ? 'border-red-500' : 'border-slate-300'
+              }`}
               placeholder="Task title"
             />
+            {titleError ? <p className="mt-1 text-xs text-red-500">{titleError}</p> : null}
           </label>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">

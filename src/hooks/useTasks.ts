@@ -81,8 +81,14 @@ export function useTasks(year: number, month: number) {
       sort_order?: number
     }
   ) => {
+    const normalizedTitle = title.trim()
+    if (!normalizedTitle) {
+      toast.error('Title is required')
+      return null
+    }
+
     const row = {
-      title,
+      title: normalizedTitle,
       category_id: categoryId || null,
       date,
       status: extras?.status ?? ('todo' as TaskStatus),

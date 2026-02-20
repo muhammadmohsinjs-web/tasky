@@ -8,6 +8,7 @@ import { useCategories } from '../../../hooks/useCategories';
 import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { AddTaskModal } from './AddTaskModal';
+import { BulkAddModal } from '../BulkAddModal';
 import { CalendarGrid } from './CalendarGrid';
 import { filterTasksByQuery, formatMonthLabel, getTasksForDate, parseISODate, shiftMonth, startOfMonth, toISODate } from './calendarHelpers';
 import { TaskCard } from './TaskCard';
@@ -80,6 +81,7 @@ export default function CalendarPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const {
@@ -88,6 +90,7 @@ export default function CalendarPage() {
     deleteTask: deleteScheduledTask,
     updateTaskStatus: updateScheduledStatus,
     addTask: addScheduledTask,
+    addTasks: addScheduledTasks,
     updateTask: updateScheduledTask,
   } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
   const {
@@ -96,6 +99,7 @@ export default function CalendarPage() {
     deleteTask: deleteBacklogTask,
     updateTaskStatus: updateBacklogStatus,
     addTask: addBacklogTask,
+    addTasks: addBacklogTasks,
     updateTask: updateBacklogTask,
   } = useBacklogTasks();
   const { categories } = useCategories();
@@ -255,17 +259,25 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditingTaskId(null);
-                setModalMode('create');
-                setIsAddModalOpen(true);
-              }}
-              className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-              <Plus className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold">Add Task</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkAddOpen(true)}
+                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                <span className="text-[11px] font-semibold">Bulk Add</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingTaskId(null);
+                  setModalMode('create');
+                  setIsAddModalOpen(true);
+                }}
+                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                <Plus className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-semibold">Add Task</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -535,6 +547,17 @@ export default function CalendarPage() {
             setActiveView('calendar');
           }
           setSelectedTaskId(created.id);
+        }}
+      />
+      <BulkAddModal
+        open={isBulkAddOpen}
+        onClose={() => setIsBulkAddOpen(false)}
+        categories={categories}
+        onAddToDate={async (items) => {
+          await addScheduledTasks(items);
+        }}
+        onAddToBacklog={async (items) => {
+          await addBacklogTasks(items);
         }}
       />
     </main>

@@ -60,8 +60,14 @@ export function useBacklogTasks() {
     priority: TaskPriority = 'medium',
     extras?: { description?: string | null; notes?: string | null; time?: string | null; status?: TaskStatus; links?: TaskLink[] }
   ) => {
+    const normalizedTitle = title.trim()
+    if (!normalizedTitle) {
+      toast.error('Title is required')
+      return null
+    }
+
     const row = {
-      title,
+      title: normalizedTitle,
       category_id: categoryId || null,
       date: null,
       status: extras?.status ?? ('todo' as TaskStatus),
