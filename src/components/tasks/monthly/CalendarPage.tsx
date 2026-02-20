@@ -573,11 +573,13 @@ export default function CalendarPage() {
 
           if (editingTask) {
             const isBacklogTask = backlogDbTasks.some((task) => task.id === editingTask.id);
+            let updated = false;
             if (isBacklogTask) {
-              await updateBacklogTask(editingTask.id, baseUpdate);
+              updated = await updateBacklogTask(editingTask.id, baseUpdate);
             } else {
-              await updateScheduledTask(editingTask.id, baseUpdate);
+              updated = await updateScheduledTask(editingTask.id, baseUpdate);
             }
+            if (!updated) return false;
 
             if (payload.files.length > 0) {
               await uploadFilesForTask(editingTask.id, payload.files);
@@ -589,7 +591,7 @@ export default function CalendarPage() {
               setActiveView('calendar');
             }
             setSelectedTaskId(editingTask.id);
-            return;
+            return true;
           }
 
           const created = payload.dateISO
@@ -619,7 +621,7 @@ export default function CalendarPage() {
                 }
               );
 
-          if (!created) return;
+          if (!created) return false;
 
           if (payload.files.length > 0) {
             await uploadFilesForTask(created.id, payload.files);
@@ -631,6 +633,7 @@ export default function CalendarPage() {
             setActiveView('calendar');
           }
           setSelectedTaskId(created.id);
+          return true;
         }}
       />
       <BulkAddModal

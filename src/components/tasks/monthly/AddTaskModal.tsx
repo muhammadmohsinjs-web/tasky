@@ -24,7 +24,7 @@ interface AddTaskModalProps {
   task: Task | null;
   categories: Category[];
   onClose: () => void;
-  onSubmit: (payload: TaskFormPayload) => Promise<void> | void;
+  onSubmit: (payload: TaskFormPayload) => Promise<boolean> | boolean;
 }
 
 function dbToCalendarStatus(status: DbTaskStatus): TaskStatus {
@@ -148,8 +148,9 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
     setSubmitting(true);
     setTitleError('');
+    let didSave = false;
     try {
-      await onSubmit({
+      didSave = await onSubmit({
         title: normalizedTitle,
         description: description.trim() || null,
         notes: notes.trim() || null,
@@ -161,10 +162,10 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
         links,
         files,
       });
-      onClose();
     } finally {
       setSubmitting(false);
     }
+    if (didSave) onClose();
   };
 
   return (

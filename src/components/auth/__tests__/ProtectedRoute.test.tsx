@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import type { User } from '@supabase/supabase-js'
 import { ProtectedRoute } from '../ProtectedRoute'
 
 // Mock useAuth to control auth state
@@ -63,7 +64,7 @@ describe('ProtectedRoute', () => {
     mockUseAuth.mockReturnValue({
       authenticated: true,
       loading: false,
-      user: { id: '1', email: 'test@example.com' } as any,
+      user: { id: '1', email: 'test@example.com' } as unknown as User,
       signInWithGoogle: async () => {},
       signOut: async () => {},
     })

@@ -158,17 +158,18 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to update task:', error)
       toast.error('Failed to save task')
-      return
+      return false
     }
 
     if ((updates.date !== undefined && updates.date !== null) || updates.category_id !== undefined) {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       toast.success('Task saved')
-      return
+      return true
     }
 
     invalidate()
     toast.success('Task saved')
+    return true
   }
 
   const deleteTask = async (id: string) => {

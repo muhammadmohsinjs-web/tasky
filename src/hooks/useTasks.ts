@@ -26,8 +26,7 @@ export function useTasks(year: number, month: number) {
         .select(TASK_SELECT)
         .not('date', 'is', null)
         .lt('date', endDate)
-        .or(`end_date.is.null,end_date.gte.${startDate}`)
-        .gte('date', startDate)
+        .or(`and(end_date.is.null,date.gte.${startDate}),end_date.gte.${startDate}`)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true })
         .abortSignal(signal)
@@ -192,17 +191,18 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to update task:', error)
       toast.error('Failed to save task')
-      return
+      return false
     }
 
     if (!data || data.length === 0) {
       toast.error('This task was modified elsewhere. Refreshing...')
       invalidate()
-      return
+      return false
     }
 
     invalidate()
     toast.success('Task saved')
+    return true
   }
 
   const deleteTask = async (id: string) => {

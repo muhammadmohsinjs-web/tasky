@@ -25,7 +25,7 @@ export function expandRecurrence(
 
   if (rule.frequency === 'weekly' && rule.days_of_week?.length) {
     // For weekly with specific days, iterate day-by-day within each interval period
-    let weekStart = new Date(start)
+    const weekStart = new Date(start)
     let iterations = 0
 
     while (weekStart <= rangeEnd && iterations < maxIterations) {
@@ -52,7 +52,7 @@ export function expandRecurrence(
       iterations++
     }
   } else {
-    let current = new Date(start)
+    const current = new Date(start)
     let iterations = 0
 
     while (current <= rangeEnd && iterations < maxIterations) {
