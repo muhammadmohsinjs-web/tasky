@@ -56,6 +56,7 @@ A skill is a set of local instructions stored in a `SKILL.md` file.
 - `tasky-roadmap-execution`: Convert plans/user stories into dependency-aware implementation slices. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-roadmap-execution/SKILL.md`)
 - `tasky-debugging-issues`: Debug workflow for reproducing, isolating, fixing, and verifying Tasky bugs and regressions. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-debugging-issues/SKILL.md`)
 - `tasky-product-stability-audit`: Product-level workflow, UX, reliability, and architecture audit with a production-readiness verdict. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-product-stability-audit/SKILL.md`)
+- `tasky-senior-product-manager`: Founder-level product strategy and architecture authority for decisive Build/Refactor/Kill/Pivot recommendations. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-senior-product-manager/SKILL.md`)
 
 ### Auto-trigger guidance (plain prompts, no `$` needed)
 - Use `tasky-schema-migration-advisor` when prompts include: `schema`, `migration`, `table`, `column`, `RLS`, `backfill`, `DB change`.
@@ -65,5 +66,6 @@ A skill is a set of local instructions stored in a `SKILL.md` file.
 - Use `tasky-debugging-issues` when prompts include: `debug`, `bug`, `issue`, `regression`, `failing test`, `runtime error`, `not working`.
 - Use `tasky-roadmap-execution` when prompts include: `roadmap`, `phase`, `sprint`, `execution plan`, `prioritize`.
 - Use `tasky-product-stability-audit` when prompts include: `workflow audit`, `UX audit`, `production readiness`, `broken flow`, `dead end`, `stability review`, `architecture risk`.
+- Use `tasky-senior-product-manager` when prompts include: `product strategy`, `feature bloat`, `ROI vs complexity`, `build/refactor/kill/pivot`, `product conflict`, `founder-level decision`, `retention impact`, `opportunity cost`.
 - Use `tasky-feature-delivery` for normal feature coding prompts in app code.
 - Default to `tasky-vibe-coding` + `tasky-fullstack-standard-coding` for end-to-end implementation requests.

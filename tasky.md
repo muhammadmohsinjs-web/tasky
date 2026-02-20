@@ -6,8 +6,7 @@ This document merges current implementation details with product strategy and fu
 - `AGENTS.md`
 - `PRODUCT_ANALYSIS.md`
 - `IMPLEMENTATION_BLUEPRINT.md`
-- `FUTURE_PLANS.md`
-- `FUTURE_PLANS_EXECUTION.md`
+- `GOOGLE_CALENDAR_INTEGRATION_PLAN.md`
 - `USER_STORIES.md`
 - `PRODUCTION_READINESS_REVIEW.md`
 - Current source code under `src/` and `supabase/`
@@ -203,7 +202,7 @@ Estimated ranges in docs:
 - Full broader backlog: 7-10 weeks depending on scope
 
 ### 8.2 Google sync platform track
-From `FUTURE_PLANS.md` and `FUTURE_PLANS_EXECUTION.md`:
+From `GOOGLE_CALENDAR_INTEGRATION_PLAN.md`:
 - Phase 0: foundation (multi-tenant connection model, canonical schema, token security, jobs)
 - Phase 1: OAuth + one-way import
 - Phase 2: bidirectional sync MVP + conflicts/tombstones

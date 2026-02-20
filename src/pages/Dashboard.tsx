@@ -1,12 +1,14 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useAllTasks } from '../hooks/useAllTasks'
 import { useCategories } from '../hooks/useCategories'
 import { useProfile } from '../hooks/useProfile'
+import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -15,7 +17,9 @@ export default function Dashboard() {
   const { tasks, loading } = useAllTasks()
   const { categories } = useCategories()
   const { profile } = useProfile()
+  const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()
+  const [googleDebugStatus, setGoogleDebugStatus] = useState('idle')
 
   const stats = useMemo(() => {
     const todo = tasks.filter((t) => t.status === 'todo').length
@@ -77,6 +81,80 @@ export default function Dashboard() {
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  const handleFetchGoogleData = async () => {
+    const clickedAt = new Date().toLocaleTimeString()
+    setGoogleDebugStatus(`clicked at ${clickedAt}`)
+    toast.message('Dashboard fetch button clicked')
+    console.warn('[Dashboard] Fetch button clicked')
+    console.warn('[Dashboard] Fetching Google Calendar events...')
+    try {
+      const preview = await fetchAndLog()
+      const calendarSummaries = preview.calendars.map((calendar) => ({
+        id: calendar.id,
+        name: calendar.summary,
+        primary: Boolean(calendar.primary),
+        timezone: calendar.timeZone ?? 'UTC',
+        events: preview.eventsByCalendar[calendar.id]?.length ?? 0,
+      }))
+
+      const normalizedEvents = Object.entries(preview.eventsByCalendar)
+        .flatMap(([calendarId, events]) =>
+          events.map((event) => ({
+            calendarId,
+            id: event.id,
+            title: event.summary ?? '(No title)',
+            status: event.status,
+            start: event.start?.dateTime ?? event.start?.date ?? null,
+            end: event.end?.dateTime ?? event.end?.date ?? null,
+            allDay: Boolean(event.start?.date && !event.start?.dateTime),
+          }))
+        )
+        .sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
+
+      const eventSummary = {
+        total: normalizedEvents.length,
+        timed: normalizedEvents.filter((event) => !event.allDay).length,
+        allDay: normalizedEvents.filter((event) => event.allDay).length,
+        upcoming: normalizedEvents.slice(0, 10),
+      }
+
+      const normalizedTasks = Object.entries(preview.tasksByList).flatMap(([taskListId, taskItems]) =>
+        taskItems.map((task) => ({
+          taskListId,
+          id: task.id,
+          title: task.title ?? '(No title)',
+          status: task.status ?? 'needsAction',
+          due: task.due ?? null,
+          completedAt: task.completed ?? null,
+        }))
+      )
+
+      const taskSummary = {
+        lists: preview.taskLists.map((taskList) => ({
+          id: taskList.id,
+          title: taskList.title,
+          tasks: preview.tasksByList[taskList.id]?.length ?? 0,
+        })),
+        total: normalizedTasks.length,
+        pending: normalizedTasks.filter((task) => task.status !== 'completed').length,
+        completed: normalizedTasks.filter((task) => task.status === 'completed').length,
+        sample: normalizedTasks.slice(0, 10),
+        error: preview.tasksError ?? null,
+      }
+
+      setGoogleDebugStatus(`success: ${preview.calendars.length} calendars, ${normalizedEvents.length} events`)
+      console.group('[Dashboard] Google Snapshot')
+      console.log('calendars', calendarSummaries)
+      console.log('tasks', taskSummary)
+      console.log('events', eventSummary)
+      console.groupEnd()
+    } catch (error) {
+      setGoogleDebugStatus('failed: check toast/error')
+      console.warn('[Dashboard] Google Calendar fetch failed')
+      console.error('[Dashboard] Google Calendar fetch failed', error)
+    }
+  }
+
   if (loading) {
     return <LoadingSpinner message="Loading dashboard..." />
   }
@@ -102,12 +180,23 @@ export default function Dashboard() {
               <span className="inline-flex items-center rounded-full border border-[#F2D3D3] bg-[#FFF1F1] px-2.5 py-1 text-xs font-medium text-[#A33A3A]">
                 Overdue: {overdue}
               </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Google debug: {googleDebugStatus}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/tasks')} className="btn btn-secondary !h-10 !px-4">
               Plan Today
+            </button>
+            <button
+              onClick={() => void handleFetchGoogleData()}
+              disabled={googlePreviewLoading}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              <CloudDownload className="h-4 w-4" />
+              {googlePreviewLoading ? 'Fetching Google...' : 'Fetch Google Data'}
             </button>
             <button onClick={() => navigate('/tasks')} className="btn btn-primary !h-10 !px-4">
               <Plus className="h-4 w-4" />

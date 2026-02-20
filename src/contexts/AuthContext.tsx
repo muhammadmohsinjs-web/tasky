@@ -44,6 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: 'google',
       options: {
         redirectTo: `${appBaseUrl}/dashboard`,
+        scopes: 'openid email profile https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly',
+        queryParams: {
+          access_type: 'offline',
+          include_granted_scopes: 'true',
+          prompt: 'consent',
+        },
       },
     })
   }
