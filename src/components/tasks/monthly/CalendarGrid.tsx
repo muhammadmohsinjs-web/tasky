@@ -37,7 +37,7 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
   const todayISO = new Date().toISOString().slice(0, 10);
 
   return (
-    <section className="h-full rounded-[16px] border border-[#E1E8F3] bg-[#FBFCFF] p-3 shadow-[0_8px_24px_rgba(30,58,110,0.05)] md:p-4" aria-label="Monthly calendar">
+    <section className="h-full" aria-label="Monthly calendar">
       {showHeader ? (
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{formatMonthLabel(monthDate)}</h1>
@@ -62,99 +62,100 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-[#DDE5F1] bg-white">
-        <div className="grid grid-cols-7 border-b border-[#E4EAF4] bg-[#F8FAFE]">
-          {WEEKDAY_LABELS.map((dayLabel, dayIndex) => (
+      <div className="grid grid-cols-7 border-b border-[#E5EBF5] bg-[#F8FAFD]">
+        {WEEKDAY_LABELS.map((dayLabel, dayIndex) => (
+          <div
+            key={dayLabel}
+            className={`px-1.5 py-2 text-center text-[12px] font-semibold md:px-3 md:py-2.5 md:text-[13px] ${dayIndex === 0 ? 'text-[#D65250]' : 'text-[#44536D]'}`}
+          >
+            {dayLabel}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7">
+        {monthCells.map((cell) => {
+          const dayTasks = getTasksForDate(tasks, cell.isoDate);
+          const visibleDayTasks = dayTasks.slice(0, 3);
+          const hiddenCount = dayTasks.length - visibleDayTasks.length;
+          const isSelected = selectedDateISO === cell.isoDate;
+          const isSundayInMonth = cell.inCurrentMonth && cell.date.getDay() === 0;
+          const isToday = cell.isoDate === todayISO;
+          const isPastDate = cell.isoDate < todayISO;
+          const showQuickAdd = cell.inCurrentMonth && dayTasks.length === 0 && !isPastDate;
+
+          return (
             <div
-              key={dayLabel}
-              className={`px-2 py-2.5 text-center text-xs font-semibold md:px-3 md:text-[13px] ${dayIndex === 0 ? 'text-[#D65250]' : 'text-[#44536D]'}`}
+              key={cell.isoDate}
+              onClick={() => onSelectDate(cell.isoDate)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectDate(cell.isoDate);
+                }
+              }}
+              className={[
+                'group relative min-h-[94px] border-r border-b border-[#E5EBF5] p-2 text-left transition-colors md:min-h-[124px] md:p-2.5',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
+                cell.inCurrentMonth ? 'bg-white hover:bg-[#F8FAFF]' : 'bg-[#F7F9FC] text-slate-400',
+                isSelected ? 'bg-[#EEF4FF] shadow-[inset_0_0_0_1px_#C5D8F7]' : '',
+              ].join(' ')}
+              role="button"
+              tabIndex={0}
+              aria-label={`Select ${cell.isoDate}`}
+              aria-pressed={isSelected}
             >
-              {dayLabel}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7">
-          {monthCells.map((cell) => {
-            const dayTasks = getTasksForDate(tasks, cell.isoDate);
-            const visibleDayTasks = dayTasks.slice(0, 3);
-            const hiddenCount = dayTasks.length - visibleDayTasks.length;
-            const isSelected = selectedDateISO === cell.isoDate;
-            const isSundayInMonth = cell.inCurrentMonth && cell.date.getDay() === 0;
-            const isToday = cell.isoDate === todayISO;
-            const isPastDate = cell.isoDate < todayISO;
-            const showQuickAdd = cell.inCurrentMonth && dayTasks.length === 0 && !isPastDate;
-
-            return (
-              <div
-                key={cell.isoDate}
-                onClick={() => onSelectDate(cell.isoDate)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    onSelectDate(cell.isoDate);
-                  }
-                }}
-                className={[
-                  'group relative min-h-[94px] border-r border-b border-[#E4EAF3] p-2 text-left transition-colors md:min-h-[124px] md:p-2.5',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
-                  cell.inCurrentMonth ? 'bg-white hover:bg-[#F6F9FF]' : 'bg-[#F6F8FC] text-slate-400',
-                  isSelected ? 'bg-[#EDF4FF] shadow-[inset_0_0_0_1px_#C8DBFA]' : '',
-                ].join(' ')}
-                role="button"
-                tabIndex={0}
-                aria-label={`Select ${cell.isoDate}`}
-                aria-pressed={isSelected}
-              >
-                {showQuickAdd ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onQuickAddDate(cell.isoDate);
-                    }}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    aria-label={`Add task on ${cell.isoDate}`}
-                    className="absolute right-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#D5E2F7] bg-[#EEF4FF] text-[#2A6ED3] transition hover:bg-[#E0ECFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                ) : null}
-
-                <span
+              {showQuickAdd ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onQuickAddDate(cell.isoDate);
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  aria-label={`Add task on ${cell.isoDate}`}
                   className={[
-                    'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold leading-none md:h-7 md:min-w-7',
-                    cell.inCurrentMonth ? 'text-[#3F4F68]' : 'text-[#9AA8BF]',
-                    isSundayInMonth ? 'text-[#D75A58]' : '',
-                    isToday && !isSelected ? 'bg-[#1F3C70] text-white' : '',
-                    isSelected ? 'border-2 border-[#2E89F6] text-[#2E89F6]' : '',
-                    isToday && isSelected ? 'border-[#256EDF] bg-[#DDEBFF] text-[#1857BE]' : '',
+                    'absolute right-1.5 top-1.5 h-5 w-5 items-center justify-center rounded-full border border-[#D1DEF3] bg-[#EEF4FF] text-[#2A6ED3] transition hover:bg-[#E0ECFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:right-2 md:top-2',
+                    isSelected ? 'inline-flex' : 'hidden md:inline-flex',
                   ].join(' ')}
                 >
-                  {cell.dayNumber}
-                </span>
+                  <Plus className="h-3 w-3" />
+                </button>
+              ) : null}
 
-                <div className="mt-2 space-y-1">
-                  {visibleDayTasks.map((task) => (
-                    <span
-                      key={task.id}
-                      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold md:text-[11px] ${STATUS_TILE_CLASS[task.status]}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${DOT_CLASS[task.categoryColor]}`} aria-hidden="true" />
-                      <span className="truncate">{task.timeLabel || 'Task'}</span>
-                    </span>
-                  ))}
+              <span
+                className={[
+                  'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[13px] font-semibold leading-none md:h-7 md:min-w-7',
+                  cell.inCurrentMonth ? 'text-[#3F4F68]' : 'text-[#9AA8BF]',
+                  isSundayInMonth ? 'text-[#D75A58]' : '',
+                  isToday && !isSelected ? 'bg-[#1F3C70] text-white' : '',
+                  isSelected ? 'border-2 border-[#2E89F6] text-[#2E89F6]' : '',
+                  isToday && isSelected ? 'border-[#256EDF] bg-[#DDEBFF] text-[#1857BE]' : '',
+                ].join(' ')}
+              >
+                {cell.dayNumber}
+              </span>
 
-                  {hiddenCount > 0 ? (
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold md:text-[11px] ${STATUS_OVERFLOW_CLASS[visibleDayTasks[0]?.status ?? 'pending']}`}>
-                      +{hiddenCount} more
-                    </span>
-                  ) : null}
-                </div>
+              <div className="mt-2 space-y-1">
+                {visibleDayTasks.map((task) => (
+                  <span
+                    key={task.id}
+                    className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold md:text-[11px] ${STATUS_TILE_CLASS[task.status]}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${DOT_CLASS[task.categoryColor]}`} aria-hidden="true" />
+                    <span className="truncate">{task.timeLabel || 'Task'}</span>
+                  </span>
+                ))}
+
+                {hiddenCount > 0 ? (
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold md:text-[11px] ${STATUS_OVERFLOW_CLASS[visibleDayTasks[0]?.status ?? 'pending']}`}>
+                    +{hiddenCount} more
+                  </span>
+                ) : null}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

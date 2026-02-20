@@ -27,3 +27,4 @@ storybook-static
 
 # Environment variables
 .env
+.vercel

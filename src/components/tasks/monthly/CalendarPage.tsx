@@ -13,6 +13,7 @@ import { ConfirmationDialog } from '../../design-system/feedback/ConfirmationDia
 import { AddTaskModal } from './AddTaskModal';
 import { BulkAddModal } from '../BulkAddModal';
 import { CalendarGrid } from './CalendarGrid';
+import { MobileCalendarAgenda } from './MobileCalendarAgenda';
 import { filterTasksByQuery, formatMonthLabel, getTasksForDate, parseISODate, shiftMonth, startOfMonth, toISODate } from './calendarHelpers';
 import { TaskCard } from './TaskCard';
 import { TaskSidebar } from './TaskSidebar';
@@ -95,7 +96,6 @@ export default function CalendarPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<CalendarTask | null>(null);
 
   const {
@@ -250,10 +250,6 @@ export default function CalendarPage() {
 
     const nextDate = parseISODate(isoDate);
     setMonthDate(startOfMonth(nextDate.getFullYear(), nextDate.getMonth()));
-
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setIsMobileSidebarOpen(true);
-    }
   };
 
   const handleGoToToday = () => {
@@ -458,7 +454,7 @@ export default function CalendarPage() {
         </section>
 
         {activeView === 'calendar' ? (
-          <section className="rounded-[20px] border border-[#DFE4ED] bg-[#F6F8FC] shadow-[0_10px_28px_rgba(40,56,90,0.08)]">
+          <section className="overflow-hidden rounded-[18px] border border-[#D8E1EE] bg-white shadow-[0_10px_24px_rgba(40,56,90,0.07)]">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-14 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -482,16 +478,34 @@ export default function CalendarPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-[inherit]">
+              <div>
                 {monthTasks.length === 0 ? (
-                  <div className="border-b border-[#DFE4ED] bg-[#F4F8FF] px-4 py-3 text-sm text-[#526380] md:px-6">
+                  <div className="border-b border-[#E2E8F3] bg-[#F8FBFF] px-4 py-3 text-sm text-[#526380] md:px-6">
                     {hasActiveFilters
                       ? 'No calendar tasks match current filters. Clear filters to see all tasks.'
                       : 'No scheduled tasks in this month yet. Use Add Task or quick-add on a date to begin.'}
                   </div>
                 ) : null}
                 <div className="grid grid-cols-1 items-stretch xl:grid-cols-[minmax(0,3fr)_minmax(360px,1fr)]">
-                  <div className="p-4 md:p-5">
+                  <div className="p-2 md:hidden">
+                    <MobileCalendarAgenda
+                      monthDate={monthDate}
+                      selectedDateISO={selectedDateISO}
+                      tasks={scheduledTasks}
+                      selectedTaskId={selectedTaskId}
+                      onSelectDate={handleSelectDate}
+                      onQuickAddDate={handleQuickAddDate}
+                      onPrevMonth={() => handleMonthChange(-1)}
+                      onNextMonth={() => handleMonthChange(1)}
+                      onSelectTask={setSelectedTaskId}
+                      onViewTask={handleViewTask}
+                      onEditTask={handleEditTask}
+                      onDeleteTask={handleDeleteTask}
+                      onToggleStatus={handleToggleStatus}
+                    />
+                  </div>
+
+                  <div className="hidden p-4 md:block md:p-5">
                     <CalendarGrid
                       monthDate={monthDate}
                       selectedDateISO={selectedDateISO}
@@ -617,49 +631,6 @@ export default function CalendarPage() {
           </section>
         ) : null}
       </div>
-
-      {activeView === 'calendar' ? (
-        <button
-          type="button"
-          onClick={() => setIsMobileSidebarOpen(true)}
-          disabled={!isOnline}
-          className="fixed bottom-5 right-5 inline-flex h-12 items-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-medium text-white shadow-lg hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 md:hidden">
-          <CalendarDays className="h-4 w-4" />
-          Tasks
-        </button>
-      ) : null}
-
-      {activeView === 'calendar' && isMobileSidebarOpen ? (
-        <div className="fixed inset-0 z-30 bg-slate-900/45 md:hidden" role="presentation" onClick={() => setIsMobileSidebarOpen(false)}>
-          <div className="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-2xl" onClick={event => event.stopPropagation()}>
-            <TaskSidebar
-              selectedDateISO={selectedDateISO}
-              tasks={tasksForSelectedDate}
-              visibleTasks={visibleSidebarTasks}
-              selectedTaskId={selectedTaskId}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onSelectTask={setSelectedTaskId}
-              onOpenAddTask={() => {
-                if (!isOnline) {
-                  toast.error('You are offline. Reconnect to create tasks.');
-                  return;
-                }
-                setEditingTaskId(null);
-                setModalMode('create');
-                setIsAddModalOpen(true);
-              }}
-              onClose={() => setIsMobileSidebarOpen(false)}
-              onViewTask={handleViewTask}
-              onEditTask={handleEditTask}
-              onDeleteTask={handleDeleteTask}
-              onToggleStatus={handleToggleStatus}
-              onToggleFilters={() => setShowFilters((prev) => !prev)}
-              hasActiveFilters={hasActiveFilters}
-            />
-          </div>
-        </div>
-      ) : null}
 
       <AddTaskModal
         isOpen={isAddModalOpen}
