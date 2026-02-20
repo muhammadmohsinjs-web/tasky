@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus, WifiOff } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
 import { useCategories } from '../../../hooks/useCategories';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { AddTaskModal } from './AddTaskModal';
@@ -79,6 +81,7 @@ function formatTimeLabel(value: string | null | undefined): string {
 
 export default function CalendarPage() {
   const queryClient = useQueryClient();
+  const isOnline = useOnlineStatus();
   const [monthDate, setMonthDate] = useState(initialMonth);
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,6 +132,10 @@ export default function CalendarPage() {
   const loadError = scheduledError || backlogError;
 
   const handleDeleteTask = useCallback((taskId: string) => {
+    if (!isOnline) {
+      toast.error('You are offline. Reconnect to delete tasks.');
+      return;
+    }
     const isBacklog = backlogDbTasks.some(t => t.id === taskId);
     if (isBacklog) {
       deleteBacklogTask(taskId);
@@ -136,7 +143,7 @@ export default function CalendarPage() {
       deleteScheduledTask(taskId);
     }
     if (selectedTaskId === taskId) setSelectedTaskId(null);
-  }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, selectedTaskId]);
+  }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, isOnline, selectedTaskId]);
 
   const handleViewTask = (taskId: string) => {
     setSelectedTaskId(taskId);
@@ -153,6 +160,10 @@ export default function CalendarPage() {
   };
 
   const handleToggleStatus = useCallback((taskId: string) => {
+    if (!isOnline) {
+      toast.error('You are offline. Reconnect to update status.');
+      return;
+    }
     const calTask = allCalendarTasks.find(t => t.id === taskId);
     if (!calTask) return;
     const nextCalStatus = NEXT_CALENDAR_STATUS[calTask.status];
@@ -163,7 +174,7 @@ export default function CalendarPage() {
     } else {
       updateScheduledStatus(taskId, nextDbStatus);
     }
-  }, [allCalendarTasks, backlogDbTasks, updateBacklogStatus, updateScheduledStatus]);
+  }, [allCalendarTasks, backlogDbTasks, isOnline, updateBacklogStatus, updateScheduledStatus]);
 
   const filteredTasks = useMemo(() => {
     const bySearch = filterTasksByQuery(allCalendarTasks, searchQuery);
@@ -240,6 +251,10 @@ export default function CalendarPage() {
 
   const handleQuickAddDate = (isoDate: string) => {
     if (!isoDate) return;
+    if (!isOnline) {
+      toast.error('You are offline. Reconnect to create tasks.');
+      return;
+    }
     setSelectedDateISO(isoDate);
     setEditingTaskId(null);
     setModalMode('create');
@@ -254,6 +269,14 @@ export default function CalendarPage() {
     <main className="min-h-screen bg-[#EEF3FA] px-3 py-4 md:px-5 md:py-5">
       <div className="mx-auto max-w-[1880px]">
         <h1 className="sr-only">Tasks</h1>
+        {!isOnline ? (
+          <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 md:px-4">
+            <p className="inline-flex items-center gap-2 font-medium">
+              <WifiOff className="h-3.5 w-3.5" />
+              You&apos;re offline. Task changes are temporarily disabled until reconnection.
+            </p>
+          </div>
+        ) : null}
 
         <section className="mb-3 rounded-[14px] border border-[#DEE6F2] bg-[#FCFDFF] px-4 py-3 shadow-[0_6px_20px_rgba(40,56,90,0.07)] md:px-6">
           <div className="flex flex-col gap-3">
@@ -295,6 +318,7 @@ export default function CalendarPage() {
                 <button
                   type="button"
                   onClick={() => setIsBulkAddOpen(true)}
+                  disabled={!isOnline}
                   className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
                   <span className="text-[11px] font-semibold">Bulk Add</span>
                 </button>
@@ -305,6 +329,7 @@ export default function CalendarPage() {
                     setModalMode('create');
                     setIsAddModalOpen(true);
                   }}
+                  disabled={!isOnline}
                   className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
                   <Plus className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold">Add Task</span>
@@ -476,6 +501,10 @@ export default function CalendarPage() {
                       onSearchChange={setSearchQuery}
                       onSelectTask={setSelectedTaskId}
                       onOpenAddTask={() => {
+                        if (!isOnline) {
+                          toast.error('You are offline. Reconnect to create tasks.');
+                          return;
+                        }
                         setEditingTaskId(null);
                         setModalMode('create');
                         setIsAddModalOpen(true);
@@ -580,6 +609,7 @@ export default function CalendarPage() {
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
+          disabled={!isOnline}
           className="fixed bottom-5 right-5 inline-flex h-12 items-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-medium text-white shadow-lg hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 md:hidden">
           <CalendarDays className="h-4 w-4" />
           Tasks
@@ -598,6 +628,10 @@ export default function CalendarPage() {
               onSearchChange={setSearchQuery}
               onSelectTask={setSelectedTaskId}
               onOpenAddTask={() => {
+                if (!isOnline) {
+                  toast.error('You are offline. Reconnect to create tasks.');
+                  return;
+                }
                 setEditingTaskId(null);
                 setModalMode('create');
                 setIsAddModalOpen(true);
@@ -626,6 +660,11 @@ export default function CalendarPage() {
           setModalMode('create');
         }}
         onSubmit={async payload => {
+          if (!isOnline) {
+            toast.error('You are offline. Reconnect to save task changes.');
+            return false;
+          }
+
           const dbStatus = CALENDAR_TO_DB_STATUS[payload.status];
           const baseUpdate = {
             title: payload.title,
@@ -709,9 +748,17 @@ export default function CalendarPage() {
         onClose={() => setIsBulkAddOpen(false)}
         categories={categories}
         onAddToDate={async (items) => {
+          if (!isOnline) {
+            toast.error('You are offline. Reconnect to add tasks.');
+            return;
+          }
           await addScheduledTasks(items);
         }}
         onAddToBacklog={async (items) => {
+          if (!isOnline) {
+            toast.error('You are offline. Reconnect to add tasks.');
+            return;
+          }
           await addBacklogTasks(items);
         }}
       />
