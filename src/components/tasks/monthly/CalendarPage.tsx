@@ -66,7 +66,7 @@ export default function CalendarPage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const { tasks: scheduledDbTasks, loading: scheduledLoading, deleteTask: deleteScheduledTask, updateTaskStatus: updateScheduledStatus, addTask: addScheduledTask } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
-  const { tasks: backlogDbTasks, loading: backlogLoading, deleteTask: deleteBacklogTask, updateTaskStatus: updateBacklogStatus, addTask: addBacklogTask } = useBacklogTasks();
+  const { tasks: backlogDbTasks, loading: backlogLoading, deleteTask: deleteBacklogTask, updateTaskStatus: updateBacklogStatus } = useBacklogTasks();
   const { categories } = useCategories();
 
   const allCalendarTasks = useMemo(() => {
