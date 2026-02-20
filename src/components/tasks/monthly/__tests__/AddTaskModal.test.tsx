@@ -51,4 +51,34 @@ describe('AddTaskModal submit behavior', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
   })
+
+  it('renders saved links as clickable anchors', () => {
+    const onClose = vi.fn()
+    const onSubmit = vi.fn()
+
+    render(
+      <AddTaskModal
+        isOpen
+        mode="view"
+        defaultDateISO="2026-02-20"
+        task={{
+          id: 'task-1',
+          title: 'Task with link',
+          category_id: null,
+          date: '2026-02-20',
+          status: 'todo',
+          priority: 'medium',
+          links: [{ url: 'https://example.com', label: 'Codex tutorial' }],
+          attachments: [],
+          created_at: '2026-02-20T00:00:00.000Z',
+        }}
+        categories={[]}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    )
+
+    const link = screen.getByRole('link', { name: 'Codex tutorial' })
+    expect(link).toHaveAttribute('href', 'https://example.com')
+  })
 })

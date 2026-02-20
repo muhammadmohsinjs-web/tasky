@@ -212,10 +212,12 @@ export function useTasks(year: number, month: number) {
     return true
   }
 
-  const deleteTask = async (id: string) => {
-    const taskTitle = tasks.find((task) => task.id === id)?.title
-    const confirmed = confirmAction(taskTitle ? `Delete "${taskTitle}"?` : 'Delete this task?')
-    if (!confirmed) return
+  const deleteTask = async (id: string, options?: { skipConfirm?: boolean }) => {
+    if (!options?.skipConfirm) {
+      const taskTitle = tasks.find((task) => task.id === id)?.title
+      const confirmed = confirmAction(taskTitle ? `Delete "${taskTitle}"?` : 'Delete this task?')
+      if (!confirmed) return
+    }
 
     const { error } = await supabase.from('tasks').delete().eq('id', id)
 

@@ -9,6 +9,7 @@ import { useCategories } from '../../../hooks/useCategories';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
+import { ConfirmationDialog } from '../../design-system/feedback/ConfirmationDialog';
 import { AddTaskModal } from './AddTaskModal';
 import { BulkAddModal } from '../BulkAddModal';
 import { CalendarGrid } from './CalendarGrid';
@@ -95,6 +96,7 @@ export default function CalendarPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [pendingDeleteTask, setPendingDeleteTask] = useState<CalendarTask | null>(null);
 
   const {
     tasks: scheduledDbTasks,
@@ -136,14 +138,25 @@ export default function CalendarPage() {
       toast.error('You are offline. Reconnect to delete tasks.');
       return;
     }
+    const task = allCalendarTasks.find(t => t.id === taskId);
+    if (!task) return;
+    setPendingDeleteTask(task);
+  }, [allCalendarTasks, isOnline]);
+
+  const handleConfirmDeleteTask = useCallback(async () => {
+    if (!pendingDeleteTask) return;
+    const taskId = pendingDeleteTask.id;
     const isBacklog = backlogDbTasks.some(t => t.id === taskId);
+
     if (isBacklog) {
-      deleteBacklogTask(taskId);
+      await deleteBacklogTask(taskId, { skipConfirm: true });
     } else {
-      deleteScheduledTask(taskId);
+      await deleteScheduledTask(taskId, { skipConfirm: true });
     }
+
     if (selectedTaskId === taskId) setSelectedTaskId(null);
-  }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, isOnline, selectedTaskId]);
+    setPendingDeleteTask(null);
+  }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, pendingDeleteTask, selectedTaskId]);
 
   const handleViewTask = (taskId: string) => {
     setSelectedTaskId(taskId);
@@ -762,6 +775,24 @@ export default function CalendarPage() {
           await addBacklogTasks(items);
         }}
       />
+      <ConfirmationDialog
+        open={Boolean(pendingDeleteTask)}
+        title="Delete task?"
+        description="This action will permanently remove the task and its details."
+        confirmLabel="Delete task"
+        cancelLabel="Keep task"
+        onCancel={() => setPendingDeleteTask(null)}
+        onConfirm={() => {
+          void handleConfirmDeleteTask();
+        }}
+      >
+        {pendingDeleteTask ? (
+          <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-900">
+            <p className="font-semibold">{pendingDeleteTask.title}</p>
+            <p className="mt-1 text-xs text-red-700">You can&apos;t undo this action.</p>
+          </div>
+        ) : null}
+      </ConfirmationDialog>
     </main>
   );
 }

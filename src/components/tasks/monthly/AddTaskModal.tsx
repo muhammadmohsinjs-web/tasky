@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
 import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
+import { formatMonthLabel, generateMonthGrid, parseISODate, toISODate } from './calendarHelpers';
 import type { TaskStatus } from './types';
 
 interface TaskFormPayload {
@@ -38,6 +39,181 @@ function getCurrentTimeValue() {
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+interface CalendarDateInputProps {
+  value: string;
+  onChange: (nextValue: string) => void;
+  disabled: boolean;
+}
+
+function formatDateValue(isoDate: string): string {
+  return parseISODate(isoDate).toLocaleDateString('en-GB', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+function CalendarDateInput({ value, onChange, disabled }: CalendarDateInputProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [monthDate, setMonthDate] = useState(() => {
+    if (value) {
+      const selectedDate = parseISODate(value);
+      return new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!value) return;
+    const selectedDate = parseISODate(value);
+    setMonthDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+  }, [value]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!containerRef.current) return;
+      if (containerRef.current.contains(event.target as Node)) return;
+      setIsOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!disabled) return;
+    setIsOpen(false);
+  }, [disabled]);
+
+  const monthCells = useMemo(
+    () => generateMonthGrid(monthDate.getFullYear(), monthDate.getMonth()),
+    [monthDate],
+  );
+  const todayISO = toISODate(new Date());
+
+  const handleSelectDate = (isoDate: string) => {
+    onChange(isoDate);
+    setIsOpen(false);
+  };
+
+  const shiftMonthBy = (offset: number) => {
+    setMonthDate((previous) => new Date(previous.getFullYear(), previous.getMonth() + offset, 1));
+  };
+
+  const dayAbbr = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-left text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-default disabled:bg-[#F5F8FC]">
+        <span className="flex items-center justify-between">
+          <span>{value ? formatDateValue(value) : 'Pick a date'}</span>
+          <CalendarDays className="h-4 w-4 text-[#5E7392]" />
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div
+          role="dialog"
+          aria-label="Pick a date"
+          className="absolute left-0 top-[calc(100%+8px)] z-50 w-full min-w-[300px] rounded-2xl border border-[#CCD8EA] bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.2)]">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-base font-semibold text-[#11263D]">{formatMonthLabel(monthDate)}</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => shiftMonthBy(-1)}
+                aria-label="Previous month"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#314866] transition hover:bg-[#EAF1FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => shiftMonthBy(1)}
+                aria-label="Next month"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#314866] transition hover:bg-[#EAF1FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-[0.08em] text-[#667A98]">
+            {dayAbbr.map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {monthCells.map((cell) => {
+              const isSelected = value === cell.isoDate;
+              const isToday = cell.isoDate === todayISO;
+
+              return (
+                <button
+                  key={cell.isoDate}
+                  type="button"
+                  onClick={() => handleSelectDate(cell.isoDate)}
+                  aria-label={cell.date.toLocaleDateString('en-US', { dateStyle: 'full' })}
+                  className={`inline-flex h-9 items-center justify-center rounded-lg border text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    isSelected
+                      ? 'border-[#1F67E8] bg-[#1F67E8] font-semibold text-white'
+                      : isToday
+                        ? 'border-[#94B8F7] bg-[#EAF2FF] font-semibold text-[#0F3D88]'
+                        : cell.inCurrentMonth
+                          ? 'border-transparent text-[#1E2F47] hover:border-[#CCD8EA] hover:bg-[#F5F8FF]'
+                          : 'border-transparent text-[#98A8BF] hover:border-[#E0E8F5] hover:bg-[#F7FAFF]'
+                  }`}>
+                  {cell.dayNumber}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                onChange('');
+                setIsOpen(false);
+              }}
+              className="text-sm font-semibold text-[#2A63B2] transition hover:text-[#144B96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(todayISO);
+                const today = new Date();
+                setMonthDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                setIsOpen(false);
+              }}
+              className="text-sm font-semibold text-[#2A63B2] transition hover:text-[#144B96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              Today
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, onClose, onSubmit }: AddTaskModalProps) {
@@ -312,12 +488,10 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium text-[#314866]">Date</span>
-                  <input
+                  <CalendarDateInput
                     value={dateISO}
-                    onChange={event => setDateISO(event.target.value)}
-                    type="date"
+                    onChange={setDateISO}
                     disabled={isViewMode}
-                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   />
                 </label>
 
@@ -383,7 +557,14 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                 {links.map((link, index) => (
                   <div key={`${link.url}-${index}`} className="flex items-center gap-2 rounded-lg border border-[#DEE6F2] bg-white px-2 py-1.5">
                     <LinkIcon className="h-3.5 w-3.5 shrink-0 text-[#607A9C]" />
-                    <span className="truncate text-sm text-[#324A68]">{link.label || link.url}</span>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 truncate text-sm text-[#324A68] hover:text-[#1F67E8] hover:underline"
+                    >
+                      {link.label || link.url}
+                    </a>
                     {!isViewMode ? (
                       <button type="button" onClick={() => removeLink(index)} className="ml-auto p-1 text-[#7D8EA8] hover:text-red-500">
                         <X className="h-3.5 w-3.5" />
