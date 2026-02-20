@@ -28,11 +28,18 @@ create index if not exists idx_tasks_status on tasks (status);
 
 -- Seed default categories (safe to re-run)
 insert into categories (name, slug, color, accent, short_label)
-values
-  ('Backend', 'backend', 'bg-blue-100 text-blue-700', 'border-l-blue-400', 'BE'),
-  ('Cloud', 'cloud', 'bg-amber-100 text-amber-700', 'border-l-amber-400', 'AWS'),
-  ('Agentic AI', 'agentic-ai', 'bg-violet-100 text-violet-700', 'border-l-violet-400', 'AI')
-on conflict (slug) do nothing;
+select seed.name, seed.slug, seed.color, seed.accent, seed.short_label
+from (
+  values
+    ('Backend', 'backend', 'bg-blue-100 text-blue-700', 'border-l-blue-400', 'BE'),
+    ('Cloud', 'cloud', 'bg-amber-100 text-amber-700', 'border-l-amber-400', 'AWS'),
+    ('Agentic AI', 'agentic-ai', 'bg-violet-100 text-violet-700', 'border-l-violet-400', 'AI')
+) as seed(name, slug, color, accent, short_label)
+where not exists (
+  select 1
+  from categories c
+  where c.slug = seed.slug
+);
 
 -- Row Level Security
 alter table tasks enable row level security;
@@ -50,6 +57,13 @@ alter table categories enable row level security;
 
 -- Migration: Add links support (run once in Supabase SQL Editor):
 -- ALTER TABLE tasks ADD COLUMN links jsonb DEFAULT '[]';
+
+-- Migration: Add task time support (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ADD COLUMN time text;
+
+-- Migration: Add recurring instance source linkage (run once in Supabase SQL Editor):
+-- ALTER TABLE tasks ADD COLUMN source_task_id uuid REFERENCES tasks(id) ON DELETE SET NULL;
+-- CREATE INDEX IF NOT EXISTS idx_tasks_source_task ON tasks (source_task_id);
 
 -- Migration: Add task attachments table (run once in Supabase SQL Editor):
 -- CREATE TABLE IF NOT EXISTS task_attachments (
@@ -96,14 +110,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
 CREATE POLICY "Users can read own profile"
   ON profiles FOR SELECT TO authenticated
   USING (id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE TO authenticated
   USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can insert own profile"
   ON profiles FOR INSERT TO authenticated
   WITH CHECK (id = auth.uid());
@@ -162,15 +179,19 @@ DROP POLICY IF EXISTS "Authenticated users can update tasks" ON tasks;
 DROP POLICY IF EXISTS "Authenticated users can delete tasks" ON tasks;
 
 -- 7. Create user-scoped RLS policies on tasks
+DROP POLICY IF EXISTS "Users can read own tasks" ON tasks;
 CREATE POLICY "Users can read own tasks"
   ON tasks FOR SELECT TO authenticated
   USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can insert own tasks" ON tasks;
 CREATE POLICY "Users can insert own tasks"
   ON tasks FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own tasks" ON tasks;
 CREATE POLICY "Users can update own tasks"
   ON tasks FOR UPDATE TO authenticated
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own tasks" ON tasks;
 CREATE POLICY "Users can delete own tasks"
   ON tasks FOR DELETE TO authenticated
   USING (user_id = auth.uid());
@@ -182,15 +203,19 @@ DROP POLICY IF EXISTS "Authenticated users can update categories" ON categories;
 DROP POLICY IF EXISTS "Authenticated users can delete categories" ON categories;
 
 -- 9. Create user-scoped RLS policies on categories
+DROP POLICY IF EXISTS "Users can read own categories" ON categories;
 CREATE POLICY "Users can read own categories"
   ON categories FOR SELECT TO authenticated
   USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can insert own categories" ON categories;
 CREATE POLICY "Users can insert own categories"
   ON categories FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own categories" ON categories;
 CREATE POLICY "Users can update own categories"
   ON categories FOR UPDATE TO authenticated
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own categories" ON categories;
 CREATE POLICY "Users can delete own categories"
   ON categories FOR DELETE TO authenticated
   USING (user_id = auth.uid());
@@ -201,12 +226,15 @@ DROP POLICY IF EXISTS "Authenticated users can insert attachments" ON task_attac
 DROP POLICY IF EXISTS "Authenticated users can delete attachments" ON task_attachments;
 
 -- 11. Create user-scoped RLS policies on task_attachments
+DROP POLICY IF EXISTS "Users can read own attachments" ON task_attachments;
 CREATE POLICY "Users can read own attachments"
   ON task_attachments FOR SELECT TO authenticated
   USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can insert own attachments" ON task_attachments;
 CREATE POLICY "Users can insert own attachments"
   ON task_attachments FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own attachments" ON task_attachments;
 CREATE POLICY "Users can delete own attachments"
   ON task_attachments FOR DELETE TO authenticated
   USING (user_id = auth.uid());

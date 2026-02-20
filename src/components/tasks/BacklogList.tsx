@@ -6,6 +6,7 @@ import { categoryAccent, categoryLabel, categoryStyle } from '../../lib/category
 import { StatusBadge, nextStatus } from '../ui/StatusBadge'
 import { PriorityBadge } from '../ui/PriorityBadge'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '../../lib/constants'
+import { VirtualList } from '../ui/VirtualList'
 
 interface Props {
   tasks: Task[]
@@ -171,6 +172,57 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
 
   const hasSelection = selectedIds.size > 0
   const allSelected = tasks.length > 0 && selectedIds.size === tasks.length
+
+  const renderBacklogRow = (task: Task) => {
+    const isSelected = selectedIds.has(task.id)
+    return (
+      <div
+        key={task.id}
+        className={`group flex items-center gap-3 px-4 py-3 ${categoryAccent(task.category)} border-l-2 hover:bg-slate-50 cursor-pointer ${
+          isSelected ? 'bg-indigo-50/50' : ''
+        }`}
+        onClick={() => onSelect(task, 'view')}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task, 'view') }}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleSelect(task.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer shrink-0"
+        />
+        <div onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}>
+          <StatusBadge status={task.status} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+            {task.title}
+          </div>
+          {task.description && (
+            <div className="text-xs text-slate-400 mt-0.5 truncate">
+              {task.description}
+            </div>
+          )}
+        </div>
+        <PriorityBadge priority={task.priority} />
+        {task.links && task.links.length > 0 && (
+          <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
+        )}
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
+          {categoryLabel(task.category)}
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
+          className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Delete"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="animate-fade-in">
@@ -451,56 +503,16 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
             </span>
           </div>
           <div className="divide-y divide-slate-100">
-            {tasks.map((task) => {
-              const isSelected = selectedIds.has(task.id)
-              return (
-                <div
-                  key={task.id}
-                  className={`group flex items-center gap-3 px-4 py-3 ${categoryAccent(task.category)} border-l-2 hover:bg-slate-50 cursor-pointer ${
-                    isSelected ? 'bg-indigo-50/50' : ''
-                  }`}
-                  onClick={() => onSelect(task, 'view')}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onSelect(task, 'view') }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleSelect(task.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer shrink-0"
-                  />
-                  <div onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus(task.status)) }}>
-                    <StatusBadge status={task.status} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm truncate ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                      {task.title}
-                    </div>
-                    {task.description && (
-                      <div className="text-xs text-slate-400 mt-0.5 truncate">
-                        {task.description}
-                      </div>
-                    )}
-                  </div>
-                  <PriorityBadge priority={task.priority} />
-                  {task.links && task.links.length > 0 && (
-                    <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
-                  )}
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle(task.category)}`}>
-                    {categoryLabel(task.category)}
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id) }}
-                    className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )
-            })}
+            {tasks.length > 80 ? (
+              <VirtualList
+                items={tasks}
+                itemHeight={58}
+                height={Math.min(620, tasks.length * 58)}
+                renderItem={(task) => renderBacklogRow(task)}
+              />
+            ) : (
+              tasks.map((task) => renderBacklogRow(task))
+            )}
           </div>
         </div>
       )}

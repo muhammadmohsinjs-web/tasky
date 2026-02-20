@@ -1,8 +1,8 @@
-import type { Task, Category, TaskStatus, TaskPriority, TaskLink } from '../../types'
-import { TaskItem } from './TaskItem'
-import { AddTaskInline } from './AddTaskInline'
-import { CheckCircle2 } from 'lucide-react'
-import { STATUS_CONFIG } from '../../lib/constants'
+import { useEffect, useMemo, useState } from 'react'
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus } from '../../types'
+import { MONTH_NAMES } from '../../lib/constants'
+import { CalendarCell } from './month-view/CalendarCell'
+import type { CalendarDay, CalendarEvent, CalendarEventType } from './month-view/types'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -12,145 +12,218 @@ interface Props {
   tasks: Task[]
   categories: Category[]
   onAdd: (title: string, categoryId: string, date: string, priority?: TaskPriority, extras?: { description?: string | null; notes?: string | null; status?: TaskStatus; links?: TaskLink[] }) => Promise<Task | null> | void
-  onStatusChange: (id: string, status: TaskStatus) => void
-  onUpdate: (id: string, updates: { title?: string; category_id?: string | null }) => void
-  onDelete: (id: string) => void
   onSelect: (task: Task, mode: 'view' | 'edit') => void
+  selectedDate?: string | null
+  onDateSelect?: (date: string) => void
+  completionTick?: number
 }
 
-export function Calendar({
-  year,
-  month,
-  tasks,
-  categories,
-  onAdd,
-  onStatusChange,
-  onUpdate,
-  onDelete,
-  onSelect,
-}: Props) {
-  const firstDay = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
+export function Calendar({ year, month, tasks, categories, onAdd, onSelect, selectedDate, onDateSelect, completionTick = 0 }: Props) {
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return window.matchMedia('(max-width: 767px)').matches
+  })
 
-  const tasksByDate: Record<string, Task[]> = {}
-  for (const task of tasks) {
-    if (!task.date) continue
-    if (!tasksByDate[task.date]) tasksByDate[task.date] = []
-    tasksByDate[task.date].push(task)
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const handleChange = (event: MediaQueryListEvent) => setIsSmallScreen(event.matches)
+
+    setIsSmallScreen(mediaQuery.matches)
+    mediaQuery.addEventListener('change', handleChange)
+
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  const maxVisibleEvents = isSmallScreen ? 2 : 3
+
+  const { days, taskLookup } = useMemo(() => {
+    const taskByDate = new Map<string, Task[]>()
+
+    for (const task of tasks) {
+      if (!task.date) {
+        continue
+      }
+
+      const start = parseLocalDate(task.date)
+      const end = task.end_date && task.end_date > task.date ? parseLocalDate(task.end_date) : start
+      const cursor = new Date(start)
+
+      while (cursor <= end) {
+        const key = toDateKey(cursor)
+        const existing = taskByDate.get(key) ?? []
+        existing.push(task)
+        taskByDate.set(key, existing)
+        cursor.setDate(cursor.getDate() + 1)
+      }
+    }
+
+    const firstOfMonth = new Date(year, month, 1)
+    const firstDayOffset = firstOfMonth.getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const leadingDays = firstDayOffset
+    const cellCount = Math.ceil((leadingDays + daysInMonth) / 7) * 7
+    const startDate = new Date(year, month, 1 - leadingDays)
+
+    const todayKey = toDateKey(new Date())
+
+    const monthDays: CalendarDay[] = Array.from({ length: cellCount }, (_, index) => {
+      const date = new Date(startDate)
+      date.setDate(startDate.getDate() + index)
+      const dateKey = toDateKey(date)
+
+      return {
+        date,
+        isToday: dateKey === todayKey,
+        isCurrentMonth: date.getMonth() === month,
+        events: (taskByDate.get(dateKey) ?? [])
+          .slice(0, 8)
+          .map((task) => mapTaskToCalendarEvent(task)),
+      }
+    })
+
+    return { days: monthDays, taskLookup: taskByDate }
+  }, [year, month, tasks])
+
+  const weeks = useMemo(() => {
+    const rows: CalendarDay[][] = []
+    for (let i = 0; i < days.length; i += 7) {
+      rows.push(days.slice(i, i + 7))
+    }
+    return rows
+  }, [days])
+
+  const handleOpenDay = (date: Date) => {
+    onDateSelect?.(toDateKey(date))
   }
 
-  const today = new Date()
-  const todayFull = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  const todayStr =
-    today.getFullYear() === year && today.getMonth() === month
-      ? todayFull
-      : null
-
-  const cells: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
+  const handleEventClick = (event: CalendarEvent) => {
+    const task = tasks.find((candidate) => candidate.id === event.id)
+    if (task) {
+      onSelect(task, 'view')
+    }
+  }
 
   return (
-    <div className="w-full animate-fade-in">
-      <div className="grid grid-cols-7 mb-3">
-        {DAY_NAMES.map((d, i) => (
+    <div className="w-full">
+      <div className="mb-2 grid grid-cols-7 border border-[var(--calendar-grid-border)] border-b-0 bg-[var(--calendar-header-bg)]">
+        {DAY_NAMES.map((dayLabel) => (
           <div
-            key={d}
-            className={`text-xs font-bold text-center py-2.5 tracking-wider uppercase ${
-              i === 0 || i === 6 ? 'text-slate-400' : 'text-slate-500'
-            }`}
+            key={dayLabel}
+            className="border-r last:border-r-0 border-[var(--calendar-grid-border)] px-2 py-2 text-center text-[11px] md:text-xs font-medium text-[var(--calendar-weekday-text)]"
           >
-            {d}
+            {dayLabel}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-px bg-slate-200/80 rounded-2xl overflow-hidden shadow-sm border border-slate-200/80">
-        {cells.map((day, i) => {
-          const colIndex = i % 7
-          const isWeekend = colIndex === 0 || colIndex === 6
+      <div role="grid" aria-label={`Task calendar for ${MONTH_NAMES[month]} ${year}`} className="space-y-0">
+        {weeks.map((week, index) => (
+          <div key={`week-${index}`} className="grid grid-cols-7 border-x border-[var(--calendar-grid-border)]">
+            {week.map((day) => {
+              const dayKey = toDateKey(day.date)
+              const selected = selectedDate === dayKey
+              const dayEvents = day.isCurrentMonth
+                ? day.events
+                : []
 
-          if (day === null) {
-            return (
-              <div
-                key={`empty-${i}`}
-                className="bg-slate-50/80 min-h-[150px]"
-              />
-            )
-          }
+              const extraDayEvents = !day.isCurrentMonth
+                ? []
+                : (taskLookup.get(dayKey) ?? []).slice(dayEvents.length)
+                    .map((task) => mapTaskToCalendarEvent(task))
 
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-          const dayTasks = tasksByDate[dateStr] || []
-          const isToday = dateStr === todayStr
-          const doneCount = dayTasks.filter((t) => t.status === 'done').length
-          const hasAllDone = dayTasks.length > 0 && doneCount === dayTasks.length
-
-          return (
-            <div
-              key={dateStr}
-              className={`min-h-[150px] p-2.5 flex flex-col transition-colors ${
-                isToday
-                  ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200/50'
-                  : isWeekend
-                    ? 'bg-slate-50/50'
-                    : 'bg-white'
-              } hover:bg-slate-50/80`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span
-                  className={`text-sm font-bold leading-none ${
-                    isToday
-                      ? 'bg-indigo-500 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-md'
-                      : isWeekend
-                        ? 'text-slate-400'
-                        : 'text-slate-600'
-                  }`}
-                >
-                  {day}
-                </span>
-                <div className="flex items-center gap-1">
-                  {dayTasks.length > 0 && !hasAllDone && (
-                    <div className="flex gap-1">
-                      {(['todo', 'inprogress', 'done'] as TaskStatus[]).map((s) => {
-                        const count = dayTasks.filter((t) => t.status === s).length
-                        if (count === 0) return null
-                        return (
-                          <div
-                            key={s}
-                            className={`w-2 h-2 rounded-full ${STATUS_CONFIG[s].dot}`}
-                            title={`${count} ${STATUS_CONFIG[s].label}`}
-                          />
-                        )
-                      })}
-                    </div>
-                  )}
-                  {hasAllDone && (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  )}
-                </div>
-              </div>
-
-              <div className="flex-1 space-y-1 task-scroll overflow-y-auto max-h-[130px]">
-                {dayTasks.map((task) => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onStatusChange={onStatusChange}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
-                    onSelect={onSelect}
-                    categories={categories}
-                  />
-                ))}
-              </div>
-
-              <AddTaskInline date={dateStr} onAdd={onAdd} categories={categories} />
-            </div>
-          )
-        })}
+              return (
+                <CalendarCell
+                  key={dayKey}
+                  dateKey={dayKey}
+                  day={{ ...day, events: [...dayEvents, ...extraDayEvents] }}
+                  isSelected={selected}
+                  completionTick={completionTick}
+                  visibleEventCount={maxVisibleEvents}
+                  categories={categories}
+                  onAdd={onAdd}
+                  onOpenDay={handleOpenDay}
+                  onEventClick={handleEventClick}
+                />
+              )
+            })}
+          </div>
+        ))}
       </div>
     </div>
   )
+}
+
+function toDateKey(date: Date): string {
+  const yearValue = date.getFullYear()
+  const monthValue = String(date.getMonth() + 1).padStart(2, '0')
+  const dayValue = String(date.getDate()).padStart(2, '0')
+  return `${yearValue}-${monthValue}-${dayValue}`
+}
+
+function mapTaskToCalendarEvent(task: Task): CalendarEvent {
+  return {
+    id: task.id,
+    title: task.title,
+    startTime: getTaskStartTime(task),
+    type: getTaskEventType(task),
+  }
+}
+
+function getTaskStartTime(task: Task): string {
+  if (!task.created_at) {
+    return 'All day'
+  }
+
+  const date = new Date(task.created_at)
+  if (Number.isNaN(date.getTime())) {
+    return 'All day'
+  }
+
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function getTaskEventType(task: Task): CalendarEventType {
+  const categoryName = task.category?.name?.toLowerCase() ?? ''
+  const categorySlug = task.category?.slug?.toLowerCase() ?? ''
+
+  if (task.priority === 'urgent') {
+    return 'important'
+  }
+
+  if (categorySlug.includes('meeting') || categoryName.includes('meeting') || categoryName.includes('sync')) {
+    return 'meeting'
+  }
+
+  if (categorySlug.includes('finance') || categoryName.includes('finance') || categoryName.includes('invoice')) {
+    return 'finance'
+  }
+
+  if (categorySlug.includes('personal') || categoryName.includes('personal') || categoryName.includes('health')) {
+    return 'personal'
+  }
+
+  if (categorySlug.includes('important') || categoryName.includes('important')) {
+    return 'important'
+  }
+
+  return 'work'
+}
+
+function parseLocalDate(value: string): Date {
+  const [yearPart, monthPart, dayPart] = value.split('-')
+  const yearValue = Number(yearPart)
+  const monthValue = Number(monthPart)
+  const dayValue = Number(dayPart)
+
+  if (!yearValue || !monthValue || !dayValue) {
+    return new Date(value)
+  }
+
+  return new Date(yearValue, monthValue - 1, dayValue)
 }

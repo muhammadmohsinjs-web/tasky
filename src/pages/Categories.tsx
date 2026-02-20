@@ -131,7 +131,7 @@ export default function Categories() {
   }
 
   const handleDelete = async (id: string) => {
-    await deleteCategory(id)
+    await deleteCategory(id, { skipConfirm: true })
     setDeleteConfirm(null)
   }
 

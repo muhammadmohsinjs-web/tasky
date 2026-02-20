@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
+import { confirmAction } from '../lib/confirm'
 import type { TaskAttachment } from '../types'
 
 const BUCKET_NAME = 'task-attachments'
@@ -46,7 +47,7 @@ export function useTaskAttachments(taskId: string | null) {
 
       // Generate unique file name
       const fileExt = file.name.split('.').pop()
-      const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+      const fileName = `${userId}/${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
       // Upload to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -97,7 +98,10 @@ export function useTaskAttachments(taskId: string | null) {
     }
   }
 
-  const deleteAttachment = async (id: string, fileUrl: string) => {
+  const deleteAttachment = async (id: string, fileUrl: string, fileName?: string) => {
+    const confirmed = confirmAction(fileName ? `Delete attachment "${fileName}"?` : 'Delete this attachment?')
+    if (!confirmed) return
+
     try {
       // Extract file path from URL
       const urlParts = fileUrl.split(`/${BUCKET_NAME}/`)

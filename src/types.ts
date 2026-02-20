@@ -8,6 +8,7 @@ export interface Profile {
   email: string | null
   created_at: string
   updated_at: string
+  streak?: StreakData
 }
 
 export interface TaskLink {
@@ -39,17 +40,39 @@ export interface Category {
   created_at?: string
 }
 
+export interface RecurrenceRule {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  interval: number
+  days_of_week?: number[]  // 0=Sun..6=Sat
+  end_date?: string | null
+  count?: number | null
+}
+
+export interface StreakData {
+  current: number
+  longest: number
+  last_completed_date: string | null
+}
+
 export interface Task {
   id: string
   user_id?: string
   title: string
   description?: string | null
   notes?: string | null
+  time?: string | null
   category_id: string | null
   category?: Category | null
   date: string | null // ISO date string (YYYY-MM-DD) or null for backlog tasks
+  end_date?: string | null
+  recurrence?: RecurrenceRule | null
   status: TaskStatus
   priority: TaskPriority
+  sort_order?: number
   links?: TaskLink[]
+  attachments?: TaskAttachment[]
   created_at: string
+  updated_at?: string
+  is_projected?: boolean
+  source_task_id?: string | null
 }

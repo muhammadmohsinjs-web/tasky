@@ -1,32 +1,27 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { confirmAction } from '../lib/confirm'
 import type { Category } from '../types'
 
 export function useCategories() {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const { user } = useAuth()
+  const queryKey = ['categories']
 
-  const fetchCategories = useCallback(async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('created_at', { ascending: true })
+  const { data: categories = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('created_at', { ascending: true })
 
-    if (error) {
-      console.error('Failed to fetch categories:', error)
-      setCategories([])
-    } else {
-      setCategories((data as Category[]) || [])
-    }
-    setLoading(false)
-  }, [user])
-
-  useEffect(() => {
-    fetchCategories()
-  }, [fetchCategories])
+      if (error) throw error
+      return (data as Category[]) || []
+    },
+    enabled: !!user,
+  })
 
   const addCategory = async (category: Omit<Category, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
@@ -39,7 +34,7 @@ export function useCategories() {
       console.error('Failed to add category:', error)
       return null
     }
-    setCategories((prev) => [...prev, data as Category])
+    await queryClient.invalidateQueries({ queryKey })
     return data as Category
   }
 
@@ -49,19 +44,32 @@ export function useCategories() {
       console.error('Failed to update category:', error)
       return false
     }
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))
+    await queryClient.invalidateQueries({ queryKey })
     return true
   }
 
-  const deleteCategory = async (id: string) => {
+  const deleteCategory = async (id: string, options?: { skipConfirm?: boolean }) => {
+    if (!options?.skipConfirm) {
+      const categoryName = categories.find((category) => category.id === id)?.name
+      const confirmed = confirmAction(categoryName ? `Delete category "${categoryName}"?` : 'Delete this category?')
+      if (!confirmed) return false
+    }
+
     const { error } = await supabase.from('categories').delete().eq('id', id)
     if (error) {
       console.error('Failed to delete category:', error)
       return false
     }
-    setCategories((prev) => prev.filter((c) => c.id !== id))
+    await queryClient.invalidateQueries({ queryKey })
     return true
   }
 
-  return { categories, loading, refetch: fetchCategories, addCategory, updateCategory, deleteCategory }
+  return {
+    categories,
+    loading,
+    refetch: () => queryClient.invalidateQueries({ queryKey }),
+    addCategory,
+    updateCategory,
+    deleteCategory,
+  }
 }
