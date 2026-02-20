@@ -7,6 +7,7 @@ export interface CalendarTask {
   title: string;
   status: TaskStatus;
   dateISO: string | null;
+  categoryId: string | null;
   categoryColor: CategoryColor;
   timeLabel: string;
 }

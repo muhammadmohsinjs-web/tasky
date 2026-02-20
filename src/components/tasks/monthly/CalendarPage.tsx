@@ -20,7 +20,14 @@ const initialMonth = startOfMonth(now.getFullYear(), now.getMonth());
 const todayISO = toISODate(now);
 
 type ViewMode = 'calendar' | 'list' | 'backlog';
-type DomainFilter = 'all' | 'backend' | 'frontend' | 'devops';
+const ALL_CATEGORY_FILTER = 'all';
+const UNCATEGORIZED_FILTER = '__uncategorized__';
+const STATUS_FILTER_LABELS: Record<'all' | TaskStatus, string> = {
+  all: 'All Status',
+  pending: 'Pending',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+};
 
 /* ── Status mapping between DB and Calendar UI ── */
 const DB_TO_CALENDAR_STATUS: Record<DbTaskStatus, TaskStatus> = {
@@ -52,6 +59,7 @@ function taskToCalendarTask(task: Task): CalendarTask {
     title: task.title,
     status: DB_TO_CALENDAR_STATUS[task.status as DbTaskStatus] ?? 'pending',
     dateISO: task.date,
+    categoryId: task.category_id,
     categoryColor: toCategoryColor(task.category?.color),
     timeLabel: formatTimeLabel(task.time),
   };
@@ -76,7 +84,7 @@ export default function CalendarPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [activeView, setActiveView] = useState<ViewMode>('list');
-  const [domainFilter, setDomainFilter] = useState<DomainFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_FILTER);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -155,8 +163,12 @@ export default function CalendarPage() {
   const filteredTasks = useMemo(() => {
     const bySearch = filterTasksByQuery(allCalendarTasks, searchQuery);
     const byStatus = bySearch.filter(task => (statusFilter === 'all' ? true : task.status === statusFilter));
-    return byStatus.filter(task => (domainFilter === 'all' ? true : mapDomain(task.categoryColor) === domainFilter));
-  }, [allCalendarTasks, searchQuery, statusFilter, domainFilter]);
+    return byStatus.filter(task => {
+      if (categoryFilter === ALL_CATEGORY_FILTER) return true;
+      if (categoryFilter === UNCATEGORIZED_FILTER) return task.categoryId === null;
+      return task.categoryId === categoryFilter;
+    });
+  }, [allCalendarTasks, searchQuery, statusFilter, categoryFilter]);
 
   const scheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
   const backlogTasks = useMemo(() => filteredTasks.filter(task => task.dateISO === null), [filteredTasks]);
@@ -179,6 +191,12 @@ export default function CalendarPage() {
   const progressCompleted = useMemo(() => monthTasks.filter(task => task.status === 'completed').length, [monthTasks]);
   const progressTotal = monthTasks.length;
   const progressPercent = progressTotal === 0 ? 0 : Math.round((progressCompleted / progressTotal) * 100);
+  const selectedCategoryLabel = useMemo(() => {
+    if (categoryFilter === ALL_CATEGORY_FILTER) return 'All Categories';
+    if (categoryFilter === UNCATEGORIZED_FILTER) return 'Uncategorized';
+    return categories.find(category => category.id === categoryFilter)?.name ?? 'All Categories';
+  }, [categories, categoryFilter]);
+  const hasActiveFilters = categoryFilter !== ALL_CATEGORY_FILTER || statusFilter !== 'all' || searchQuery.trim().length > 0;
 
   const setMonthAndYear = (year: number, monthIndex: number) => {
     const currentSelectedDay = parseISODate(selectedDateISO).getDate();
@@ -218,138 +236,170 @@ export default function CalendarPage() {
   return (
     <main className="min-h-screen bg-[#f2f4fa] px-3 py-4 md:px-5 md:py-5">
       <div className="mx-auto max-w-[1880px]">
-        <section className="mb-3 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3.5 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6 md:py-4">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#74809A]">Execution</p>
-          <h1 className="mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-[#151C2E]">Tasks</h1>
-          <p className="mt-1.5 text-[11px] text-[#5E6A80]">Manage your calendar, list view, and backlog in one workflow.</p>
-        </section>
+        <h1 className="sr-only">Tasks</h1>
 
         <section className="mb-3 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6">
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={() => setShowFilters(prev => !prev)}
-                aria-expanded={showFilters}
-                aria-controls="task-filters-panel"
-                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-[#F7F9FC] px-3 text-[#2A3650] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                <span className="text-[11px] font-semibold">Filters</span>
-                <ChevronDown className={`h-3.5 w-3.5 transition ${showFilters ? 'rotate-180' : ''}`} />
-              </button>
-
-              <div className="flex items-center gap-3 rounded-xl border border-[#E1E7F2] bg-[#F7FAFF] px-3 py-2">
-                <CircularProgress value={progressPercent} />
-                <div>
-                  <p className="text-[11px] font-semibold text-[#2A3650]">Tasks Progress</p>
-                  <p className="text-[10px] text-[#5D6880]">
-                    {progressCompleted} of {progressTotal} completed
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {showFilters ? (
-              <div id="task-filters-panel" className="grid gap-2 rounded-xl border border-[#E1E7F2] bg-[#F9FBFF] p-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
-                  Category
-                  <select
-                    value={domainFilter}
-                    onChange={event => setDomainFilter(event.target.value as DomainFilter)}
-                    className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
-                    aria-label="Filter category">
-                    <option value="all">All Categories</option>
-                    <option value="backend">Backend</option>
-                    <option value="frontend">Frontend</option>
-                    <option value="devops">DevOps</option>
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
-                  Status
-                  <select
-                    value={statusFilter}
-                    onChange={event => setStatusFilter(event.target.value as 'all' | TaskStatus)}
-                    className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
-                    aria-label="Filter status">
-                    <option value="all">All</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="pending">Pending</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </label>
-              </div>
-            ) : null}
-
-            <div className="flex items-center gap-2 justify-self-start xl:justify-self-end">
-              <button
-                type="button"
-                onClick={() => setIsBulkAddOpen(true)}
-                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                <span className="text-[11px] font-semibold">Bulk Add</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingTaskId(null);
-                  setModalMode('create');
-                  setIsAddModalOpen(true);
-                }}
-                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                <Plus className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-semibold">Add Task</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-3 rounded-xl border border-[#E4E8F0] bg-[#FCFDFF] px-3 py-2 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-0.5">
+            <div className="grid gap-3 xl:grid-cols-[auto_1fr_auto] xl:items-center">
+              <div className="flex items-center gap-0.5">
               <ViewTab label="Calendar" value="calendar" activeView={activeView} onChange={setActiveView} icon={<CalendarDays className="h-4 w-4" />} />
               <ViewTab label="List" value="list" activeView={activeView} onChange={setActiveView} icon={<List className="h-4 w-4" />} />
               <ViewTab label="Backlog" value="backlog" activeView={activeView} onChange={setActiveView} icon={<Inbox className="h-4 w-4" />} />
-            </div>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-[32px] items-center overflow-hidden rounded-lg border border-[#C9D2E3] bg-[#F6F8FC]">
-                <button
-                  type="button"
-                  onClick={() => handleMonthChange(-1)}
-                  className="inline-flex h-full w-[32px] items-center justify-center border-r border-[#CFD7E4] text-[#364562] hover:bg-white"
-                  aria-label="Previous month">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <div className="inline-flex h-full min-w-[150px] items-center justify-center gap-1.5 px-2.5 text-[#2A3650]">
-                  <CalendarIcon className="h-3.5 w-3.5 text-[#2A7CF2]" />
-                  <span className="text-[11px] font-semibold">{formatMonthLabel(monthDate)}</span>
+              <div className="flex items-center gap-2 xl:justify-center">
+                <div className="inline-flex h-[32px] items-center overflow-hidden rounded-lg border border-[#C9D2E3] bg-[#F6F8FC]">
+                  <button
+                    type="button"
+                    onClick={() => handleMonthChange(-1)}
+                    className="inline-flex h-full w-[32px] items-center justify-center border-r border-[#CFD7E4] text-[#364562] hover:bg-white"
+                    aria-label="Previous month">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <div className="inline-flex h-full min-w-[150px] items-center justify-center gap-1.5 px-2.5 text-[#2A3650]">
+                    <CalendarIcon className="h-3.5 w-3.5 text-[#2A7CF2]" />
+                    <span className="text-[11px] font-semibold">{formatMonthLabel(monthDate)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleMonthChange(1)}
+                    className="inline-flex h-full w-8 items-center justify-center border-l border-[#CFD7E4] text-[#364562] hover:bg-white"
+                    aria-label="Next month">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleMonthChange(1)}
-                  className="inline-flex h-full w-8 items-center justify-center border-l border-[#CFD7E4] text-[#364562] hover:bg-white"
-                  aria-label="Next month">
-                  <ChevronRight className="h-4 w-4" />
+
+                <button type="button" onClick={handleGoToToday} className="h-8 rounded-lg border border-[#CFD7E4] bg-white px-3 text-[11px] font-medium text-[#3C4A65] hover:bg-[#F8FAFD]">
+                  Today
                 </button>
               </div>
 
-              <button type="button" onClick={handleGoToToday} className="h-8 rounded-lg border border-[#CFD7E4] bg-white px-3 text-[11px] font-medium text-[#3C4A65] hover:bg-[#F8FAFD]">
-                Today
-              </button>
+              <div className="flex items-center gap-2 xl:justify-self-end">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkAddOpen(true)}
+                  className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                  <span className="text-[11px] font-semibold">Bulk Add</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTaskId(null);
+                    setModalMode('create');
+                    setIsAddModalOpen(true);
+                  }}
+                  className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold">Add Task</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E1E7F2] bg-[#F9FBFF] p-2.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(prev => !prev)}
+                    aria-expanded={showFilters}
+                    aria-controls="task-filters-panel"
+                    className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-[#F7F9FC] px-3 text-[#2A3650] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                    <span className="text-[11px] font-semibold">Filters</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition ${showFilters ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium ${
+                      categoryFilter === ALL_CATEGORY_FILTER
+                        ? 'border border-[#D9E1EF] bg-white text-[#5A6680]'
+                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#1F4EA3]'
+                    }`}>
+                      {selectedCategoryLabel}
+                    </span>
+                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium ${
+                      statusFilter === 'all'
+                        ? 'border border-[#D9E1EF] bg-white text-[#5A6680]'
+                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#1F4EA3]'
+                    }`}>
+                      {STATUS_FILTER_LABELS[statusFilter]}
+                    </span>
+                    <span className="inline-flex h-8 items-center rounded-md border border-[#E2E7F1] bg-[#F6F8FC] px-2.5 text-[11px] font-medium text-[#68748D]">
+                      This month: {progressTotal}
+                    </span>
+                    <span className="inline-flex h-8 items-center rounded-md border border-[#E2E7F1] bg-[#F6F8FC] px-2.5 text-[11px] font-medium text-[#68748D]">
+                      Backlog: {backlogTasks.length}
+                    </span>
+                    {hasActiveFilters ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoryFilter(ALL_CATEGORY_FILTER);
+                          setStatusFilter('all');
+                          setSearchQuery('');
+                        }}
+                        className="inline-flex h-8 items-center rounded-md border border-[#CAD5E8] bg-[#F7F9FD] px-2.5 text-[11px] font-semibold text-[#3B4A67] transition hover:bg-white">
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {activeView !== 'calendar' ? (
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={event => setSearchQuery(event.target.value)}
+                      placeholder="Search tasks..."
+                      aria-label="Search tasks"
+                      className="h-8 w-full min-w-[220px] rounded-md border border-[#D4DDEB] bg-white px-2.5 text-[11px] text-[#344257] placeholder:text-[#7D879A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-[260px]"
+                    />
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-3 rounded-xl border border-[#E1E7F2] bg-[#F7FAFF] px-3 py-2">
+                  <CircularProgress value={progressPercent} />
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#2A3650]">Tasks Progress</p>
+                    <p className="text-[10px] text-[#5D6880]">
+                      {progressCompleted} of {progressTotal} completed
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {showFilters ? (
+                <div id="task-filters-panel" className="mt-2 grid gap-2 rounded-lg border border-[#E1E7F2] bg-white p-2 sm:grid-cols-2 lg:max-w-[420px]">
+                  <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
+                    Category
+                    <select
+                      value={categoryFilter}
+                      onChange={event => setCategoryFilter(event.target.value)}
+                      className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
+                      aria-label="Filter category">
+                      <option value={ALL_CATEGORY_FILTER}>All Categories</option>
+                      <option value={UNCATEGORIZED_FILTER}>Uncategorized</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
+                    Status
+                    <select
+                      value={statusFilter}
+                      onChange={event => setStatusFilter(event.target.value as 'all' | TaskStatus)}
+                      className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
+                      aria-label="Filter status">
+                      <option value="all">All</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="pending">Pending</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
             </div>
           </div>
-
-          {activeView !== 'calendar' ? (
-            <div className="mt-2 border-t border-[#E9EDF4] pt-2">
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={event => setSearchQuery(event.target.value)}
-                placeholder="Search tasks..."
-                aria-label="Search tasks"
-                className="h-8 w-full rounded-md border border-[#D4DDEB] bg-[#F7F9FD] px-2.5 text-[11px] text-[#344257] placeholder:text-[#7D879A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              />
-            </div>
-          ) : null}
         </section>
 
         {activeView === 'calendar' ? (
@@ -634,10 +684,4 @@ function ViewTab({ label, value, activeView, onChange, icon }: { label: string; 
       <span className={`absolute bottom-0 h-[2px] w-[48px] rounded-full bg-[#2A7CF2] transition ${active ? 'opacity-100' : 'opacity-0'}`} />
     </button>
   );
-}
-
-function mapDomain(color: CategoryColor): DomainFilter {
-  if (color === 'blue') return 'frontend';
-  if (color === 'green') return 'devops';
-  return 'backend';
 }
