@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Inbox, List, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
+import { useTasks } from '../../../hooks/useTasks';
+import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
+import { useCategories } from '../../../hooks/useCategories';
+import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { AddTaskModal } from './AddTaskModal';
 import { CalendarGrid } from './CalendarGrid';
 import { filterTasksByQuery, formatMonthLabel, getTasksForDate, parseISODate, shiftMonth, startOfMonth, toISODate } from './calendarHelpers';
@@ -15,28 +19,44 @@ const todayISO = toISODate(now);
 type ViewMode = 'calendar' | 'list' | 'backlog';
 type DomainFilter = 'all' | 'backend' | 'frontend' | 'devops';
 
-const INITIAL_TASKS: CalendarTask[] = [
-  { id: 'task-1', title: 'API Integration', status: 'in_progress', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 12)), categoryColor: 'red', timeLabel: '09:00 AM' },
-  { id: 'task-2', title: 'Fix Login Bug', status: 'pending', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 12)), categoryColor: 'yellow', timeLabel: '04:00 PM' },
-  { id: 'task-3', title: 'Code Review', status: 'completed', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 15)), categoryColor: 'green', timeLabel: '09:00 AM' },
-  { id: 'task-4', title: 'Database Update', status: 'in_progress', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 18)), categoryColor: 'red', timeLabel: '11:30 PM' },
-  { id: 'task-5', title: 'Design QA', status: 'pending', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 18)), categoryColor: 'blue', timeLabel: '01:00 PM' },
-  { id: 'task-6', title: 'Write Unit Tests', status: 'completed', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 18)), categoryColor: 'green', timeLabel: '03:30 PM' },
-  { id: 'task-7', title: 'Sprint Planning', status: 'pending', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 18)), categoryColor: 'yellow', timeLabel: '05:00 PM' },
-  { id: 'task-8', title: 'Ops Handoff', status: 'in_progress', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 25)), categoryColor: 'green', timeLabel: '04:34 PM' },
-  { id: 'task-9', title: 'Client Sync', status: 'completed', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 26)), categoryColor: 'blue', timeLabel: '08:45 AM' },
-  { id: 'task-10', title: 'Accessibility Audit', status: 'pending', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 26)), categoryColor: 'yellow', timeLabel: '10:15 AM' },
-  { id: 'task-11', title: 'Release Prep', status: 'in_progress', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 26)), categoryColor: 'red', timeLabel: '11:30 AM' },
-  { id: 'task-12', title: 'Inbox Cleanup', status: 'completed', dateISO: toISODate(new Date(now.getFullYear(), now.getMonth(), 26)), categoryColor: 'green', timeLabel: '02:20 PM' },
-  { id: 'task-13', title: 'Research SSO Provider', status: 'pending', dateISO: null, categoryColor: 'blue', timeLabel: '10:00 AM' },
-  { id: 'task-14', title: 'Draft onboarding flow copy', status: 'in_progress', dateISO: null, categoryColor: 'yellow', timeLabel: '11:15 AM' },
-  { id: 'task-15', title: 'Backfill analytics events', status: 'pending', dateISO: null, categoryColor: 'red', timeLabel: '02:00 PM' },
-];
+/* ── Status mapping between DB and Calendar UI ── */
+const DB_TO_CALENDAR_STATUS: Record<DbTaskStatus, TaskStatus> = {
+  todo: 'pending',
+  inprogress: 'in_progress',
+  done: 'completed',
+};
+
+const CALENDAR_TO_DB_STATUS: Record<TaskStatus, DbTaskStatus> = {
+  pending: 'todo',
+  in_progress: 'inprogress',
+  completed: 'done',
+};
+
+const NEXT_CALENDAR_STATUS: Record<TaskStatus, TaskStatus> = {
+  pending: 'in_progress',
+  in_progress: 'completed',
+  completed: 'pending',
+};
+
+function toCategoryColor(color: string | undefined | null): CategoryColor {
+  if (color === 'green' || color === 'yellow' || color === 'red' || color === 'blue') return color;
+  return 'blue';
+}
+
+function taskToCalendarTask(task: Task): CalendarTask {
+  return {
+    id: task.id,
+    title: task.title,
+    status: DB_TO_CALENDAR_STATUS[task.status as DbTaskStatus] ?? 'pending',
+    dateISO: task.date,
+    categoryColor: toCategoryColor(task.category?.color),
+    timeLabel: '',
+  };
+}
 
 export default function CalendarPage() {
   const [monthDate, setMonthDate] = useState(initialMonth);
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
-  const [tasks, setTasks] = useState<CalendarTask[]>(INITIAL_TASKS);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [activeView, setActiveView] = useState<ViewMode>('list');
@@ -45,10 +65,27 @@ export default function CalendarPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(currentTasks => currentTasks.filter(t => t.id !== taskId));
+  const { tasks: scheduledDbTasks, loading: scheduledLoading, deleteTask: deleteScheduledTask, updateTaskStatus: updateScheduledStatus, addTask: addScheduledTask } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
+  const { tasks: backlogDbTasks, loading: backlogLoading, deleteTask: deleteBacklogTask, updateTaskStatus: updateBacklogStatus, addTask: addBacklogTask } = useBacklogTasks();
+  const { categories } = useCategories();
+
+  const allCalendarTasks = useMemo(() => {
+    const scheduled = scheduledDbTasks.map(taskToCalendarTask);
+    const backlog = backlogDbTasks.map(taskToCalendarTask);
+    return [...scheduled, ...backlog];
+  }, [scheduledDbTasks, backlogDbTasks]);
+
+  const loading = scheduledLoading || backlogLoading;
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    const isBacklog = backlogDbTasks.some(t => t.id === taskId);
+    if (isBacklog) {
+      deleteBacklogTask(taskId);
+    } else {
+      deleteScheduledTask(taskId);
+    }
     if (selectedTaskId === taskId) setSelectedTaskId(null);
-  };
+  }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, selectedTaskId]);
 
   const handleViewTask = (taskId: string) => {
     setSelectedTaskId(taskId);
@@ -58,21 +95,24 @@ export default function CalendarPage() {
     setSelectedTaskId(taskId);
   };
 
-  const handleToggleStatus = (taskId: string) => {
-    setTasks(currentTasks =>
-      currentTasks.map(t => {
-        if (t.id !== taskId) return t;
-        const next = t.status === 'pending' ? 'in_progress' : t.status === 'in_progress' ? 'completed' : 'pending';
-        return { ...t, status: next };
-      }),
-    );
-  };
+  const handleToggleStatus = useCallback((taskId: string) => {
+    const calTask = allCalendarTasks.find(t => t.id === taskId);
+    if (!calTask) return;
+    const nextCalStatus = NEXT_CALENDAR_STATUS[calTask.status];
+    const nextDbStatus = CALENDAR_TO_DB_STATUS[nextCalStatus];
+    const isBacklog = backlogDbTasks.some(t => t.id === taskId);
+    if (isBacklog) {
+      updateBacklogStatus(taskId, nextDbStatus);
+    } else {
+      updateScheduledStatus(taskId, nextDbStatus);
+    }
+  }, [allCalendarTasks, backlogDbTasks, updateBacklogStatus, updateScheduledStatus]);
 
   const filteredTasks = useMemo(() => {
-    const bySearch = filterTasksByQuery(tasks, searchQuery);
+    const bySearch = filterTasksByQuery(allCalendarTasks, searchQuery);
     const byStatus = bySearch.filter(task => (statusFilter === 'all' ? true : task.status === statusFilter));
     return byStatus.filter(task => (domainFilter === 'all' ? true : mapDomain(task.categoryColor) === domainFilter));
-  }, [tasks, searchQuery, statusFilter, domainFilter]);
+  }, [allCalendarTasks, searchQuery, statusFilter, domainFilter]);
 
   const scheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
   const backlogTasks = useMemo(() => filteredTasks.filter(task => task.dateISO === null), [filteredTasks]);
@@ -272,7 +312,9 @@ export default function CalendarPage() {
 
         {activeView === 'list' ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
-            {groupedMonthTasks.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
+            ) : groupedMonthTasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No scheduled tasks match current filters for this month.</div>
             ) : (
               <div className="space-y-5">
@@ -302,7 +344,9 @@ export default function CalendarPage() {
 
         {activeView === 'backlog' ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
-            {backlogTasks.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
+            ) : backlogTasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No backlog tasks match current filters.</div>
             ) : (
               <div className="space-y-2.5">
@@ -360,24 +404,24 @@ export default function CalendarPage() {
         isOpen={isAddModalOpen}
         defaultDateISO={selectedDateISO}
         onClose={() => setIsAddModalOpen(false)}
-        onAddTask={payload => {
-          const generatedId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `task-${Date.now()}`;
+        onAddTask={async payload => {
+          const matchedCategory = categories.find(c => c.color === payload.categoryColor);
+          const categoryId = matchedCategory?.id ?? '';
+          const dbStatus = CALENDAR_TO_DB_STATUS[payload.status];
 
-          setTasks(currentTasks => [
-            {
-              id: generatedId,
-              title: payload.title,
-              status: payload.status,
-              dateISO: payload.dateISO,
-              categoryColor: payload.categoryColor,
-              timeLabel: payload.timeLabel,
-            },
-            ...currentTasks,
-          ]);
+          const created = await addScheduledTask(
+            payload.title,
+            categoryId,
+            payload.dateISO,
+            'medium',
+            { status: dbStatus },
+          );
 
-          handleSelectDate(payload.dateISO);
-          setSelectedTaskId(generatedId);
-          setActiveView('calendar');
+          if (created) {
+            handleSelectDate(payload.dateISO);
+            setSelectedTaskId(created.id);
+            setActiveView('calendar');
+          }
         }}
       />
     </main>
