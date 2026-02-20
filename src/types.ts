@@ -60,6 +60,7 @@ export interface Task {
   title: string
   description?: string | null
   notes?: string | null
+  time?: string | null
   category_id: string | null
   category?: Category | null
   date: string | null // ISO date string (YYYY-MM-DD) or null for backlog tasks

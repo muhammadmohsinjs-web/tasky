@@ -19,7 +19,7 @@ export async function uploadFilesForTask(taskId: string, files: File[]) {
     }
 
     const fileExt = file.name.split('.').pop()
-    const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+    const fileName = `${userId}/${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)

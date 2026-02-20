@@ -4,6 +4,7 @@ import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Inbo
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
 import { useCategories } from '../../../hooks/useCategories';
+import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { AddTaskModal } from './AddTaskModal';
 import { CalendarGrid } from './CalendarGrid';
@@ -50,8 +51,20 @@ function taskToCalendarTask(task: Task): CalendarTask {
     status: DB_TO_CALENDAR_STATUS[task.status as DbTaskStatus] ?? 'pending',
     dateISO: task.date,
     categoryColor: toCategoryColor(task.category?.color),
-    timeLabel: '',
+    timeLabel: formatTimeLabel(task.time),
   };
+}
+
+function formatTimeLabel(value: string | null | undefined): string {
+  if (!value) return '';
+  if (value.includes('AM') || value.includes('PM')) return value;
+  const [hoursRaw, minutesRaw] = value.split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+  return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
 }
 
 export default function CalendarPage() {
@@ -62,12 +75,29 @@ export default function CalendarPage() {
   const [activeView, setActiveView] = useState<ViewMode>('list');
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  const { tasks: scheduledDbTasks, loading: scheduledLoading, deleteTask: deleteScheduledTask, updateTaskStatus: updateScheduledStatus, addTask: addScheduledTask } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
-  const { tasks: backlogDbTasks, loading: backlogLoading, deleteTask: deleteBacklogTask, updateTaskStatus: updateBacklogStatus } = useBacklogTasks();
+  const {
+    tasks: scheduledDbTasks,
+    loading: scheduledLoading,
+    deleteTask: deleteScheduledTask,
+    updateTaskStatus: updateScheduledStatus,
+    addTask: addScheduledTask,
+    updateTask: updateScheduledTask,
+  } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
+  const {
+    tasks: backlogDbTasks,
+    loading: backlogLoading,
+    deleteTask: deleteBacklogTask,
+    updateTaskStatus: updateBacklogStatus,
+    addTask: addBacklogTask,
+    updateTask: updateBacklogTask,
+  } = useBacklogTasks();
   const { categories } = useCategories();
+  const allDbTasks = useMemo(() => [...scheduledDbTasks, ...backlogDbTasks], [scheduledDbTasks, backlogDbTasks]);
+  const editingTask = useMemo(() => allDbTasks.find((task) => task.id === editingTaskId) ?? null, [allDbTasks, editingTaskId]);
 
   const allCalendarTasks = useMemo(() => {
     const scheduled = scheduledDbTasks.map(taskToCalendarTask);
@@ -93,6 +123,8 @@ export default function CalendarPage() {
 
   const handleEditTask = (taskId: string) => {
     setSelectedTaskId(taskId);
+    setEditingTaskId(taskId);
+    setIsAddModalOpen(true);
   };
 
   const handleToggleStatus = useCallback((taskId: string) => {
@@ -218,11 +250,13 @@ export default function CalendarPage() {
 
             <button
               type="button"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                setEditingTaskId(null);
+                setIsAddModalOpen(true);
+              }}
               className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#2A2DEB] to-[#0A6CE8] px-4 text-white shadow-[0_6px_16px_rgba(25,68,220,0.3)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
               <Plus className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold">Bulk Add</span>
-              <span className="inline-flex h-5 items-center rounded px-1.5 text-[9px] font-semibold border border-white/20 bg-white/16">⌘ B</span>
+              <span className="text-[11px] font-semibold">Add Task</span>
             </button>
           </div>
         </section>
@@ -299,7 +333,10 @@ export default function CalendarPage() {
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   onSelectTask={setSelectedTaskId}
-                  onOpenAddTask={() => setIsAddModalOpen(true)}
+                  onOpenAddTask={() => {
+                    setEditingTaskId(null);
+                    setIsAddModalOpen(true);
+                  }}
                   onViewTask={handleViewTask}
                   onEditTask={handleEditTask}
                   onDeleteTask={handleDeleteTask}
@@ -389,7 +426,10 @@ export default function CalendarPage() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               onSelectTask={setSelectedTaskId}
-              onOpenAddTask={() => setIsAddModalOpen(true)}
+              onOpenAddTask={() => {
+                setEditingTaskId(null);
+                setIsAddModalOpen(true);
+              }}
               onClose={() => setIsMobileSidebarOpen(false)}
               onViewTask={handleViewTask}
               onEditTask={handleEditTask}
@@ -403,25 +443,84 @@ export default function CalendarPage() {
       <AddTaskModal
         isOpen={isAddModalOpen}
         defaultDateISO={selectedDateISO}
-        onClose={() => setIsAddModalOpen(false)}
-        onAddTask={async payload => {
-          const matchedCategory = categories.find(c => c.color === payload.categoryColor);
-          const categoryId = matchedCategory?.id ?? '';
+        task={editingTask}
+        categories={categories}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingTaskId(null);
+        }}
+        onSubmit={async payload => {
           const dbStatus = CALENDAR_TO_DB_STATUS[payload.status];
+          const baseUpdate = {
+            title: payload.title,
+            description: payload.description,
+            notes: payload.notes,
+            time: payload.time,
+            category_id: payload.categoryId || null,
+            date: payload.dateISO,
+            status: dbStatus,
+            priority: payload.priority,
+            links: payload.links,
+          };
 
-          const created = await addScheduledTask(
-            payload.title,
-            categoryId,
-            payload.dateISO,
-            'medium',
-            { status: dbStatus },
-          );
+          if (editingTask) {
+            const isBacklogTask = backlogDbTasks.some((task) => task.id === editingTask.id);
+            if (isBacklogTask) {
+              await updateBacklogTask(editingTask.id, baseUpdate);
+            } else {
+              await updateScheduledTask(editingTask.id, baseUpdate);
+            }
 
-          if (created) {
+            if (payload.files.length > 0) {
+              await uploadFilesForTask(editingTask.id, payload.files);
+            }
+
+            if (payload.dateISO) {
+              handleSelectDate(payload.dateISO);
+              setActiveView('calendar');
+            }
+            setSelectedTaskId(editingTask.id);
+            return;
+          }
+
+          const created = payload.dateISO
+            ? await addScheduledTask(
+                payload.title,
+                payload.categoryId,
+                payload.dateISO,
+                payload.priority,
+                {
+                  description: payload.description,
+                  notes: payload.notes,
+                  time: payload.time,
+                  status: dbStatus,
+                  links: payload.links,
+                }
+              )
+            : await addBacklogTask(
+                payload.title,
+                payload.categoryId,
+                payload.priority,
+                {
+                  description: payload.description,
+                  notes: payload.notes,
+                  time: payload.time,
+                  status: dbStatus,
+                  links: payload.links,
+                }
+              );
+
+          if (!created) return;
+
+          if (payload.files.length > 0) {
+            await uploadFilesForTask(created.id, payload.files);
+          }
+
+          if (payload.dateISO) {
             handleSelectDate(payload.dateISO);
-            setSelectedTaskId(created.id);
             setActiveView('calendar');
           }
+          setSelectedTaskId(created.id);
         }}
       />
     </main>

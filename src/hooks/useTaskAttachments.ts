@@ -46,7 +46,7 @@ export function useTaskAttachments(taskId: string | null) {
 
       // Generate unique file name
       const fileExt = file.name.split('.').pop()
-      const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+      const fileName = `${userId}/${taskId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
       // Upload to storage
       const { data: uploadData, error: uploadError } = await supabase.storage

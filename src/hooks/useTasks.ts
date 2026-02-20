@@ -77,6 +77,7 @@ export function useTasks(year: number, month: number) {
     extras?: {
       description?: string | null
       notes?: string | null
+      time?: string | null
       status?: TaskStatus
       links?: TaskLink[]
       end_date?: string | null
@@ -94,6 +95,7 @@ export function useTasks(year: number, month: number) {
       user_id: user?.id,
       description: extras?.description ?? null,
       notes: extras?.notes ?? null,
+      time: extras?.time ?? null,
       links: extras?.links ?? [],
       end_date: extras?.end_date ?? null,
       recurrence: extras?.recurrence ?? null,
@@ -118,7 +120,7 @@ export function useTasks(year: number, month: number) {
     const { data, error } = await supabase
       .from('tasks')
       .insert(row)
-      .select(TASK_SELECT)
+      .select('id,created_at,updated_at')
       .single()
 
     if (error) {
@@ -126,7 +128,13 @@ export function useTasks(year: number, month: number) {
       toast.error('Failed to add task')
       return null
     }
-    const created = data as unknown as Task
+    const created = {
+      ...(row as Omit<Task, 'id' | 'created_at' | 'updated_at' | 'category'>),
+      id: data.id,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      category: null,
+    } as Task
     queryClient.setQueryData<Task[]>(queryKey, (old) => [...(old ?? []), created])
     toast.success('Task added')
     return created
@@ -199,11 +207,13 @@ export function useTasks(year: number, month: number) {
       title?: string
       description?: string | null
       notes?: string | null
+      time?: string | null
       category_id?: string | null
       date?: string | null
       end_date?: string | null
       status?: TaskStatus
       priority?: TaskPriority
+      links?: TaskLink[]
       sort_order?: number
       recurrence?: RecurrenceRule | null
       source_task_id?: string | null

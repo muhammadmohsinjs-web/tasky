@@ -41,3 +41,27 @@
 - Supabase credentials are required at runtime.
 - Create a `.env` file with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` before running locally.
 - Database schema and migrations live in `supabase/`.
+
+## Skills
+A skill is a set of local instructions stored in a `SKILL.md` file.
+
+### Available skills
+- `tasky-vibe-coding`: End-to-end Tasky implementation orchestration across UI, hooks, Supabase, and tests. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-vibe-coding/SKILL.md`)
+- `tasky-fullstack-standard-coding`: Fullstack coding style guardrails for simple, standard, low-bug implementation. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-fullstack-standard-coding/SKILL.md`)
+- `tasky-feature-delivery`: Feature implementation using existing Tasky patterns in React hooks, TanStack Query, and Supabase logic. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-feature-delivery/SKILL.md`)
+- `tasky-calendar-ux`: Calendar/list/backlog UX behavior and interaction consistency. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-calendar-ux/SKILL.md`)
+- `tasky-supabase-rls`: Schema, migration, policy, and user-isolation changes in Supabase. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-supabase-rls/SKILL.md`)
+- `tasky-schema-migration-advisor`: Analyze new feature vs current DB schema and suggest safe migration SQL/RLS/backfill/rollback. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-schema-migration-advisor/SKILL.md`)
+- `tasky-testing-ci`: Test, lint, build, and CI-style verification workflow. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-testing-ci/SKILL.md`)
+- `tasky-roadmap-execution`: Convert plans/user stories into dependency-aware implementation slices. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-roadmap-execution/SKILL.md`)
+- `tasky-debugging-issues`: Debug workflow for reproducing, isolating, fixing, and verifying Tasky bugs and regressions. (file: `/Users/muhammadmohsin/Desktop/mvps/tasky/skills/tasky-debugging-issues/SKILL.md`)
+
+### Auto-trigger guidance (plain prompts, no `$` needed)
+- Use `tasky-schema-migration-advisor` when prompts include: `schema`, `migration`, `table`, `column`, `RLS`, `backfill`, `DB change`.
+- Use `tasky-supabase-rls` when prompts include: `Supabase policy`, `user isolation`, `multi-tenant`, `auth.uid()`.
+- Use `tasky-calendar-ux` when prompts include: `calendar`, `list view`, `backlog`, `drawer`, `status toggle`, `monthly`.
+- Use `tasky-testing-ci` when prompts include: `test`, `lint`, `build`, `verify`, `regression`, `CI`.
+- Use `tasky-debugging-issues` when prompts include: `debug`, `bug`, `issue`, `regression`, `failing test`, `runtime error`, `not working`.
+- Use `tasky-roadmap-execution` when prompts include: `roadmap`, `phase`, `sprint`, `execution plan`, `prioritize`.
+- Use `tasky-feature-delivery` for normal feature coding prompts in app code.
+- Default to `tasky-vibe-coding` + `tasky-fullstack-standard-coding` for end-to-end implementation requests.

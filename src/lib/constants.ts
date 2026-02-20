@@ -76,4 +76,4 @@ export const CATEGORY_PALETTE = [
   { name: 'Sky', color: 'bg-sky-100 text-sky-700', accent: 'border-l-sky-400', hex: '#0ea5e9' },
 ]
 
-export const TASK_SELECT = 'id,title,description,notes,category_id,date,end_date,recurrence,source_task_id,status,priority,sort_order,links,created_at,updated_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
+export const TASK_SELECT = 'id,title,description,notes,time,category_id,date,end_date,recurrence,source_task_id,status,priority,sort_order,links,created_at,updated_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at)'
