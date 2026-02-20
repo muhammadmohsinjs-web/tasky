@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { confirmAction } from '../lib/confirm'
 import type { Category } from '../types'
 
 export function useCategories() {
@@ -47,7 +48,13 @@ export function useCategories() {
     return true
   }
 
-  const deleteCategory = async (id: string) => {
+  const deleteCategory = async (id: string, options?: { skipConfirm?: boolean }) => {
+    if (!options?.skipConfirm) {
+      const categoryName = categories.find((category) => category.id === id)?.name
+      const confirmed = confirmAction(categoryName ? `Delete category "${categoryName}"?` : 'Delete this category?')
+      if (!confirmed) return false
+    }
+
     const { error } = await supabase.from('categories').delete().eq('id', id)
     if (error) {
       console.error('Failed to delete category:', error)

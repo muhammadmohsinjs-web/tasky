@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
+import { confirmAction } from '../lib/confirm'
 import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
 
 export function useBacklogTasks() {
@@ -171,6 +172,10 @@ export function useBacklogTasks() {
   }
 
   const deleteTask = async (id: string) => {
+    const taskTitle = tasks.find((task) => task.id === id)?.title
+    const confirmed = confirmAction(taskTitle ? `Delete "${taskTitle}"?` : 'Delete this task?')
+    if (!confirmed) return
+
     const { error } = await supabase.from('tasks').delete().eq('id', id)
 
     if (error) {
@@ -200,6 +205,9 @@ export function useBacklogTasks() {
   }
 
   const bulkDelete = async (ids: string[]) => {
+    const confirmed = confirmAction(`Delete ${ids.length} ${ids.length === 1 ? 'task' : 'tasks'}?`)
+    if (!confirmed) return
+
     const { error } = await supabase
       .from('tasks')
       .delete()

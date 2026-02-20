@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
+import { confirmAction } from '../lib/confirm'
 import type { TaskAttachment } from '../types'
 
 const BUCKET_NAME = 'task-attachments'
@@ -97,7 +98,10 @@ export function useTaskAttachments(taskId: string | null) {
     }
   }
 
-  const deleteAttachment = async (id: string, fileUrl: string) => {
+  const deleteAttachment = async (id: string, fileUrl: string, fileName?: string) => {
+    const confirmed = confirmAction(fileName ? `Delete attachment "${fileName}"?` : 'Delete this attachment?')
+    if (!confirmed) return
+
     try {
       // Extract file path from URL
       const urlParts = fileUrl.split(`/${BUCKET_NAME}/`)

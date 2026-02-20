@@ -127,7 +127,7 @@ export function TaskItem({ task, onStatusChange, onDelete, onSelect, draggable =
           <Pencil className="w-3 h-3" />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id) }}
+          onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
           className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"
           title="Delete"
           aria-label="Delete task"

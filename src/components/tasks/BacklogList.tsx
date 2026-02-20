@@ -214,7 +214,7 @@ export function BacklogList({ tasks, totalCount, categories, onAdd, onStatusChan
           {categoryLabel(task.category)}
         </span>
         <button
-          onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id) }}
+          onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
           className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
           title="Delete"
         >
