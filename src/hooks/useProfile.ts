@@ -67,9 +67,7 @@ export function useProfile() {
       .update({ streak: newStreak })
       .eq('id', user.id)
 
-    queryClient.setQueryData<Profile | null>(queryKey, (old) =>
-      old ? { ...old, streak: newStreak } : old
-    )
+    await queryClient.invalidateQueries({ queryKey })
   }
 
   return { profile, loading, updateStreak }

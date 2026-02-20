@@ -4,12 +4,7 @@ import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
-import { enqueueTaskMutation } from '../lib/offlineQueue'
 import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
-
-function isOffline() {
-  return typeof navigator !== 'undefined' && !navigator.onLine
-}
 
 export function useBacklogTasks() {
   const queryClient = useQueryClient()
@@ -78,23 +73,10 @@ export function useBacklogTasks() {
       links: extras?.links ?? [],
     }
 
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'insert', payload: row })
-      const optimistic = {
-        id: `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        ...row,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as Task
-      queryClient.setQueryData<Task[]>(queryKey, (old) => [optimistic, ...(old ?? [])])
-      toast.info('Task queued offline and will sync later')
-      return optimistic
-    }
-
     const { data, error } = await supabase
       .from('tasks')
       .insert(row)
-      .select('id,created_at,updated_at')
+      .select(TASK_SELECT)
       .single()
 
     if (error) {
@@ -102,16 +84,10 @@ export function useBacklogTasks() {
       toast.error('Failed to add task')
       return null
     }
-    const created = {
-      ...(row as Omit<Task, 'id' | 'created_at' | 'updated_at' | 'category'>),
-      id: data.id,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
-      category: null,
-    } as Task
-    queryClient.setQueryData<Task[]>(queryKey, (old) => [created, ...(old ?? [])])
+
+    invalidate()
     toast.success('Task added to backlog')
-    return created
+    return data as unknown as Task
   }
 
   const addTasks = async (items: { title: string; categoryId: string; priority?: TaskPriority }[]) => {
@@ -124,43 +100,21 @@ export function useBacklogTasks() {
       user_id: user?.id,
     }))
 
-    if (isOffline()) {
-      for (const row of rows) {
-        await enqueueTaskMutation({ kind: 'insert', payload: row })
-      }
-      toast.info(`${items.length} tasks queued for sync`)
-      return
-    }
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('tasks')
       .insert(rows)
-      .select(TASK_SELECT)
 
     if (error) {
       console.error('Failed to add backlog tasks:', error)
       toast.error('Failed to add tasks')
       return
     }
-    queryClient.setQueryData<Task[]>(queryKey, (old) => [...(data as unknown as Task[]), ...(old ?? [])])
+
+    invalidate()
     toast.success(`${items.length} tasks added to backlog`)
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
-    const task = tasks.find((t) => t.id === id)
-    if (!task) return
-    const oldTask = JSON.parse(JSON.stringify(task))
-
-    queryClient.setQueryData<Task[]>(queryKey, (old) =>
-      (old ?? []).map((t) => (t.id === id ? { ...t, status: newStatus } : t))
-    )
-
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'update', payload: { id, updates: { status: newStatus } } })
-      toast.info('Status update queued for sync')
-      return
-    }
-
     const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus })
@@ -169,10 +123,10 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to update task status:', error)
       toast.error('Failed to update task status')
-      queryClient.setQueryData<Task[]>(queryKey, (old) =>
-        (old ?? []).map((t) => (t.id === id ? oldTask : t))
-      )
+      return
     }
+
+    invalidate()
   }
 
   const updateTask = async (
@@ -189,15 +143,6 @@ export function useBacklogTasks() {
       links?: TaskLink[]
     }
   ) => {
-    if (isOffline()) {
-      queryClient.setQueryData<Task[]>(queryKey, (old) =>
-        (old ?? []).map((t) => (t.id === id ? { ...t, ...updates } : t))
-      )
-      await enqueueTaskMutation({ kind: 'update', payload: { id, updates } })
-      toast.info('Task update queued for sync')
-      return
-    }
-
     const { error } = await supabase
       .from('tasks')
       .update(updates)
@@ -208,46 +153,31 @@ export function useBacklogTasks() {
       toast.error('Failed to save task')
       return
     }
-    toast.success('Task saved')
+
     if ((updates.date !== undefined && updates.date !== null) || updates.category_id !== undefined) {
-      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      toast.success('Task saved')
       return
     }
-    queryClient.setQueryData<Task[]>(queryKey, (old) =>
-      (old ?? []).map((t) => (t.id === id ? { ...t, ...updates } : t))
-    )
+
+    invalidate()
+    toast.success('Task saved')
   }
 
   const deleteTask = async (id: string) => {
-    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => t.id !== id))
-
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'delete', payload: { id } })
-      toast.info('Task deletion queued for sync')
-      return
-    }
-
     const { error } = await supabase.from('tasks').delete().eq('id', id)
+
     if (error) {
       console.error('Failed to delete task:', error)
       toast.error('Failed to delete task')
-      invalidate()
       return
     }
+
+    invalidate()
     toast.success('Task deleted')
   }
 
   const bulkUpdateStatus = async (ids: string[], newStatus: TaskStatus) => {
-    queryClient.setQueryData<Task[]>(queryKey, (old) =>
-      (old ?? []).map((t) => (ids.includes(t.id) ? { ...t, status: newStatus } : t))
-    )
-
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'bulk_update', payload: { ids, updates: { status: newStatus } } })
-      toast.info('Bulk update queued for sync')
-      return
-    }
-
     const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus })
@@ -256,21 +186,14 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to bulk update status:', error)
       toast.error('Failed to update tasks')
-      invalidate()
       return
     }
+
+    invalidate()
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} updated`)
   }
 
   const bulkDelete = async (ids: string[]) => {
-    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
-
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'bulk_delete', payload: { ids } })
-      toast.info('Bulk delete queued for sync')
-      return
-    }
-
     const { error } = await supabase
       .from('tasks')
       .delete()
@@ -279,22 +202,14 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to bulk delete tasks:', error)
       toast.error('Failed to delete tasks')
-      invalidate()
       return
     }
+
+    invalidate()
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
   }
 
   const scheduleTasks = async (ids: string[], date: string) => {
-    queryClient.setQueryData<Task[]>(queryKey, (old) => (old ?? []).filter((t) => !ids.includes(t.id)))
-
-    if (isOffline()) {
-      await enqueueTaskMutation({ kind: 'bulk_update', payload: { ids, updates: { date } } })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      toast.info('Scheduling queued for sync')
-      return
-    }
-
     const { error } = await supabase
       .from('tasks')
       .update({ date })
@@ -303,9 +218,9 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to schedule tasks:', error)
       toast.error('Failed to schedule tasks')
-      invalidate()
       return
     }
+
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
     toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} scheduled`)
   }

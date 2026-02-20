@@ -33,7 +33,7 @@ export function useCategories() {
       console.error('Failed to add category:', error)
       return null
     }
-    queryClient.setQueryData<Category[]>(queryKey, (old) => [...(old ?? []), data as Category])
+    await queryClient.invalidateQueries({ queryKey })
     return data as Category
   }
 
@@ -43,9 +43,7 @@ export function useCategories() {
       console.error('Failed to update category:', error)
       return false
     }
-    queryClient.setQueryData<Category[]>(queryKey, (old) =>
-      (old ?? []).map((c) => (c.id === id ? { ...c, ...updates } : c))
-    )
+    await queryClient.invalidateQueries({ queryKey })
     return true
   }
 
@@ -55,7 +53,7 @@ export function useCategories() {
       console.error('Failed to delete category:', error)
       return false
     }
-    queryClient.setQueryData<Category[]>(queryKey, (old) => (old ?? []).filter((c) => c.id !== id))
+    await queryClient.invalidateQueries({ queryKey })
     return true
   }
 
