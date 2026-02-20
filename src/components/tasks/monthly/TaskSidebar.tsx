@@ -17,6 +17,8 @@ interface TaskSidebarProps {
   onEditTask?: (taskId: string) => void;
   onDeleteTask?: (taskId: string) => void;
   onToggleStatus?: (taskId: string) => void;
+  onToggleFilters?: () => void;
+  hasActiveFilters?: boolean;
 }
 
 export function TaskSidebar({
@@ -33,6 +35,8 @@ export function TaskSidebar({
   onEditTask,
   onDeleteTask,
   onToggleStatus,
+  onToggleFilters,
+  hasActiveFilters = false,
 }: TaskSidebarProps) {
   const counts = getTaskCounts(tasks);
 
@@ -107,8 +111,10 @@ export function TaskSidebar({
           </div>
           <button
             type="button"
+            onClick={onToggleFilters}
             className="inline-flex h-full w-10 shrink-0 items-center justify-center border-l border-[#E0E8F4] bg-[#F9FBFF] text-[#72849D] transition hover:bg-[#F1F6FD] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4285F4]/40"
             aria-label="Task filters"
+            aria-pressed={hasActiveFilters}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>

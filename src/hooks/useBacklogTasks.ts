@@ -14,7 +14,7 @@ export function useBacklogTasks() {
   const countLabel = (count: number) => `${count} ${count === 1 ? 'task' : 'tasks'}`
   const statusLabel = (status: TaskStatus) => (status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do')
 
-  const { data: tasks = [], isLoading: loading } = useQuery({
+  const { data: tasks = [], isLoading: loading, error } = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
       const { data, error } = await supabase
@@ -263,6 +263,7 @@ export function useBacklogTasks() {
   return {
     tasks,
     loading,
+    error: error ? (error as Error).message : null,
     addTask,
     addTasks,
     updateTaskStatus,

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
@@ -96,20 +96,24 @@ export default function CalendarPage() {
   const {
     tasks: scheduledDbTasks,
     loading: scheduledLoading,
+    error: scheduledError,
     deleteTask: deleteScheduledTask,
     updateTaskStatus: updateScheduledStatus,
     addTask: addScheduledTask,
     addTasks: addScheduledTasks,
     updateTask: updateScheduledTask,
+    refetch: refetchScheduledTasks,
   } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
   const {
     tasks: backlogDbTasks,
     loading: backlogLoading,
+    error: backlogError,
     deleteTask: deleteBacklogTask,
     updateTaskStatus: updateBacklogStatus,
     addTask: addBacklogTask,
     addTasks: addBacklogTasks,
     updateTask: updateBacklogTask,
+    refetch: refetchBacklogTasks,
   } = useBacklogTasks();
   const { categories } = useCategories();
   const allDbTasks = useMemo(() => [...scheduledDbTasks, ...backlogDbTasks], [scheduledDbTasks, backlogDbTasks]);
@@ -122,6 +126,7 @@ export default function CalendarPage() {
   }, [scheduledDbTasks, backlogDbTasks]);
 
   const loading = scheduledLoading || backlogLoading;
+  const loadError = scheduledError || backlogError;
 
   const handleDeleteTask = useCallback((taskId: string) => {
     const isBacklog = backlogDbTasks.some(t => t.id === taskId);
@@ -239,6 +244,10 @@ export default function CalendarPage() {
     setEditingTaskId(null);
     setModalMode('create');
     setIsAddModalOpen(true);
+  };
+
+  const handleRetryLoad = async () => {
+    await Promise.all([refetchScheduledTasks(), refetchBacklogTasks()]);
   };
 
   return (
@@ -412,43 +421,76 @@ export default function CalendarPage() {
 
         {activeView === 'calendar' ? (
           <section className="rounded-[20px] border border-[#DFE4ED] bg-[#F6F8FC] shadow-[0_10px_28px_rgba(40,56,90,0.08)]">
-            <div className="overflow-hidden rounded-[inherit]">
-              <div className="grid grid-cols-1 items-stretch xl:grid-cols-[minmax(0,3fr)_minmax(360px,1fr)]">
-                <div className="p-4 md:p-5">
-                  <CalendarGrid
-                    monthDate={monthDate}
-                    selectedDateISO={selectedDateISO}
-                    tasks={scheduledTasks}
-                    onSelectDate={handleSelectDate}
-                    onQuickAddDate={handleQuickAddDate}
-                    onPrevMonth={() => handleMonthChange(-1)}
-                    onNextMonth={() => handleMonthChange(1)}
-                    showHeader={false}
-                  />
-                </div>
-
-                <div className="hidden border-l border-[#DFE4ED] bg-[#F9FBFF] p-4 md:block md:p-5">
-                  <TaskSidebar
-                    selectedDateISO={selectedDateISO}
-                    tasks={tasksForSelectedDate}
-                    visibleTasks={visibleSidebarTasks}
-                    selectedTaskId={selectedTaskId}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onSelectTask={setSelectedTaskId}
-                    onOpenAddTask={() => {
-                      setEditingTaskId(null);
-                      setModalMode('create');
-                      setIsAddModalOpen(true);
-                    }}
-                    onViewTask={handleViewTask}
-                    onEditTask={handleEditTask}
-                    onDeleteTask={handleDeleteTask}
-                    onToggleStatus={handleToggleStatus}
-                  />
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-14 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading calendar tasks...
+              </div>
+            ) : loadError ? (
+              <div className="px-4 py-8 md:px-6 md:py-10">
+                <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+                  <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <p className="text-sm font-semibold text-red-700">Couldn&apos;t load calendar tasks</p>
+                  <p className="mt-1 text-xs text-red-600">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={handleRetryLoad}
+                    className="mt-4 inline-flex h-8 items-center rounded-md border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Retry
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="overflow-hidden rounded-[inherit]">
+                {monthTasks.length === 0 ? (
+                  <div className="border-b border-[#DFE4ED] bg-[#F4F8FF] px-4 py-3 text-sm text-[#526380] md:px-6">
+                    {hasActiveFilters
+                      ? 'No calendar tasks match current filters. Clear filters to see all tasks.'
+                      : 'No scheduled tasks in this month yet. Use Add Task or quick-add on a date to begin.'}
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-1 items-stretch xl:grid-cols-[minmax(0,3fr)_minmax(360px,1fr)]">
+                  <div className="p-4 md:p-5">
+                    <CalendarGrid
+                      monthDate={monthDate}
+                      selectedDateISO={selectedDateISO}
+                      tasks={scheduledTasks}
+                      onSelectDate={handleSelectDate}
+                      onQuickAddDate={handleQuickAddDate}
+                      onPrevMonth={() => handleMonthChange(-1)}
+                      onNextMonth={() => handleMonthChange(1)}
+                      showHeader={false}
+                    />
+                  </div>
+
+                  <div className="hidden border-l border-[#DFE4ED] bg-[#F9FBFF] p-4 md:block md:p-5">
+                    <TaskSidebar
+                      selectedDateISO={selectedDateISO}
+                      tasks={tasksForSelectedDate}
+                      visibleTasks={visibleSidebarTasks}
+                      selectedTaskId={selectedTaskId}
+                      searchQuery={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      onSelectTask={setSelectedTaskId}
+                      onOpenAddTask={() => {
+                        setEditingTaskId(null);
+                        setModalMode('create');
+                        setIsAddModalOpen(true);
+                      }}
+                      onViewTask={handleViewTask}
+                      onEditTask={handleEditTask}
+                      onDeleteTask={handleDeleteTask}
+                      onToggleStatus={handleToggleStatus}
+                      onToggleFilters={() => setShowFilters((prev) => !prev)}
+                      hasActiveFilters={hasActiveFilters}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         ) : null}
 
@@ -456,6 +498,18 @@ export default function CalendarPage() {
           <section className="rounded-2xl border border-[#DEE6F2] bg-[#FCFDFF] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
+            ) : loadError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+                <p className="font-semibold">Couldn&apos;t load tasks list</p>
+                <p className="mt-1 text-xs">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={handleRetryLoad}
+                  className="mt-3 inline-flex h-8 items-center rounded-md border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-100"
+                >
+                  Retry
+                </button>
+              </div>
             ) : groupedMonthTasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No scheduled tasks match current filters for this month.</div>
             ) : (
@@ -488,6 +542,18 @@ export default function CalendarPage() {
           <section className="rounded-2xl border border-[#DEE6F2] bg-[#FCFDFF] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
+            ) : loadError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+                <p className="font-semibold">Couldn&apos;t load backlog tasks</p>
+                <p className="mt-1 text-xs">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={handleRetryLoad}
+                  className="mt-3 inline-flex h-8 items-center rounded-md border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-100"
+                >
+                  Retry
+                </button>
+              </div>
             ) : backlogTasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No backlog tasks match current filters.</div>
             ) : (
@@ -541,6 +607,8 @@ export default function CalendarPage() {
               onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask}
               onToggleStatus={handleToggleStatus}
+              onToggleFilters={() => setShowFilters((prev) => !prev)}
+              hasActiveFilters={hasActiveFilters}
             />
           </div>
         </div>

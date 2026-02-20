@@ -20,7 +20,7 @@ export function useTasks(year: number, month: number) {
       ? `${year + 1}-01-01`
       : `${year}-${String(month + 2).padStart(2, '0')}-01`
 
-  const { data: tasks = [], isLoading: loading } = useQuery({
+  const { data: tasks = [], isLoading: loading, error } = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
       const { data, error } = await supabase
@@ -329,6 +329,7 @@ export function useTasks(year: number, month: number) {
   return {
     tasks,
     loading,
+    error: error ? (error as Error).message : null,
     addTask,
     addTasks,
     updateTaskStatus,
