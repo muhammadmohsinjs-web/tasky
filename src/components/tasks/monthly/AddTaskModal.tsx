@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileIcon, Image as ImageIcon, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
+import { CalendarDays, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
 import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
 import type { TaskStatus } from './types';
@@ -59,6 +59,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
   const [titleError, setTitleError] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const existingAttachments = task?.attachments ?? [];
+  const isBacklogTask = !dateISO;
 
   const heading = useMemo(() => {
     if (isViewMode) return 'Task Details';
@@ -269,39 +270,79 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
           <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">
             <h3 className="mb-3 text-sm font-semibold text-[#233553]">Schedule</h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-[#314866]">Date</span>
-                <input
-                  value={dateISO}
-                  onChange={event => setDateISO(event.target.value)}
-                  type="date"
+            <div className="mb-3 rounded-xl border border-[#D8E3F3] bg-white p-1.5">
+              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#556985]">Task type</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
                   disabled={isViewMode}
-                  className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                />
-                {dateISO && !isViewMode ? (
-                  <button
-                    type="button"
-                    onClick={() => setDateISO('')}
-                    className="mt-2 inline-flex h-8 items-center rounded-lg border border-[#CFDBEA] bg-white px-2.5 text-xs font-medium text-[#516887] hover:bg-[#F3F7FD]"
-                  >
-                    <X className="mr-1 h-3.5 w-3.5" />
-                    Move to backlog
-                  </button>
-                ) : null}
-              </label>
+                  onClick={() => setDateISO(defaultDateISO || new Date().toISOString().slice(0, 10))}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                    !isBacklogTask
+                      ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
+                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                  } ${isViewMode ? 'cursor-default' : ''}`}>
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <CalendarDays className="h-4 w-4" />
+                    Scheduled
+                  </span>
+                  {!isBacklogTask ? <span className="rounded-full bg-[#CFE0FF] px-2 py-0.5 text-[10px] font-semibold text-[#1F4C9A]">Active</span> : null}
+                </button>
 
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-[#314866]">Time</span>
-                <input
-                  value={time}
-                  onChange={event => setTime(event.target.value)}
-                  type="time"
+                <button
+                  type="button"
                   disabled={isViewMode}
-                  className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                />
-              </label>
+                  onClick={() => setDateISO('')}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                    isBacklogTask
+                      ? 'border-[#A8C4F2] bg-[#EFF5FF] text-[#244D96]'
+                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                  } ${isViewMode ? 'cursor-default' : ''}`}>
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <Inbox className="h-4 w-4" />
+                    Backlog
+                  </span>
+                  {isBacklogTask ? <span className="rounded-full bg-[#D8E7FF] px-2 py-0.5 text-[10px] font-semibold text-[#2859AB]">Active</span> : null}
+                </button>
+              </div>
             </div>
+
+            {!isBacklogTask ? (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">Date</span>
+                  <input
+                    value={dateISO}
+                    onChange={event => setDateISO(event.target.value)}
+                    type="date"
+                    disabled={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">Time</span>
+                  <input
+                    value={time}
+                    onChange={event => setTime(event.target.value)}
+                    type="time"
+                    disabled={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-[#C8D8EF] bg-[#F5F9FF] px-3 py-2">
+                <p className="text-sm font-medium text-[#385073]">
+                  This task is in backlog and will not appear on a calendar date.
+                </p>
+                {!isViewMode ? (
+                  <p className="mt-1 text-xs text-[#5A7091]">
+                    Choose <span className="font-semibold">Scheduled</span> above when you are ready to assign a date and time.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">
