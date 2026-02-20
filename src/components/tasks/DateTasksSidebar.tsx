@@ -25,37 +25,52 @@ export function DateTasksSidebar({ selectedDate, tasks, totalCount, completedCou
     });
   }, [tasks, query]);
 
-  const titleDate = formatDateTitle(selectedDate);
+  const titleDate = formatHeaderDate(selectedDate);
   const count = totalCount ?? tasks.length;
   const doneCount = completedCount ?? tasks.filter(task => task.status === 'done').length;
+  const progressWidth = count === 0 ? 0 : Math.max(0, Math.min(48, Math.round((doneCount / count) * 48)));
 
   return (
     <aside className="relative w-full lg:w-[390px] shrink-0 border-l border-[#DDE3EC] bg-[#F2F4F8] animate-slide-in-right">
-      <header className="border-b border-[#E2E8F0] bg-white px-5 py-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[40px] font-semibold leading-none tracking-[-0.02em] text-[#1E293B]">Tasks</h2>
+      <header className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <h2 className="text-[28px] font-semibold leading-8 tracking-[-0.003em] text-[#0F172A]">Tasks</h2>
+            <p className="flex items-center text-[13px] font-medium text-[#64748B]">
+              <span>{titleDate}</span>
+              <span className="px-2 opacity-70">•</span>
+              <span>{count} {count === 1 ? 'Task' : 'Tasks'}</span>
+              <span className="px-2 opacity-70">•</span>
+              <span>{doneCount} Completed</span>
+            </p>
+          </div>
+
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-11 items-center gap-2 rounded bg-[#3B82F6] px-4 text-[15px] font-medium text-white shadow-[0_4px_10px_rgba(59,130,246,0.32)] transition-colors hover:bg-[#3176e6] cursor-pointer">
-              <Plus className="h-4 w-4" />
-              <span>Add Task</span>
-            </button>
+            <div className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#2563EB] px-4 text-[14px] font-semibold text-white transition-colors hover:bg-[#1D4ED8] active:bg-[#1E40AF] cursor-pointer">
+                <Plus className="h-4 w-4 stroke-[2.25]" />
+                <span>Add Task</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 rounded-full bg-[#EEF2FF] px-3 py-1.5">
+                <div className="h-1 w-12 overflow-hidden rounded-full bg-[#E0E7FF]">
+                  <div className="h-full rounded-full bg-[#4338CA]" style={{ width: `${progressWidth}px` }} />
+                </div>
+                <span className="text-[12px] font-medium text-[#4338CA]">
+                  {doneCount} / {count} Done
+                </span>
+              </div>
+            </div>
+
             <button
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-[#F8FAFC] cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#94A3B8] transition-colors hover:bg-[#F1F5F9] active:bg-[#E2E8F0] cursor-pointer"
               aria-label="Close tasks sidebar">
               <X className="h-4 w-4" />
             </button>
           </div>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between text-[13px] text-slate-500">
-          <span>{titleDate}</span>
-          <span>
-            {count} task{count === 1 ? '' : 's'}
-            {doneCount > 0 ? ` · ${doneCount} completed` : ''}
-          </span>
         </div>
       </header>
 
@@ -206,7 +221,7 @@ const STATUS_UI: Record<TaskStatus, { label: string; badgeClass: string; iconCla
   },
 };
 
-function formatDateTitle(selectedDate: string): string {
+function formatHeaderDate(selectedDate: string): string {
   const [yearPart, monthPart, dayPart] = selectedDate.split('-');
   const yearValue = Number(yearPart);
   const monthValue = Number(monthPart);
@@ -215,7 +230,7 @@ function formatDateTitle(selectedDate: string): string {
     return selectedDate;
   }
   return new Date(yearValue, monthValue - 1, dayValue).toLocaleDateString('en-US', {
-    weekday: 'long',
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
   });

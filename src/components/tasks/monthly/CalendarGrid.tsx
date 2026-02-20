@@ -23,7 +23,7 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
   const monthCells = generateMonthGrid(monthDate.getFullYear(), monthDate.getMonth());
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6" aria-label="Monthly calendar">
+    <section className="h-full rounded-[14px] border border-[#E2E6EE] bg-[#FBFCFF] p-3 md:p-4" aria-label="Monthly calendar">
       {showHeader ? (
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{formatMonthLabel(monthDate)}</h1>
@@ -48,12 +48,12 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80">
+      <div className="overflow-hidden rounded-xl border border-[#E3E7EF] bg-white">
+        <div className="grid grid-cols-7 border-b border-[#E3E7EF] bg-[#FAFBFD]">
           {WEEKDAY_LABELS.map((dayLabel, dayIndex) => (
             <div
               key={dayLabel}
-              className={`px-2 py-3 text-center text-sm font-medium md:px-3 md:text-[15px] ${dayIndex === 0 ? 'text-rose-500' : 'text-slate-600'}`}
+              className={`px-2 py-2 text-center text-xs font-semibold md:px-3 md:text-[13px] ${dayIndex === 0 ? 'text-[#DF5B59]' : 'text-[#4D576D]'}`}
             >
               {dayLabel}
             </div>
@@ -66,6 +66,7 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
             const visibleDayTasks = dayTasks.slice(0, 3);
             const hiddenCount = dayTasks.length - visibleDayTasks.length;
             const isSelected = selectedDateISO === cell.isoDate;
+            const isSundayInMonth = cell.inCurrentMonth && cell.date.getDay() === 0;
 
             return (
               <button
@@ -73,43 +74,46 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
                 type="button"
                 onClick={() => onSelectDate(cell.isoDate)}
                 className={[
-                  'group min-h-[105px] border-r border-b border-slate-200 p-2 text-left transition md:min-h-[140px] md:p-3',
+                  'group min-h-[90px] border-r border-b border-[#E3E7EF] p-2 text-left transition md:min-h-[120px] md:p-2.5',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
-                  cell.inCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50 text-slate-400',
-                  isSelected ? 'bg-blue-50/60' : '',
+                  cell.inCurrentMonth ? 'bg-white hover:bg-[#F8FAFE]' : 'bg-[#F7F9FC] text-slate-400',
+                  isSelected ? 'bg-[#EEF5FF]' : '',
                 ].join(' ')}
                 aria-label={`Select ${cell.isoDate}`}
                 aria-pressed={isSelected}
               >
                 <span
                   className={[
-                    'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-base font-medium md:h-8 md:min-w-8',
-                    cell.inCurrentMonth ? 'text-slate-700' : 'text-slate-400',
-                    isSelected ? 'border-2 border-blue-500 text-blue-600' : '',
+                    'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[13px] font-medium leading-none md:h-7 md:min-w-7',
+                    cell.inCurrentMonth ? 'text-[#525C71]' : 'text-slate-400',
+                    isSundayInMonth ? 'text-[#D75A58]' : '',
+                    isSelected ? 'border-2 border-[#2E89F6] text-[#2E89F6]' : '',
                   ].join(' ')}
                 >
                   {cell.dayNumber}
                 </span>
 
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-1.5 space-y-1">
                   {visibleDayTasks.map((task) => (
                     <span
                       key={task.id}
-                      className="flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-medium text-slate-600 md:text-xs"
+                      className="flex items-center gap-1 rounded-full bg-[#E9EEF6] px-2 py-0.5 text-[9px] font-semibold text-[#53607A] md:text-[11px]"
                     >
-                      <span className={`h-2 w-2 rounded-full ${DOT_CLASS[task.categoryColor]}`} aria-hidden="true" />
+                      <span className={`h-1.5 w-1.5 rounded-full ${DOT_CLASS[task.categoryColor]}`} aria-hidden="true" />
                       <span className="truncate">{task.timeLabel}</span>
                     </span>
                   ))}
 
                   {hiddenCount > 0 ? (
-                    <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700 md:text-xs">
+                    <span className="inline-flex rounded-full bg-[#DCEBFF] px-2 py-0.5 text-[9px] font-semibold text-[#2B6FC5] md:text-[11px]">
                       +{hiddenCount} more
                     </span>
                   ) : null}
 
                   {dayTasks.length === 0 && cell.inCurrentMonth ? (
-                    <span className="block pt-2 text-[11px] text-slate-300 md:text-sm">add task</span>
+                    <span className="block pt-1 text-[10px] text-[#A2AABC] md:text-[12px]">
+                      add task
+                    </span>
                   ) : null}
                 </div>
               </button>

@@ -1,4 +1,4 @@
-import { Menu, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { formatSidebarDate, getTaskCounts } from './calendarHelpers';
 import { TaskCard } from './TaskCard';
 import type { CalendarTask } from './types';
@@ -13,6 +13,10 @@ interface TaskSidebarProps {
   onSelectTask: (taskId: string) => void;
   onOpenAddTask: () => void;
   onClose?: () => void;
+  onViewTask?: (taskId: string) => void;
+  onEditTask?: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => void;
+  onToggleStatus?: (taskId: string) => void;
 }
 
 export function TaskSidebar({
@@ -25,80 +29,110 @@ export function TaskSidebar({
   onSelectTask,
   onOpenAddTask,
   onClose,
+  onViewTask,
+  onEditTask,
+  onDeleteTask,
+  onToggleStatus,
 }: TaskSidebarProps) {
   const counts = getTaskCounts(tasks);
 
   return (
-    <aside className="rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-      <header className="border-b border-slate-200 px-6 py-5">
+    <aside className="flex h-full flex-col rounded-[14px] border border-[#E4E8F0] bg-[#FBFCFF]">
+      {/* ── Header ── */}
+      <header className="shrink-0 border-b border-[#E2E8F0] bg-[#F8FAFC] px-5 py-4">
+        {/* Title row */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight text-slate-900">Tasks</h2>
-          <div className="flex items-center gap-2 text-slate-500">
+          <h2 className="text-[22px] font-semibold leading-7 tracking-[-0.003em] text-[#0F172A]">Tasks</h2>
+          {onClose ? (
             <button
               type="button"
-              className="rounded-md p-2 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="Open tasks menu"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#94A3B8] transition-colors hover:bg-[#F1F5F9] active:bg-[#E2E8F0] cursor-pointer"
+              aria-label="Close sidebar"
             >
-              <Menu className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
-            {onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md p-2 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Close tasks sidebar"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3 border-b border-slate-200 pb-4">
-          <p className="text-base font-medium text-slate-700 md:text-lg">{formatSidebarDate(selectedDateISO)}</p>
+        {/* Date + stats row */}
+        <div className="mt-2 flex items-center justify-between">
+          <p className="flex items-center text-[13px] font-medium text-[#64748B]">
+            <span>{formatSidebarDate(selectedDateISO)}</span>
+            <span className="px-1.5 opacity-70">&middot;</span>
+            <span>{counts.total} {counts.total === 1 ? 'Task' : 'Tasks'}</span>
+            <span className="px-1.5 opacity-70">&middot;</span>
+            <span>{counts.completed} Completed</span>
+          </p>
+        </div>
+
+        {/* Command bar: Add Task + progress */}
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
           <button
             type="button"
             onClick={onOpenAddTask}
-            className="inline-flex h-11 items-center rounded-xl bg-blue-600 px-4 text-base font-medium text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)] hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-[10px] bg-[#2563EB] text-[13px] font-semibold text-white transition-colors hover:bg-[#1D4ED8] active:bg-[#1E40AF] cursor-pointer"
           >
-            + Add Task
+            <Plus className="h-4 w-4 stroke-[2.25]" />
+            <span>Add Task</span>
           </button>
-        </div>
 
-        <p className="pt-4 text-base text-slate-500">
-          {counts.total} tasks &middot; {counts.completed} completed
-        </p>
+          <div className="flex items-center gap-1.5 rounded-full bg-[#EEF2FF] px-3 py-1.5">
+            <div className="h-1 w-12 overflow-hidden rounded-full bg-[#E0E7FF]">
+              <div
+                className="h-full rounded-full bg-[#4338CA]"
+                style={{ width: `${counts.total === 0 ? 0 : Math.round((counts.completed / counts.total) * 48)}px` }}
+              />
+            </div>
+            <span className="whitespace-nowrap text-[11px] font-medium text-[#4338CA]">
+              {counts.completed} / {counts.total} Done
+            </span>
+          </div>
+        </div>
       </header>
 
-      <div className="border-b border-slate-200 px-6 py-4">
-        <div className="flex h-12 items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      {/* ── Search ── */}
+      <div className="shrink-0 px-4 pt-3 pb-2">
+        <div className="flex h-9 items-center overflow-hidden rounded-lg border border-[#E2E7EF] bg-white transition focus-within:border-[#93B4F0] focus-within:ring-2 focus-within:ring-[#3B82F6]/10">
           <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
-            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            <Search className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" aria-hidden="true" />
             <input
               type="search"
               value={searchQuery}
-              onChange={(event) => onSearchChange(event.target.value)}
+              onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search tasks..."
               aria-label="Search tasks"
-              className="w-full bg-transparent text-base text-slate-700 placeholder:text-slate-400 focus:outline-none"
+              className="w-full bg-transparent text-[12px] text-[#334155] placeholder:text-[#B0B8C9] focus:outline-none"
             />
           </div>
           <button
             type="button"
-            className="inline-flex h-full w-12 items-center justify-center border-l border-slate-200 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-[#E2E7EF] text-[#8994A7] transition hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4285F4]/40"
             aria-label="Task filters"
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="space-y-3 px-6 py-4">
+      {/* ── Task list ── */}
+      <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-4 pt-1">
         {visibleTasks.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">No tasks found.</div>
+          <div className="mt-3 rounded-lg border border-dashed border-[#E2E7EF] bg-[#FAFBFD] px-4 py-6 text-center text-[11px] text-[#94A3B8]">
+            No tasks for this day.
+          </div>
         ) : (
           visibleTasks.map((task) => (
-            <TaskCard key={task.id} task={task} isSelected={selectedTaskId === task.id} onSelect={onSelectTask} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              isSelected={selectedTaskId === task.id}
+              onSelect={onSelectTask}
+              onView={onViewTask}
+              onEdit={onEditTask}
+              onDelete={onDeleteTask}
+              onToggleStatus={onToggleStatus}
+            />
           ))
         )}
       </div>

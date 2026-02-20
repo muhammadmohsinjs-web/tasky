@@ -54,7 +54,7 @@ export function formatMonthLabel(value: Date): string {
 
 export function formatSidebarDate(isoDate: string): string {
   const value = parseISODate(isoDate);
-  return value.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return value.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 export function formatTaskDate(isoDate: string | null): string {
