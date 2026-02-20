@@ -233,6 +233,14 @@ export default function CalendarPage() {
     setSelectedTaskId(null);
   };
 
+  const handleQuickAddDate = (isoDate: string) => {
+    if (!isoDate) return;
+    setSelectedDateISO(isoDate);
+    setEditingTaskId(null);
+    setModalMode('create');
+    setIsAddModalOpen(true);
+  };
+
   return (
     <main className="min-h-screen bg-[#EEF3FA] px-3 py-4 md:px-5 md:py-5">
       <div className="mx-auto max-w-[1880px]">
@@ -412,6 +420,7 @@ export default function CalendarPage() {
                     selectedDateISO={selectedDateISO}
                     tasks={scheduledTasks}
                     onSelectDate={handleSelectDate}
+                    onQuickAddDate={handleQuickAddDate}
                     onPrevMonth={() => handleMonthChange(-1)}
                     onNextMonth={() => handleMonthChange(1)}
                     showHeader={false}
