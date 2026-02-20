@@ -234,14 +234,14 @@ export default function CalendarPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f2f4fa] px-3 py-4 md:px-5 md:py-5">
+    <main className="min-h-screen bg-[#EEF3FA] px-3 py-4 md:px-5 md:py-5">
       <div className="mx-auto max-w-[1880px]">
         <h1 className="sr-only">Tasks</h1>
 
-        <section className="mb-3 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6">
+        <section className="mb-3 rounded-[14px] border border-[#DEE6F2] bg-[#FCFDFF] px-4 py-3 shadow-[0_6px_20px_rgba(40,56,90,0.07)] md:px-6">
           <div className="flex flex-col gap-3">
             <div className="grid gap-3 xl:grid-cols-[auto_1fr_auto] xl:items-center">
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0.5 rounded-xl border border-[#D9E3F2] bg-[#F5F9FF] p-0.5">
               <ViewTab label="Calendar" value="calendar" activeView={activeView} onChange={setActiveView} icon={<CalendarDays className="h-4 w-4" />} />
               <ViewTab label="List" value="list" activeView={activeView} onChange={setActiveView} icon={<List className="h-4 w-4" />} />
               <ViewTab label="Backlog" value="backlog" activeView={activeView} onChange={setActiveView} icon={<Inbox className="h-4 w-4" />} />
@@ -295,7 +295,7 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#E1E7F2] bg-[#F9FBFF] p-2.5">
+            <div className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] p-2.5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <button
@@ -309,24 +309,24 @@ export default function CalendarPage() {
                   </button>
 
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium ${
+                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium ${
                       categoryFilter === ALL_CATEGORY_FILTER
-                        ? 'border border-[#D9E1EF] bg-white text-[#5A6680]'
-                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#1F4EA3]'
+                        ? 'border border-[#D4DEEE] bg-white text-[#4C5C77]'
+                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
                     }`}>
                       {selectedCategoryLabel}
                     </span>
-                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium ${
+                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium ${
                       statusFilter === 'all'
-                        ? 'border border-[#D9E1EF] bg-white text-[#5A6680]'
-                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#1F4EA3]'
+                        ? 'border border-[#D4DEEE] bg-white text-[#4C5C77]'
+                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
                     }`}>
                       {STATUS_FILTER_LABELS[statusFilter]}
                     </span>
-                    <span className="inline-flex h-8 items-center rounded-md border border-[#E2E7F1] bg-[#F6F8FC] px-2.5 text-[11px] font-medium text-[#68748D]">
+                    <span className="inline-flex h-8 items-center rounded-md border border-[#DFE6F2] bg-[#F4F8FF] px-2.5 text-[12px] font-medium text-[#5A6780]">
                       This month: {progressTotal}
                     </span>
-                    <span className="inline-flex h-8 items-center rounded-md border border-[#E2E7F1] bg-[#F6F8FC] px-2.5 text-[11px] font-medium text-[#68748D]">
+                    <span className="inline-flex h-8 items-center rounded-md border border-[#DFE6F2] bg-[#F4F8FF] px-2.5 text-[12px] font-medium text-[#5A6780]">
                       Backlog: {backlogTasks.length}
                     </span>
                     {hasActiveFilters ? (
@@ -337,7 +337,7 @@ export default function CalendarPage() {
                           setStatusFilter('all');
                           setSearchQuery('');
                         }}
-                        className="inline-flex h-8 items-center rounded-md border border-[#CAD5E8] bg-[#F7F9FD] px-2.5 text-[11px] font-semibold text-[#3B4A67] transition hover:bg-white">
+                        className="inline-flex h-8 items-center rounded-md border border-[#C7D4EA] bg-[#F4F8FF] px-2.5 text-[12px] font-semibold text-[#314563] transition hover:bg-white">
                         Clear
                       </button>
                     ) : null}
@@ -350,16 +350,16 @@ export default function CalendarPage() {
                       onChange={event => setSearchQuery(event.target.value)}
                       placeholder="Search tasks..."
                       aria-label="Search tasks"
-                      className="h-8 w-full min-w-[220px] rounded-md border border-[#D4DDEB] bg-white px-2.5 text-[11px] text-[#344257] placeholder:text-[#7D879A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-[260px]"
+                      className="h-9 w-full min-w-[220px] rounded-md border border-[#CCD7EA] bg-white px-3 text-[12px] text-[#2E3F5D] placeholder:text-[#74849E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-[260px]"
                     />
                   ) : null}
                 </div>
 
-                <div className="flex items-center gap-3 rounded-xl border border-[#E1E7F2] bg-[#F7FAFF] px-3 py-2">
+                <div className="flex items-center gap-3 rounded-xl border border-[#DCE6F5] bg-[#F3F8FF] px-3 py-2">
                   <CircularProgress value={progressPercent} />
                   <div>
-                    <p className="text-[11px] font-semibold text-[#2A3650]">Tasks Progress</p>
-                    <p className="text-[10px] text-[#5D6880]">
+                    <p className="text-[12px] font-semibold text-[#233553]">Tasks Progress</p>
+                    <p className="text-[11px] text-[#526380]">
                       {progressCompleted} of {progressTotal} completed
                     </p>
                   </div>
@@ -367,13 +367,13 @@ export default function CalendarPage() {
               </div>
 
               {showFilters ? (
-                <div id="task-filters-panel" className="mt-2 grid gap-2 rounded-lg border border-[#E1E7F2] bg-white p-2 sm:grid-cols-2 lg:max-w-[420px]">
-                  <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
+                <div id="task-filters-panel" className="mt-2 grid gap-2 rounded-lg border border-[#DEE7F4] bg-white p-2 sm:grid-cols-2 lg:max-w-[420px]">
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-[#52637F]">
                     Category
                     <select
                       value={categoryFilter}
                       onChange={event => setCategoryFilter(event.target.value)}
-                      className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
+                      className="h-9 rounded-md border border-[#CAD5E8] bg-white px-2 text-[12px] text-[#344663]"
                       aria-label="Filter category">
                       <option value={ALL_CATEGORY_FILTER}>All Categories</option>
                       <option value={UNCATEGORIZED_FILTER}>Uncategorized</option>
@@ -383,12 +383,12 @@ export default function CalendarPage() {
                     </select>
                   </label>
 
-                  <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-[#52637F]">
                     Status
                     <select
                       value={statusFilter}
                       onChange={event => setStatusFilter(event.target.value as 'all' | TaskStatus)}
-                      className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
+                      className="h-9 rounded-md border border-[#CAD5E8] bg-white px-2 text-[12px] text-[#344663]"
                       aria-label="Filter status">
                       <option value="all">All</option>
                       <option value="in_progress">In Progress</option>
@@ -444,7 +444,7 @@ export default function CalendarPage() {
         ) : null}
 
         {activeView === 'list' ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
+          <section className="rounded-2xl border border-[#DEE6F2] bg-[#FCFDFF] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
             ) : groupedMonthTasks.length === 0 ? (
@@ -453,7 +453,7 @@ export default function CalendarPage() {
               <div className="space-y-5">
                 {groupedMonthTasks.map(group => (
                   <div key={group.dateKey}>
-                    <p className="mb-1.5 text-[11px] font-medium text-slate-500">{parseISODate(group.dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                    <p className="mb-2 text-[12px] font-semibold text-[#5A6780]">{parseISODate(group.dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                     <div className="space-y-2.5">
                       {group.items.map(task => (
                         <TaskCard
@@ -476,7 +476,7 @@ export default function CalendarPage() {
         ) : null}
 
         {activeView === 'backlog' ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
+          <section className="rounded-2xl border border-[#DEE6F2] bg-[#FCFDFF] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] md:p-6">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
             ) : backlogTasks.length === 0 ? (
@@ -648,9 +648,9 @@ function CircularProgress({ value }: { value: number }) {
   const offset = circumference - (normalized / 100) * circumference;
 
   return (
-    <div className="relative h-[42px] w-[42px]" role="img" aria-label={`Task progress ${normalized}%`}>
+    <div className="relative h-[44px] w-[44px]" role="img" aria-label={`Task progress ${normalized}%`}>
       <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#D9E1EF" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#D2DEEF" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -669,7 +669,7 @@ function CircularProgress({ value }: { value: number }) {
           </linearGradient>
         </defs>
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold text-[#2A3650]">{normalized}%</span>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-[#223756]">{normalized}%</span>
     </div>
   );
 }
@@ -678,10 +678,20 @@ function ViewTab({ label, value, activeView, onChange, icon }: { label: string; 
   const active = activeView === value;
 
   return (
-    <button type="button" onClick={() => onChange(value)} className="group relative inline-flex h-[32px] min-w-[80px] items-center justify-center gap-1 px-2.5 text-[#2E3A52]" aria-pressed={active}>
+    <button
+      type="button"
+      onClick={() => onChange(value)}
+      className={[
+        'group relative inline-flex h-[32px] min-w-[84px] items-center justify-center gap-1 rounded-[9px] px-2.5 transition',
+        active
+          ? 'bg-white text-[#1F3F77] shadow-[0_1px_4px_rgba(15,23,42,0.08)]'
+          : 'text-[#3E4F6B] hover:bg-white/80',
+      ].join(' ')}
+      aria-pressed={active}
+    >
       {icon}
       <span className="text-[11px] font-semibold">{label}</span>
-      <span className={`absolute bottom-0 h-[2px] w-[48px] rounded-full bg-[#2A7CF2] transition ${active ? 'opacity-100' : 'opacity-0'}`} />
+      <span className={`absolute bottom-0.5 h-[2px] w-[48px] rounded-full bg-[#2A7CF2] transition ${active ? 'opacity-100' : 'opacity-0'}`} />
     </button>
   );
 }

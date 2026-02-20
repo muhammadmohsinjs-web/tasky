@@ -15,18 +15,18 @@ interface TaskCardProps {
 const STATUS_META = {
   in_progress: {
     label: 'In Progress',
-    bg: 'bg-[#FDECEA]',
-    text: 'text-[#C4453E]',
+    bg: 'bg-[#FDEBE8]',
+    text: 'text-[#B63B33]',
   },
   pending: {
     label: 'Pending',
-    bg: 'bg-[#FEF6E0]',
-    text: 'text-[#9A7C2E]',
+    bg: 'bg-[#FDF4DD]',
+    text: 'text-[#8C6C1F]',
   },
   completed: {
     label: 'Completed',
-    bg: 'bg-[#E6F5EC]',
-    text: 'text-[#2D7A4F]',
+    bg: 'bg-[#E6F6ED]',
+    text: 'text-[#256643]',
   },
 } as const;
 
@@ -63,13 +63,13 @@ export function TaskCard({ task, isSelected, onSelect, onView, onEdit, onDelete,
           setMenuOpen((v) => !v);
         }}
         className={[
-          'group w-full rounded-xl border bg-white px-3.5 py-2.5 text-left transition-all',
-          'shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]',
-          'hover:shadow-[0_2px_8px_rgba(0,0,0,0.06),0_6px_16px_rgba(0,0,0,0.04)]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4285F4]/40 focus-visible:ring-offset-1',
+          'group w-full rounded-2xl border bg-white px-4 py-3 text-left transition-all',
+          'shadow-[0_1px_3px_rgba(0,0,0,0.04),0_6px_18px_rgba(15,23,42,0.04)]',
+          'hover:shadow-[0_2px_10px_rgba(0,0,0,0.06),0_10px_22px_rgba(15,23,42,0.07)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2A7CF2]/45 focus-visible:ring-offset-1',
           isSelected
-            ? 'border-[#BFD8FA] bg-[#F7FAFF] shadow-[0_2px_8px_rgba(37,99,235,0.08)]'
-            : 'border-[#E8ECF2] hover:border-[#D4DAE4]',
+            ? 'border-[#9EC3FA] bg-[#F4F8FF] shadow-[0_0_0_1px_rgba(42,124,242,0.18),0_8px_20px_rgba(37,99,235,0.10)]'
+            : 'border-[#E3E9F2] hover:border-[#C9D4E3]',
         ].join(' ')}
         aria-pressed={isSelected}
       >
@@ -80,12 +80,12 @@ export function TaskCard({ task, isSelected, onSelect, onView, onEdit, onDelete,
               className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLOR[task.categoryColor]}`}
               aria-hidden="true"
             />
-            <span className="truncate text-[12px] font-semibold leading-tight text-[#1E293B]">
+            <span className="truncate text-[13px] font-semibold leading-tight text-[#1F2A3D]">
               {task.title}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#8994A7]">
+            <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#74839A]">
               {task.timeLabel}
             </span>
             <span
@@ -102,7 +102,7 @@ export function TaskCard({ task, isSelected, onSelect, onView, onEdit, onDelete,
                   setMenuOpen((v) => !v);
                 }
               }}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[#8994A7] transition hover:bg-[#F0F2F5] hover:text-[#5A6478]"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[#7E8CA2] transition hover:bg-[#EDF2F8] hover:text-[#3F4A60]"
               aria-label="Task options"
             >
               <EllipsisVertical className="h-4 w-4" />
@@ -111,13 +111,13 @@ export function TaskCard({ task, isSelected, onSelect, onView, onEdit, onDelete,
         </div>
 
         {/* Row 2: status badge (clickable to toggle) */}
-        <div className="mt-1.5 pl-4">
+        <div className="mt-2 pl-4">
           <span
             role={onToggleStatus ? 'button' : undefined}
             tabIndex={onToggleStatus ? 0 : undefined}
             onClick={onToggleStatus ? (e) => { e.stopPropagation(); onToggleStatus(task.id); } : undefined}
             onKeyDown={onToggleStatus ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleStatus(task.id); } } : undefined}
-            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold leading-snug ${meta.bg} ${meta.text} ${onToggleStatus ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-semibold leading-none ${meta.bg} ${meta.text} ${onToggleStatus ? 'cursor-pointer transition hover:brightness-95' : ''}`}
           >
             {meta.label}
           </span>
