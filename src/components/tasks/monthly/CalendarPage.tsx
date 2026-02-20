@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Calendar as CalendarIcon, CalendarDays, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
@@ -77,6 +77,7 @@ export default function CalendarPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [activeView, setActiveView] = useState<ViewMode>('list');
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('all');
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
@@ -215,32 +216,60 @@ export default function CalendarPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f2f4fa] px-3 py-3 md:px-5 md:py-4">
+    <main className="min-h-screen bg-[#f2f4fa] px-3 py-4 md:px-5 md:py-5">
       <div className="mx-auto max-w-[1880px]">
-        <section className="mb-2 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6 md:py-3.5">
+        <section className="mb-3 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3.5 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6 md:py-4">
           <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#74809A]">Execution</p>
-          <h1 className="mt-1 text-[20px] font-semibold leading-none tracking-[-0.02em] text-[#151C2E]">Tasks</h1>
+          <h1 className="mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-[#151C2E]">Tasks</h1>
           <p className="mt-1.5 text-[11px] text-[#5E6A80]">Manage your calendar, list view, and backlog in one workflow.</p>
         </section>
 
-        <section className="mb-2 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-2.5 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6">
-          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="inline-flex h-[34px] items-center overflow-hidden rounded-lg border border-[#CBD4E3] bg-[#EFF2F7] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-              <DomainTab label="All" value="all" active={domainFilter === 'all'} onClick={() => setDomainFilter('all')} />
-              <DomainTab label="Backend" value="backend" active={domainFilter === 'backend'} onClick={() => setDomainFilter('backend')} showDot />
-              <DomainTab label="Frontend" value="frontend" active={domainFilter === 'frontend'} onClick={() => setDomainFilter('frontend')} withDivider />
-              <DomainTab label="DevOps" value="devops" active={domainFilter === 'devops'} onClick={() => setDomainFilter('devops')} />
+        <section className="mb-3 rounded-[14px] border border-[#E4E8F0] bg-[#FCFDFF] px-4 py-3 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={() => setShowFilters(prev => !prev)}
+                aria-expanded={showFilters}
+                aria-controls="task-filters-panel"
+                className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-[#F7F9FC] px-3 text-[#2A3650] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                <span className="text-[11px] font-semibold">Filters</span>
+                <ChevronDown className={`h-3.5 w-3.5 transition ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+
+              <div className="flex items-center gap-3 rounded-xl border border-[#E1E7F2] bg-[#F7FAFF] px-3 py-2">
+                <CircularProgress value={progressPercent} />
+                <div>
+                  <p className="text-[11px] font-semibold text-[#2A3650]">Tasks Progress</p>
+                  <p className="text-[10px] text-[#5D6880]">
+                    {progressCompleted} of {progressTotal} completed
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="min-w-[260px] flex-1 xl:max-w-[460px]">
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold text-[#2A3650]">Tasks Progress</p>
-                <label className="text-[10px] text-[#5D6880]">
+            {showFilters ? (
+              <div id="task-filters-panel" className="grid gap-2 rounded-xl border border-[#E1E7F2] bg-[#F9FBFF] p-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
+                  Category
+                  <select
+                    value={domainFilter}
+                    onChange={event => setDomainFilter(event.target.value as DomainFilter)}
+                    className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
+                    aria-label="Filter category">
+                    <option value="all">All Categories</option>
+                    <option value="backend">Backend</option>
+                    <option value="frontend">Frontend</option>
+                    <option value="devops">DevOps</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-[10px] font-medium text-[#5D6880]">
                   Status
                   <select
                     value={statusFilter}
                     onChange={event => setStatusFilter(event.target.value as 'all' | TaskStatus)}
-                    className="ml-1 h-5 rounded-md border border-[#CFD7E4] bg-white px-1 text-[9px] text-[#40506A]"
+                    className="h-8 rounded-md border border-[#CFD7E4] bg-white px-2 text-[11px] text-[#40506A]"
                     aria-label="Filter status">
                     <option value="all">All</option>
                     <option value="in_progress">In Progress</option>
@@ -249,17 +278,9 @@ export default function CalendarPage() {
                   </select>
                 </label>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-[6px] flex-1 rounded-full bg-[#D8E0EE]">
-                  <div className="h-full rounded-full bg-gradient-to-r from-[#145BE7] to-[#2A7CF2]" style={{ width: `${progressPercent}%` }} />
-                </div>
-                <span className="text-[9px] text-[#5D6880]">
-                  {progressCompleted} of {progressTotal} completed
-                </span>
-              </div>
-            </div>
+            ) : null}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-self-start xl:justify-self-end">
               <button
                 type="button"
                 onClick={() => setIsBulkAddOpen(true)}
@@ -281,7 +302,7 @@ export default function CalendarPage() {
           </div>
         </section>
 
-        <section className="mb-2 rounded-xl border border-[#E4E8F0] bg-[#FCFDFF] px-3 py-1 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-5">
+        <section className="mb-3 rounded-xl border border-[#E4E8F0] bg-[#FCFDFF] px-3 py-2 shadow-[0_4px_16px_rgba(40,56,90,0.06)] md:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-0.5">
               <ViewTab label="Calendar" value="calendar" activeView={activeView} onChange={setActiveView} icon={<CalendarDays className="h-4 w-4" />} />
@@ -316,53 +337,57 @@ export default function CalendarPage() {
               </button>
             </div>
           </div>
+
+          {activeView !== 'calendar' ? (
+            <div className="mt-2 border-t border-[#E9EDF4] pt-2">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Search tasks..."
+                aria-label="Search tasks"
+                className="h-8 w-full rounded-md border border-[#D4DDEB] bg-[#F7F9FD] px-2.5 text-[11px] text-[#344257] placeholder:text-[#7D879A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              />
+            </div>
+          ) : null}
         </section>
 
-        <div className="mb-2 rounded-lg border border-[#E0E6F0] bg-white px-3 py-1.5 shadow-[0_4px_12px_rgba(40,56,90,0.05)] md:px-4">
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={event => setSearchQuery(event.target.value)}
-            placeholder="Search tasks..."
-            aria-label="Search tasks"
-            className="h-7 w-full rounded-md border border-[#D4DDEB] bg-[#F7F9FD] px-2.5 text-[11px] text-[#344257] placeholder:text-[#7D879A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          />
-        </div>
-
         {activeView === 'calendar' ? (
-          <section className="overflow-hidden rounded-[20px] border border-[#DFE4ED] bg-[#F6F8FC] shadow-[0_10px_28px_rgba(40,56,90,0.08)]">
-            <div className="grid grid-cols-1 items-stretch xl:grid-cols-[minmax(0,3fr)_minmax(360px,1fr)]">
-              <div className="p-4 md:p-5">
-                <CalendarGrid
-                  monthDate={monthDate}
-                  selectedDateISO={selectedDateISO}
-                  tasks={scheduledTasks}
-                  onSelectDate={handleSelectDate}
-                  onPrevMonth={() => handleMonthChange(-1)}
-                  onNextMonth={() => handleMonthChange(1)}
-                  showHeader={false}
-                />
-              </div>
+          <section className="rounded-[20px] border border-[#DFE4ED] bg-[#F6F8FC] shadow-[0_10px_28px_rgba(40,56,90,0.08)]">
+            <div className="overflow-hidden rounded-[inherit]">
+              <div className="grid grid-cols-1 items-stretch xl:grid-cols-[minmax(0,3fr)_minmax(360px,1fr)]">
+                <div className="p-4 md:p-5">
+                  <CalendarGrid
+                    monthDate={monthDate}
+                    selectedDateISO={selectedDateISO}
+                    tasks={scheduledTasks}
+                    onSelectDate={handleSelectDate}
+                    onPrevMonth={() => handleMonthChange(-1)}
+                    onNextMonth={() => handleMonthChange(1)}
+                    showHeader={false}
+                  />
+                </div>
 
-              <div className="hidden border-l border-[#DFE4ED] bg-[#F9FBFF] p-4 md:block md:p-5 overflow-hidden">
-                <TaskSidebar
-                  selectedDateISO={selectedDateISO}
-                  tasks={tasksForSelectedDate}
-                  visibleTasks={visibleSidebarTasks}
-                  selectedTaskId={selectedTaskId}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  onSelectTask={setSelectedTaskId}
-                  onOpenAddTask={() => {
-                    setEditingTaskId(null);
-                    setModalMode('create');
-                    setIsAddModalOpen(true);
-                  }}
-                  onViewTask={handleViewTask}
-                  onEditTask={handleEditTask}
-                  onDeleteTask={handleDeleteTask}
-                  onToggleStatus={handleToggleStatus}
-                />
+                <div className="hidden border-l border-[#DFE4ED] bg-[#F9FBFF] p-4 md:block md:p-5">
+                  <TaskSidebar
+                    selectedDateISO={selectedDateISO}
+                    tasks={tasksForSelectedDate}
+                    visibleTasks={visibleSidebarTasks}
+                    selectedTaskId={selectedTaskId}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onSelectTask={setSelectedTaskId}
+                    onOpenAddTask={() => {
+                      setEditingTaskId(null);
+                      setModalMode('create');
+                      setIsAddModalOpen(true);
+                    }}
+                    onViewTask={handleViewTask}
+                    onEditTask={handleEditTask}
+                    onDeleteTask={handleDeleteTask}
+                    onToggleStatus={handleToggleStatus}
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -564,21 +589,38 @@ export default function CalendarPage() {
   );
 }
 
-function DomainTab({ label, value, active, onClick, showDot, withDivider }: { label: string; value: DomainFilter; active: boolean; onClick: () => void; showDot?: boolean; withDivider?: boolean }) {
+function CircularProgress({ value }: { value: number }) {
+  const normalized = Math.max(0, Math.min(100, value));
+  const size = 42;
+  const stroke = 4;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (normalized / 100) * circumference;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      aria-label={`Filter by ${value}`}
-      className={[
-        'relative inline-flex h-full min-w-[64px] items-center justify-center gap-1 px-2.5 text-[10px] font-semibold transition',
-        withDivider ? 'before:absolute before:left-0 before:top-1/2 before:h-6 before:w-px before:-translate-y-1/2 before:bg-[#C9D2E3]' : '',
-        active ? 'rounded-[8px] border border-[#C9D2E3] bg-white text-[#222E46] shadow-[0_3px_10px_rgba(37,55,89,0.14)]' : 'text-[#36455F] hover:bg-white/60',
-      ].join(' ')}>
-      {label}
-      {showDot ? <span className="h-2 w-2 rounded-full bg-[#F2C145]" aria-hidden="true" /> : null}
-    </button>
+    <div className="relative h-[42px] w-[42px]" role="img" aria-label={`Task progress ${normalized}%`}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#D9E1EF" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="url(#task-progress-gradient)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+        <defs>
+          <linearGradient id="task-progress-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#145BE7" />
+            <stop offset="100%" stopColor="#2A7CF2" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold text-[#2A3650]">{normalized}%</span>
+    </div>
   );
 }
 
