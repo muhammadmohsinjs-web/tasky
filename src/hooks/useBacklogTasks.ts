@@ -11,6 +11,8 @@ export function useBacklogTasks() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const queryKey = useMemo(() => ['tasks', 'backlog'] as const, [])
+  const countLabel = (count: number) => `${count} ${count === 1 ? 'task' : 'tasks'}`
+  const statusLabel = (status: TaskStatus) => (status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do')
 
   const { data: tasks = [], isLoading: loading } = useQuery({
     queryKey,
@@ -55,6 +57,10 @@ export function useBacklogTasks() {
     queryClient.invalidateQueries({ queryKey })
   }, [queryClient, queryKey])
 
+  const invalidateAllTasks = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+  }, [queryClient])
+
   const addTask = async (
     title: string,
     categoryId: string,
@@ -92,7 +98,7 @@ export function useBacklogTasks() {
       return null
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task added to backlog')
     return data as unknown as Task
   }
@@ -117,8 +123,8 @@ export function useBacklogTasks() {
       return
     }
 
-    invalidate()
-    toast.success(`${items.length} tasks added to backlog`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(items.length)} added to backlog`)
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
@@ -133,7 +139,8 @@ export function useBacklogTasks() {
       return
     }
 
-    invalidate()
+    invalidateAllTasks()
+    toast.success(`Task marked as ${statusLabel(newStatus)}`)
   }
 
   const updateTask = async (
@@ -150,10 +157,14 @@ export function useBacklogTasks() {
       links?: TaskLink[]
     }
   ) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id)
+    const task = tasks.find((t) => t.id === id)
+
+    let query = supabase.from('tasks').update(updates).eq('id', id)
+    if (task?.updated_at) {
+      query = query.eq('updated_at', task.updated_at)
+    }
+
+    const { data, error } = await query.select(TASK_SELECT)
 
     if (error) {
       console.error('Failed to update task:', error)
@@ -161,13 +172,13 @@ export function useBacklogTasks() {
       return false
     }
 
-    if ((updates.date !== undefined && updates.date !== null) || updates.category_id !== undefined) {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      toast.success('Task saved')
-      return true
+    if (!data || data.length === 0) {
+      toast.error('This task was modified elsewhere. Refreshing...')
+      invalidateAllTasks()
+      return false
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task saved')
     return true
   }
@@ -185,11 +196,13 @@ export function useBacklogTasks() {
       return
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task deleted')
   }
 
   const bulkUpdateStatus = async (ids: string[], newStatus: TaskStatus) => {
+    if (ids.length === 0) return false
+
     const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus })
@@ -198,16 +211,19 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to bulk update status:', error)
       toast.error('Failed to update tasks')
-      return
+      return false
     }
 
-    invalidate()
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} updated`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} marked as ${statusLabel(newStatus)}`)
+    return true
   }
 
   const bulkDelete = async (ids: string[]) => {
+    if (ids.length === 0) return false
+
     const confirmed = confirmAction(`Delete ${ids.length} ${ids.length === 1 ? 'task' : 'tasks'}?`)
-    if (!confirmed) return
+    if (!confirmed) return false
 
     const { error } = await supabase
       .from('tasks')
@@ -217,14 +233,17 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to bulk delete tasks:', error)
       toast.error('Failed to delete tasks')
-      return
+      return false
     }
 
-    invalidate()
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} deleted`)
+    return true
   }
 
   const scheduleTasks = async (ids: string[], date: string) => {
+    if (ids.length === 0) return false
+
     const { error } = await supabase
       .from('tasks')
       .update({ date })
@@ -233,11 +252,12 @@ export function useBacklogTasks() {
     if (error) {
       console.error('Failed to schedule tasks:', error)
       toast.error('Failed to schedule tasks')
-      return
+      return false
     }
 
-    queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} scheduled`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} rescheduled`)
+    return true
   }
 
   return {

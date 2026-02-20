@@ -11,6 +11,8 @@ export function useTasks(year: number, month: number) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const queryKey = useMemo(() => ['tasks', year, month] as const, [year, month])
+  const countLabel = (count: number) => `${count} ${count === 1 ? 'task' : 'tasks'}`
+  const statusLabel = (status: TaskStatus) => (status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do')
 
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
   const endDate =
@@ -64,6 +66,10 @@ export function useTasks(year: number, month: number) {
     queryClient.invalidateQueries({ queryKey })
   }, [queryClient, queryKey])
 
+  const invalidateAllTasks = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+  }, [queryClient])
+
   const addTask = async (
     title: string,
     categoryId: string,
@@ -116,7 +122,7 @@ export function useTasks(year: number, month: number) {
       return null
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task added')
     return data as unknown as Task
   }
@@ -141,8 +147,8 @@ export function useTasks(year: number, month: number) {
       return
     }
 
-    invalidate()
-    toast.success(`${items.length} tasks added`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(items.length)} added`)
   }
 
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
@@ -157,7 +163,8 @@ export function useTasks(year: number, month: number) {
       return
     }
 
-    invalidate()
+    invalidateAllTasks()
+    toast.success(`Task marked as ${statusLabel(newStatus)}`)
   }
 
   const updateTask = async (
@@ -196,11 +203,11 @@ export function useTasks(year: number, month: number) {
 
     if (!data || data.length === 0) {
       toast.error('This task was modified elsewhere. Refreshing...')
-      invalidate()
+      invalidateAllTasks()
       return false
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task saved')
     return true
   }
@@ -218,11 +225,13 @@ export function useTasks(year: number, month: number) {
       return
     }
 
-    invalidate()
+    invalidateAllTasks()
     toast.success('Task deleted')
   }
 
   const bulkUpdateStatus = async (ids: string[], status: TaskStatus) => {
+    if (ids.length === 0) return false
+
     const { error } = await supabase
       .from('tasks')
       .update({ status })
@@ -231,15 +240,17 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk update status:', error)
       toast.error('Failed to update tasks')
-      return
+      return false
     }
 
-    invalidate()
-    const label = status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do'
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} marked as ${label}`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} marked as ${statusLabel(status)}`)
+    return true
   }
 
   const bulkReschedule = async (ids: string[], date: string) => {
+    if (ids.length === 0) return false
+
     const { error } = await supabase
       .from('tasks')
       .update({ date })
@@ -248,14 +259,17 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk reschedule:', error)
       toast.error('Failed to reschedule tasks')
-      return
+      return false
     }
 
-    invalidate()
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} rescheduled`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} rescheduled`)
+    return true
   }
 
   const bulkMoveToBacklog = async (ids: string[]) => {
+    if (ids.length === 0) return false
+
     const { error } = await supabase
       .from('tasks')
       .update({ date: null })
@@ -264,16 +278,19 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to move tasks to backlog:', error)
       toast.error('Failed to move tasks to backlog')
-      return
+      return false
     }
 
-    queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} moved to backlog`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} moved to backlog`)
+    return true
   }
 
   const bulkDelete = async (ids: string[]) => {
+    if (ids.length === 0) return false
+
     const confirmed = confirmAction(`Delete ${ids.length} ${ids.length === 1 ? 'task' : 'tasks'}?`)
-    if (!confirmed) return
+    if (!confirmed) return false
 
     const { error } = await supabase
       .from('tasks')
@@ -283,11 +300,12 @@ export function useTasks(year: number, month: number) {
     if (error) {
       console.error('Failed to bulk delete tasks:', error)
       toast.error('Failed to delete tasks')
-      return
+      return false
     }
 
-    invalidate()
-    toast.success(`${ids.length} ${ids.length === 1 ? 'task' : 'tasks'} deleted`)
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} deleted`)
+    return true
   }
 
   const reorderTasks = async (_dateStr: string, orderedIds: string[]) => {
@@ -304,7 +322,8 @@ export function useTasks(year: number, month: number) {
       return
     }
 
-    invalidate()
+    invalidateAllTasks()
+    return true
   }
 
   return {
