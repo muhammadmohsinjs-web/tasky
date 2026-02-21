@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, BarChart3, ArrowRight, CheckCircle2, Zap, Shield, Clock, Sparkles } from 'lucide-react'
 import tasksPulseLogo from '../assets/TasksPulse-logo-horizontal.svg'
+import { APP_NAME, SUPPORT_EMAIL, getPublicAppUrl } from '../lib/legal'
 
 const FEATURES = [
   {
@@ -45,6 +46,7 @@ const STEPS = [
 export default function Landing() {
   const navigate = useNavigate()
   const { authenticated } = useAuth()
+  const publicAppUrl = getPublicAppUrl()
 
   const handleCTA = () => {
     navigate(authenticated ? '/dashboard' : '/welcome')
@@ -64,7 +66,7 @@ export default function Landing() {
             <a href="#how-it-works" className="hover:text-slate-800 transition-colors">
               How it works
             </a>
-            <a href="/privacy" className="hover:text-slate-800 transition-colors">
+            <a href={`${publicAppUrl}/privacy`} className="hover:text-slate-800 transition-colors">
               Privacy
             </a>
           </div>
@@ -219,6 +221,44 @@ export default function Landing() {
         </div>
       </section>
 
+      <section id="transparency" className="py-24 px-6">
+        <div className="max-w-5xl mx-auto panel p-8 sm:p-10">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-[0.16em] mb-3">Transparency and trust</p>
+            <h2 className="text-3xl sm:text-4xl font-semibold text-slate-900 tracking-tight mb-4">How {APP_NAME} uses Google data</h2>
+            <p className="text-slate-600 leading-relaxed">
+              {APP_NAME} helps you plan tasks, schedule work, and keep delivery predictable across your calendar and task lists.
+              If you connect Google Calendar, we only request the minimum Google Calendar permissions needed to sync events for
+              the features you enable.
+            </p>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">What we access</h3>
+              <p className="text-sm text-slate-600">
+                Calendar lists and event data required to create, update, and delete synced events between {APP_NAME} and your
+                selected Google calendars.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">What we do not do</h3>
+              <p className="text-sm text-slate-600">
+                We do not sell Google user data and we do not request broader access than required for core calendar sync
+                functionality.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 space-y-2">
+            <p><span className="font-semibold text-slate-800">Official website:</span> <a href={publicAppUrl} className="text-blue-700 hover:text-blue-800">{publicAppUrl}</a></p>
+            <p><span className="font-semibold text-slate-800">Privacy policy:</span> <a href={`${publicAppUrl}/privacy`} className="text-blue-700 hover:text-blue-800">{`${publicAppUrl}/privacy`}</a></p>
+            <p><span className="font-semibold text-slate-800">Terms of service:</span> <a href={`${publicAppUrl}/terms`} className="text-blue-700 hover:text-blue-800">{`${publicAppUrl}/terms`}</a></p>
+            <p><span className="font-semibold text-slate-800">Support:</span> <a href={`mailto:${SUPPORT_EMAIL}`} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a></p>
+          </div>
+        </div>
+      </section>
+
       <section className="py-24 px-6">
         <div className="max-w-3xl mx-auto text-center panel p-10">
           <h2 className="text-3xl sm:text-4xl font-semibold text-slate-900 tracking-tight mb-4">Ready to run your work with intent?</h2>
@@ -234,7 +274,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
           <span>TasksPulse</span>
           <div className="flex flex-wrap items-center gap-4">
-            <a href="/privacy" className="hover:text-slate-800">Privacy Policy</a>
+            <a href={`${publicAppUrl}/privacy`} className="hover:text-slate-800">Privacy Policy</a>
             <a href="/terms" className="hover:text-slate-800">Terms</a>
             <a href="/support" className="hover:text-slate-800">Support</a>
             <a href="/google-api-disclosure" className="hover:text-slate-800">Google API Disclosure</a>
