@@ -29,9 +29,18 @@ export function useEvents() {
     queryFn: async () => {
       const debugPrefix = '[useEvents]'
       const nowIso = new Date().toISOString()
+      const monthStart = new Date()
+      monthStart.setDate(1)
+      monthStart.setHours(0, 0, 0, 0)
+      const monthEnd = new Date(monthStart)
+      monthEnd.setMonth(monthEnd.getMonth() + 1)
+      const timeMinIso = monthStart.toISOString()
+      const timeMaxIso = monthEnd.toISOString()
       console.info(`${debugPrefix} starting fetch`, {
         userId: user?.id ?? null,
         nowIso,
+        timeMinIso,
+        timeMaxIso,
         hasGoogleRefreshToken: Boolean(googleRefreshToken),
       })
 
@@ -142,7 +151,8 @@ export function useEvents() {
           googleRefreshToken,
           calendarsLimit: 10,
           eventsLimit: 100,
-          timeMin: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+          timeMin: timeMinIso,
+          timeMax: timeMaxIso,
         },
       })
       let googleData = invokeResult.data
@@ -174,7 +184,12 @@ export function useEvents() {
         })
 
         try {
-          const preview = await fetchGoogleCalendarPreview(googleAccessToken ?? undefined)
+          const preview = await fetchGoogleCalendarPreview(googleAccessToken ?? undefined, {
+            timeMin: timeMinIso,
+            timeMax: timeMaxIso,
+            calendarMaxResults: 10,
+            eventsMaxResults: 100,
+          })
           const fallbackEvents = Object.entries(preview.eventsByCalendar).flatMap(([calendarId, events]) =>
             events.map((event) => ({
               id: event.id,
@@ -250,14 +265,71 @@ export function useEvents() {
             is_external_google_event: true,
           }
         })
+
+      console.info(`${debugPrefix} raw google events sample`, {
+        sample: externalEvents.slice(0, 20).map((event) => ({
+          providerEventId: event.provider_event_id,
+          calendarId: event.provider_calendar_id,
+          calendarName: event.provider_calendar_name,
+          title: event.title,
+          startAt: event.start_at,
+          endAt: event.end_at,
+          isAllDay: event.is_all_day,
+        })),
+      })
+
+      const duplicateBuckets = new Map<string, number>()
+      externalEvents.forEach((event) => {
+        const key = [
+          event.provider_calendar_id ?? '',
+          event.provider_event_id ?? event.id,
+          event.start_at,
+          event.end_at,
+        ].join('|')
+        duplicateBuckets.set(key, (duplicateBuckets.get(key) ?? 0) + 1)
+      })
+      const duplicateCount = Array.from(duplicateBuckets.values()).filter((count) => count > 1).length
+      if (duplicateCount > 0) {
+        console.warn(`${debugPrefix} duplicate external event buckets detected`, {
+          duplicateBuckets: duplicateCount,
+          externalCount: externalEvents.length,
+        })
+      }
+
+      const uniqueExternalBySignature = new Map<string, EventWithTask>()
+      for (const event of externalEvents) {
+        // Deduplicate identical occurrences so one Google event does not flood the list.
+        const signature = [
+          event.start_at,
+          event.end_at,
+          event.is_all_day ? 'all-day' : 'timed',
+          event.title.trim().toLowerCase(),
+        ].join('|')
+        if (!uniqueExternalBySignature.has(signature)) {
+          uniqueExternalBySignature.set(signature, event)
+        }
+      }
+      const dedupedExternalEvents = Array.from(uniqueExternalBySignature.values())
+      console.info(`${debugPrefix} deduped google events sample`, {
+        sample: dedupedExternalEvents.slice(0, 20).map((event) => ({
+          providerEventId: event.provider_event_id,
+          calendarId: event.provider_calendar_id,
+          calendarName: event.provider_calendar_name,
+          title: event.title,
+          startAt: event.start_at,
+          endAt: event.end_at,
+          isAllDay: event.is_all_day,
+        })),
+      })
       console.info(`${debugPrefix} google events normalized`, {
         calendarsCount: (((googleData as { calendars?: unknown[] } | null)?.calendars) ?? []).length,
         rawCount: (((googleData as { events?: unknown[] } | null)?.events) ?? []).length,
-        mergedCount: externalEvents.length,
+        mergedCount: dedupedExternalEvents.length,
+        dedupedOut: externalEvents.length - dedupedExternalEvents.length,
         skippedAsMapped: mappedProviderEventIds.size,
       })
 
-      const merged = [...localEvents, ...externalEvents].sort(
+      const merged = [...localEvents, ...dedupedExternalEvents].sort(
         (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
       )
       console.info(`${debugPrefix} final merged events`, { count: merged.length })

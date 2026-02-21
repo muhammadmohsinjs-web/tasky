@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [googleSyncStatus, setGoogleSyncStatus] = useState('idle')
   const [availableCalendars, setAvailableCalendars] = useState<{ id: string; summary: string; primary?: boolean }[]>([])
   const autoSyncInFlightRef = useRef(false)
+  const calendarsHydratedRef = useRef(false)
 
   const stats = useMemo(() => {
     const todo = tasks.filter((t) => t.status === 'todo').length
@@ -122,6 +123,21 @@ export default function Dashboard() {
       console.error('[Dashboard] Google Calendar fetch failed', error)
     }
   }
+
+  useEffect(() => {
+    if (connectionLoading) return
+    if (calendarsHydratedRef.current) return
+
+    calendarsHydratedRef.current = true
+    void (async () => {
+      try {
+        const preview = await fetchAndLog({ silent: true })
+        setAvailableCalendars(preview.calendars)
+      } catch (error) {
+        console.warn('[Dashboard] Initial calendar preload failed', error)
+      }
+    })()
+  }, [connectionLoading, fetchAndLog])
 
   const handleToggleSync = async () => {
     const ensured = await ensureConnection()
@@ -290,7 +306,7 @@ export default function Dashboard() {
               <select
                 value={connection?.google_calendar_id ?? 'primary'}
                 onChange={(event) => void handleCalendarChange(event.target.value)}
-                disabled={connectionLoading || availableCalendars.length === 0}
+                disabled={connectionLoading || googlePreviewLoading}
                 className="bg-transparent text-xs outline-none"
               >
                 {availableCalendars.length === 0 ? (

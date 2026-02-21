@@ -58,6 +58,7 @@ interface SyncRequestBody {
   calendarsLimit?: number
   eventsLimit?: number
   timeMin?: string
+  timeMax?: string
 }
 
 interface ProcessResult {
@@ -544,6 +545,7 @@ async function listGoogleEvents(
     calendarsLimit: number
     eventsLimit: number
     timeMin: string
+    timeMax: string
   }
 ) {
   console.log('[calendar-sync-outbox] listGoogleEvents start', {
@@ -573,7 +575,7 @@ async function listGoogleEvents(
   const eventsByCalendar = await Promise.all(
     calendars.map(async (calendar) => {
       const eventsResponse = await requestGoogleJson<GoogleCalendarEventListResponse>(
-        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${params.eventsLimit}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(params.timeMin)}`,
+        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${params.eventsLimit}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(params.timeMin)}&timeMax=${encodeURIComponent(params.timeMax)}`,
         accessToken
       )
 
@@ -772,15 +774,24 @@ Deno.serve(async (req) => {
       if (action === 'listGoogleEvents') {
         const calendarsLimit = Math.min(Math.max(body.calendarsLimit ?? 10, 1), 25)
         const eventsLimit = Math.min(Math.max(body.eventsLimit ?? 30, 1), 100)
+        const defaultMonthStart = new Date()
+        defaultMonthStart.setDate(1)
+        defaultMonthStart.setHours(0, 0, 0, 0)
+        const defaultMonthEnd = new Date(defaultMonthStart)
+        defaultMonthEnd.setMonth(defaultMonthEnd.getMonth() + 1)
         const timeMin = body.timeMin && !Number.isNaN(new Date(body.timeMin).getTime())
           ? new Date(body.timeMin).toISOString()
-          : new Date().toISOString()
+          : defaultMonthStart.toISOString()
+        const timeMax = body.timeMax && !Number.isNaN(new Date(body.timeMax).getTime())
+          ? new Date(body.timeMax).toISOString()
+          : defaultMonthEnd.toISOString()
 
         const payload = await listGoogleEvents(accessToken, {
           calendarId: body.calendarId,
           calendarsLimit,
           eventsLimit,
           timeMin,
+          timeMax,
         })
 
         console.log('[calendar-sync-outbox] listGoogleEvents completed', {

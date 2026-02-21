@@ -96,7 +96,10 @@ async function fetchGoogleJson<T>(baseUrl: string, path: string, accessToken: st
   return requestGoogleJson<T>(baseUrl, path, accessToken)
 }
 
-export async function fetchGoogleCalendarPreview(googleAccessToken?: string): Promise<GoogleCalendarPreviewData> {
+export async function fetchGoogleCalendarPreview(
+  googleAccessToken?: string,
+  options?: { timeMin?: string; timeMax?: string; calendarMaxResults?: number; eventsMaxResults?: number }
+): Promise<GoogleCalendarPreviewData> {
   let accessToken = googleAccessToken
 
   if (!accessToken) {
@@ -111,19 +114,26 @@ export async function fetchGoogleCalendarPreview(googleAccessToken?: string): Pr
 
   const calendarsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarListItem>>(
     GOOGLE_CALENDAR_BASE_URL,
-    '/users/me/calendarList?maxResults=5',
+    `/users/me/calendarList?maxResults=${Math.min(Math.max(options?.calendarMaxResults ?? 10, 1), 25)}`,
     accessToken
   )
 
   const calendars = calendarsResponse.items ?? []
   const eventsByCalendar: Record<string, GoogleCalendarEventItem[]> = {}
-  const timeMin = new Date().toISOString()
+  const defaultMonthStart = new Date()
+  defaultMonthStart.setDate(1)
+  defaultMonthStart.setHours(0, 0, 0, 0)
+  const defaultMonthEnd = new Date(defaultMonthStart)
+  defaultMonthEnd.setMonth(defaultMonthEnd.getMonth() + 1)
+  const timeMin = options?.timeMin ?? defaultMonthStart.toISOString()
+  const timeMax = options?.timeMax ?? defaultMonthEnd.toISOString()
+  const eventsMaxResults = Math.min(Math.max(options?.eventsMaxResults ?? 50, 1), 100)
 
   await Promise.all(
     calendars.map(async (calendar) => {
       const eventsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarEventItem>>(
         GOOGLE_CALENDAR_BASE_URL,
-        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=10&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}`,
+        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${eventsMaxResults}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
         accessToken
       )
 
