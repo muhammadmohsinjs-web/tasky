@@ -46,7 +46,9 @@ export function Sidebar() {
       `}>
         <div className="px-5 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={tasksPulseLogo} alt="TasksPulse logo" className={`${isDesktop ? 'h-16 max-w-[240px]' : 'h-10 max-w-[170px]'} w-auto object-contain`} />
+            <NavLink to="/" onClick={() => setMobileOpen(false)} className="inline-flex">
+              <img src={tasksPulseLogo} alt="TasksPulse logo" className={`${isDesktop ? 'h-16 max-w-[240px]' : 'h-10 max-w-[170px]'} w-auto object-contain`} />
+            </NavLink>
           </div>
           <button onClick={() => setMobileOpen(false)} className={`${isDesktop ? 'hidden' : ''} p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer`}>
             <X className="w-5 h-5" />
