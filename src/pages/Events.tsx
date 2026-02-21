@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarRange, LayoutList, Link2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarRange, LayoutList, Link2, MapPin, Users, Video } from 'lucide-react'
 import { useEvents } from '../hooks/useEvents'
 import type { EventWithTask } from '../hooks/useEvents'
 import { useCalendarSyncSettings } from '../hooks/useCalendarSyncSettings'
+import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { getSyncBadge } from '../lib/eventSync'
 
-type SyncFilter = 'all' | 'synced' | 'pending' | 'failed' | 'dead' | 'disabled' | 'unknown'
 type LayoutMode = 'calendar' | 'list'
 type CalendarView = 'day' | 'week' | 'month'
 
@@ -18,6 +18,8 @@ interface CalendarEventUI extends EventWithTask {
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const GOOGLE_HOLIDAY_CALENDAR_ID_FRAGMENT = '#holiday@group.v.calendar.google.com'
+const ALL_CALENDARS_VALUE = '__all_calendars__'
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -148,42 +150,103 @@ function stripHtml(value: string) {
   return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function getAttendeeLabel(attendee: NonNullable<EventWithTask['attendees']>[number]) {
+  return attendee.displayName?.trim() || attendee.email?.trim() || null
+}
+
+function isGoogleHolidayCalendar(event: CalendarEventUI) {
+  const calendarId = event.provider_calendar_id?.toLowerCase() ?? ''
+  const calendarName = event.provider_calendar_name?.toLowerCase() ?? ''
+  return calendarId.includes(GOOGLE_HOLIDAY_CALENDAR_ID_FRAGMENT) || calendarName.includes('holiday')
+}
+
 function EventCard({ event, onOpenTask }: { event: CalendarEventUI; onOpenTask: (id: string) => void }) {
   const badge = getSyncBadge(event.sync_status ?? 'unknown')
   const descriptionText = event.description ? stripHtml(event.description) : ''
+  const visibleAttendees = (event.attendees ?? [])
+    .map(getAttendeeLabel)
+    .filter((attendee): attendee is string => Boolean(attendee))
+  const joinLink = event.join_link ?? event.meeting_link ?? null
+  const hideGoogleSourceChip = event.is_external_google_event && isGoogleHolidayCalendar(event)
+  const sourceLabel = event.is_external_google_event
+    ? (hideGoogleSourceChip ? null : `Google${event.provider_calendar_name ? ` • ${event.provider_calendar_name}` : ''}`)
+    : 'Tasky'
+  const hasSyncError = Boolean(event.sync_error && (event.sync_status === 'failed' || event.sync_status === 'dead'))
+  const showFooter = Boolean(sourceLabel || hasSyncError)
 
   return (
-    <article className="w-full min-w-0 rounded-2xl border border-[#DEE7F4] bg-white p-3 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:p-5">
+    <article className="w-full min-w-0 rounded-3xl border border-[#D6E3F6] bg-gradient-to-b from-white to-[#F7FAFF] p-4 shadow-[0_12px_28px_rgba(22,55,101,0.1)] transition hover:shadow-[0_16px_36px_rgba(22,55,101,0.14)] md:p-6">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="event-card-title min-w-0 flex-1 break-words text-sm font-semibold leading-[1.35] tracking-[-0.015em] text-[#1E3353] sm:text-base md:text-xl">
+        <h3 className="event-card-title min-w-0 flex-1 break-words text-base font-bold leading-[1.28] tracking-[-0.02em] text-[#162A48] sm:text-lg md:text-[1.7rem]">
           {event.title}
         </h3>
-        <span className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.01em] sm:text-[11px] ${badge.classes}`}>
+        <span className={`shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-[0.01em] shadow-sm ${badge.classes}`}>
           {badge.label}
         </span>
       </div>
-      <p className="mt-2 text-xs font-semibold tracking-[-0.01em] text-[#335B8D] sm:text-sm md:text-base">{event.displayTime}</p>
+      <p className="mt-3 inline-flex rounded-full border border-[#CFE0F8] bg-[#EDF4FF] px-3 py-1.5 text-xs font-semibold tracking-[-0.01em] text-[#234D82] sm:text-sm md:text-base">
+        {event.displayTime}
+      </p>
       {descriptionText ? (
-        <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[#7185A3] sm:text-sm sm:leading-6">{descriptionText}</p>
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#637A9A]">{descriptionText}</p>
       ) : null}
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#5A6F8F] sm:text-xs md:text-sm">
-        {event.is_external_google_event ? (
-          <span className="max-w-full truncate rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2.5 py-1 font-medium">
-            Google{event.provider_calendar_name ? ` • ${event.provider_calendar_name}` : ''}
+      {(event.location || joinLink) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2.5">
+          {event.location ? (
+            <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#D4E2F7] bg-[#F5F9FF] px-3 py-1.5 text-xs font-medium text-[#49658D] sm:text-sm">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{event.location}</span>
+            </p>
+          ) : null}
+          {joinLink ? (
+            <a
+              href={joinLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-[#AFC8EF] bg-[#E8F1FF] px-4 py-2 text-xs font-semibold text-[#1E4A86] shadow-sm transition hover:bg-[#DBE9FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7EA5E8] sm:text-sm"
+            >
+              <Video className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Join meeting</span>
+            </a>
+          ) : null}
+        </div>
+      )}
+      {visibleAttendees.length > 0 ? (
+        <div className="mt-3.5 flex flex-wrap items-center gap-2 text-xs text-[#4F6688] sm:text-sm">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[#CFE0F6] bg-[#F2F7FF] px-3 py-1.5 font-semibold">
+            <Users className="h-3 w-3" />
+            {visibleAttendees.length}
           </span>
-        ) : (
-          <span className="rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2.5 py-1 font-medium">Tasky</span>
-        )}
-        {event.sync_error && (event.sync_status === 'failed' || event.sync_status === 'dead') ? (
-          <span className="rounded-full border border-[#F4D4D4] bg-[#FFF3F3] px-2.5 py-1 text-[#A33A3A]">
-            {event.sync_error.slice(0, 70)}
-          </span>
-        ) : null}
-      </div>
+          {visibleAttendees.slice(0, 3).map((attendee, index) => (
+            <span key={`${attendee}-${index}`} className="max-w-full truncate rounded-full border border-[#D4E1F4] bg-white px-3 py-1.5">
+              {attendee}
+            </span>
+          ))}
+          {visibleAttendees.length > 3 ? (
+            <span className="rounded-full border border-[#D4E1F4] bg-white px-3 py-1.5">
+              +{visibleAttendees.length - 3}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {showFooter ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#E1EAF8] pt-3 text-xs text-[#587092] sm:text-sm">
+          {sourceLabel ? (
+            <span className="max-w-full truncate rounded-full border border-[#D0DEF3] bg-[#F4F8FF] px-3 py-1.5 font-medium">
+              {sourceLabel}
+            </span>
+          ) : null}
+          {hasSyncError ? (
+            <span className="rounded-full border border-[#F4D4D4] bg-[#FFF3F3] px-3 py-1.5 text-[#A33A3A]">
+              {event.sync_error!.slice(0, 70)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {event.linked_task ? (
         <button
           onClick={() => onOpenTask(event.linked_task!.id)}
-          className="mt-3 inline-flex max-w-full items-center gap-1 overflow-hidden rounded-lg border border-[#C9D8F0] bg-[#F9FBFF] px-2.5 py-1.5 text-[11px] font-medium text-[#2C4D7A] hover:bg-[#F3F8FF] sm:text-xs md:text-sm"
+          className="mt-4 inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-full border border-[#CBDCF3] bg-white px-3.5 py-2 text-xs font-medium text-[#2C4D7A] transition hover:bg-[#F3F8FF] sm:text-sm"
         >
           <Link2 className="h-3 w-3 shrink-0" />
           <span className="truncate">{event.linked_task.title}</span>
@@ -195,12 +258,15 @@ function EventCard({ event, onOpenTask }: { event: CalendarEventUI; onOpenTask: 
 
 export default function Events() {
   const navigate = useNavigate()
-  const [syncFilter, setSyncFilter] = useState<SyncFilter>('all')
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('calendar')
   const [calendarView, setCalendarView] = useState<CalendarView>('month')
   const [anchorDate, setAnchorDate] = useState<Date>(startOfDay(new Date()))
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()))
-  const { connection } = useCalendarSyncSettings()
+  const [selectedCalendarFilter, setSelectedCalendarFilter] = useState<string>(ALL_CALENDARS_VALUE)
+  const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([])
+  const calendarFilterTouchedRef = useRef(false)
+  const { connection, loading: connectionLoading } = useCalendarSyncSettings()
+  const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
 
   const queryRange = useMemo(() => {
     if (calendarView === 'day') {
@@ -220,19 +286,55 @@ export default function Events() {
     const gridEnd = addDays(gridStart, 42)
     return { timeMin: gridStart.toISOString(), timeMax: gridEnd.toISOString() }
   }, [anchorDate, calendarView])
+
+  useEffect(() => {
+    if (!connection?.google_calendar_id) return
+    if (calendarFilterTouchedRef.current) return
+    setSelectedCalendarFilter(connection.google_calendar_id)
+  }, [connection?.google_calendar_id])
+
+  const loadAvailableCalendars = useCallback(async (silent = true) => {
+    const preview = await fetchAndLog({ silent })
+    setAvailableCalendars(preview.calendars)
+  }, [fetchAndLog])
+
+  useEffect(() => {
+    if (connectionLoading) return
+    if (availableCalendars.length > 0) return
+
+    let active = true
+    void (async () => {
+      try {
+        const preview = await fetchAndLog({ silent: true })
+        if (!active) return
+        setAvailableCalendars(preview.calendars)
+      } catch (error) {
+        console.warn('[Events] Failed to preload Google calendars', error)
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [availableCalendars.length, connectionLoading, fetchAndLog])
+
+  const selectedCalendarId = selectedCalendarFilter === ALL_CALENDARS_VALUE
+    ? null
+    : selectedCalendarFilter
+
+  const selectedCalendarLabel = useMemo(() => {
+    if (!selectedCalendarId) return 'all calendars'
+    return availableCalendars.find((calendar) => calendar.id === selectedCalendarId)?.summary ?? selectedCalendarId
+  }, [availableCalendars, selectedCalendarId])
+
   const { events, loading } = useEvents({
     timeMin: queryRange.timeMin,
     timeMax: queryRange.timeMax,
     limit: 400,
-    calendarId: connection?.google_calendar_id ?? null,
+    calendarId: selectedCalendarId,
   })
 
-  const visibleEvents = useMemo(() => {
-    const scoped = syncFilter === 'all'
-      ? events
-      : events.filter((event) => (event.sync_status ?? 'unknown') === syncFilter)
-    return normalizeEvents(scoped)
-  }, [events, syncFilter])
+  const visibleEvents = useMemo(() => normalizeEvents(events), [events])
 
   const eventsByDay = useMemo(() => buildEventsByDay(visibleEvents), [visibleEvents])
 
@@ -340,7 +442,7 @@ export default function Events() {
             <h1>Events Workspace</h1>
             <p className="page-subtitle">
               {connection?.sync_enabled
-                ? `Showing Tasky + Google events for ${connection?.google_calendar_id ?? 'primary'}`
+                ? `Showing Tasky + Google events for ${selectedCalendarLabel}`
                 : 'Showing Tasky events (Google sync disabled)'}
             </p>
           </div>
@@ -376,20 +478,36 @@ export default function Events() {
         </header>
 
         <div className="panel-body space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'synced', 'pending', 'failed', 'dead', 'disabled', 'unknown'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setSyncFilter(filter)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                  syncFilter === filter
-                    ? 'border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
-                    : 'border-[#D9E5F6] bg-[#F6FAFF] text-[#5C6E8A]'
-                }`}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-2 rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-[11px] font-semibold text-[#5C6E8A]">
+              calendar
+              <select
+                value={selectedCalendarFilter}
+                onChange={(event) => {
+                  calendarFilterTouchedRef.current = true
+                  setSelectedCalendarFilter(event.target.value)
+                }}
+                disabled={connectionLoading || googlePreviewLoading}
+                className="bg-transparent text-[11px] font-semibold text-[#184593] outline-none"
               >
-                {filter}
-              </button>
-            ))}
+                <option value={ALL_CALENDARS_VALUE}>All calendars</option>
+                {selectedCalendarId && !availableCalendars.some((calendar) => calendar.id === selectedCalendarId) ? (
+                  <option value={selectedCalendarId}>{selectedCalendarId}</option>
+                ) : null}
+                {availableCalendars.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.summary}{calendar.primary ? ' (Primary)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={() => void loadAvailableCalendars(false)}
+              disabled={connectionLoading || googlePreviewLoading}
+              className="rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-[11px] font-semibold text-[#5C6E8A] transition hover:bg-[#EEF5FF] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {googlePreviewLoading ? 'Refreshing...' : 'Refresh calendars'}
+            </button>
           </div>
 
           <div className="rounded-2xl border border-[#DDE7F4] bg-gradient-to-br from-[#F7FAFF] to-[#FCFDFF] p-3">
@@ -616,12 +734,12 @@ export default function Events() {
                 ) : null}
               </div>
 
-              <aside className="rounded-2xl border border-[#DDE6F3] bg-[#FBFDFF] p-4">
-                <h2 className="text-xs font-semibold text-[#2D4B72] md:text-sm">Selected date</h2>
-                <p className="mt-1 text-[11px] text-[#6A819F] md:text-xs">{formatDayLabel(selectedDate)}</p>
-                <div className="mt-3 space-y-2">
+              <aside className="h-fit rounded-3xl border border-[#D6E3F5] bg-gradient-to-b from-[#FCFEFF] to-[#F3F8FF] p-5 shadow-[0_16px_32px_rgba(20,54,102,0.09)] min-[1200px]:sticky min-[1200px]:top-6 md:p-7">
+                <h2 className="text-3xl font-bold leading-none tracking-[-0.02em] text-[#132A49] md:text-[3.2rem]">Selected date</h2>
+                <p className="mt-3 text-base text-[#557197] md:text-xl">{formatDayLabel(selectedDate)}</p>
+                <div className="mt-5 space-y-3">
                   {selectedDateEvents.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[#D5E2F4] bg-white p-4 text-xs text-[#7B90AD]">
+                    <div className="rounded-2xl border border-dashed border-[#C8D8F0] bg-white p-6 text-sm text-[#6D87AA]">
                       No events on this date.
                     </div>
                   ) : (

@@ -32,6 +32,22 @@ export interface GoogleCalendarEventItem {
   summary?: string
   description?: string
   htmlLink?: string
+  hangoutLink?: string
+  location?: string
+  attendees?: Array<{
+    email?: string
+    displayName?: string
+    responseStatus?: string
+    self?: boolean
+    organizer?: boolean
+  }>
+  conferenceData?: {
+    entryPoints?: Array<{
+      entryPointType?: string
+      uri?: string
+      label?: string
+    }>
+  }
   start?: GoogleCalendarDateTime
   end?: GoogleCalendarDateTime
 }
@@ -133,7 +149,7 @@ export async function fetchGoogleCalendarPreview(
     calendars.map(async (calendar) => {
       const eventsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarEventItem>>(
         GOOGLE_CALENDAR_BASE_URL,
-        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${eventsMaxResults}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
+        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${eventsMaxResults}&singleEvents=true&orderBy=startTime&conferenceDataVersion=1&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
         accessToken
       )
 

@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { fetchGoogleCalendarPreview } from '../lib/googleCalendar'
 
 export function useGoogleCalendarPreview() {
   const [loading, setLoading] = useState(false)
 
-  const fetchAndLog = async (options?: { silent?: boolean }) => {
+  const fetchAndLog = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
     setLoading(true)
 
@@ -25,7 +25,7 @@ export function useGoogleCalendarPreview() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   return {
     loading,

@@ -8,6 +8,7 @@ const mockGetSession = vi.fn()
 const mockSignInWithOAuth = vi.fn()
 const mockSignOut = vi.fn()
 const mockOnAuthStateChange = vi.fn()
+const mockInvoke = vi.fn()
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -19,6 +20,9 @@ vi.mock('../../lib/supabase', () => ({
         mockOnAuthStateChange(cb)
         return { data: { subscription: { unsubscribe: vi.fn() } } }
       },
+    },
+    functions: {
+      invoke: (name: string, payload?: unknown) => mockInvoke(name, payload),
     },
   },
 }))
@@ -42,6 +46,7 @@ describe('AuthContext', () => {
     mockGetSession.mockResolvedValue({ data: { session: null } })
     mockSignInWithOAuth.mockResolvedValue({ data: {}, error: null })
     mockSignOut.mockResolvedValue({ error: null })
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null })
   })
 
   it('starts unauthenticated when no session exists', async () => {

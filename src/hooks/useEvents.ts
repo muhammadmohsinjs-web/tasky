@@ -9,6 +9,16 @@ import type { CalendarEvent, Task } from '../types'
 import type { EventSyncStatus } from '../lib/eventSync'
 
 export interface EventWithTask extends CalendarEvent {
+  join_link?: string | null
+  meeting_link?: string | null
+  attendees?: Array<{
+    email?: string | null
+    displayName?: string | null
+    responseStatus?: string | null
+    self?: boolean
+    organizer?: boolean
+  }>
+  location?: string | null
   linked_task?: Pick<Task, 'id' | 'title' | 'status'> | null
   sync_status?: EventSyncStatus
   sync_error?: string | null
@@ -23,6 +33,39 @@ export interface UseEventsOptions {
   timeMax?: string
   limit?: number
   calendarId?: string | null
+}
+
+const GOOGLE_HOLIDAY_CALENDAR_ID_FRAGMENT = '#holiday@group.v.calendar.google.com'
+
+function isGoogleHolidayCalendar(calendarId?: string | null, calendarSummary?: string | null) {
+  const normalizedId = calendarId?.toLowerCase() ?? ''
+  const normalizedSummary = calendarSummary?.toLowerCase() ?? ''
+  return normalizedId.includes(GOOGLE_HOLIDAY_CALENDAR_ID_FRAGMENT) || normalizedSummary.includes('holiday')
+}
+
+function sanitizeGoogleEventDescription(
+  description?: string | null,
+  options?: { calendarId?: string | null; calendarSummary?: string | null }
+) {
+  const raw = description?.trim()
+  if (!raw) return null
+
+  // For Google holiday calendars, keep cards title-only.
+  if (isGoogleHolidayCalendar(options?.calendarId, options?.calendarSummary)) {
+    return null
+  }
+
+  const withoutSettingsCopy = raw
+    .replace(/to hide observances,\s*go to google calendar/gi, '')
+    .replace(/settings\s*>\s*holidays[^\n]*/gi, '')
+
+  const cleaned = withoutSettingsCopy
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
+
+  return cleaned || null
 }
 
 function getDefaultRange() {
@@ -221,10 +264,34 @@ export function useEvents(options?: UseEventsOptions) {
           })
           const fallbackEvents = Object.entries(preview.eventsByCalendar).flatMap(([calendarId, events]) =>
             events.map((event) => ({
+              meetingLink:
+                event.conferenceData?.entryPoints?.find((entryPoint) => (
+                  entryPoint.entryPointType === 'video' && Boolean(entryPoint.uri)
+                ))?.uri
+                ?? event.conferenceData?.entryPoints?.find((entryPoint) => Boolean(entryPoint.uri))?.uri
+                ?? event.hangoutLink
+                ?? null,
+              joinLink:
+                event.conferenceData?.entryPoints?.find((entryPoint) => (
+                  entryPoint.entryPointType === 'video' && Boolean(entryPoint.uri)
+                ))?.uri
+                ?? event.conferenceData?.entryPoints?.find((entryPoint) => Boolean(entryPoint.uri))?.uri
+                ?? event.hangoutLink
+                ?? null,
               id: event.id,
               status: event.status,
               summary: event.summary ?? null,
               description: event.description ?? null,
+              location: event.location ?? null,
+              attendees: (event.attendees ?? [])
+                .map((attendee) => ({
+                  email: attendee.email ?? null,
+                  displayName: attendee.displayName ?? null,
+                  responseStatus: attendee.responseStatus ?? null,
+                  self: Boolean(attendee.self),
+                  organizer: Boolean(attendee.organizer),
+                }))
+                .filter((attendee) => attendee.email || attendee.displayName),
               start: event.start ?? null,
               end: event.end ?? null,
               calendarId,
@@ -259,6 +326,16 @@ export function useEvents(options?: UseEventsOptions) {
           status?: string
           summary?: string | null
           description?: string | null
+          meetingLink?: string | null
+          joinLink?: string | null
+          location?: string | null
+          attendees?: Array<{
+            email?: string | null
+            displayName?: string | null
+            responseStatus?: string | null
+            self?: boolean
+            organizer?: boolean
+          }>
           start?: { date?: string; dateTime?: string } | null
           end?: { date?: string; dateTime?: string } | null
           calendarId?: string
@@ -284,7 +361,14 @@ export function useEvents(options?: UseEventsOptions) {
             id: `google:${event.calendarId ?? 'primary'}:${event.id}`,
             user_id: user?.id ?? '',
             title: event.summary?.trim() || '(Untitled Google event)',
-            description: event.description ?? null,
+            description: sanitizeGoogleEventDescription(event.description, {
+              calendarId: event.calendarId ?? null,
+              calendarSummary: event.calendarSummary ?? null,
+            }),
+            join_link: event.joinLink ?? null,
+            meeting_link: event.meetingLink ?? null,
+            attendees: event.attendees ?? [],
+            location: event.location ?? null,
             start_at: startAt,
             end_at: endAt,
             is_all_day: Boolean(event.start?.date && !event.start?.dateTime),

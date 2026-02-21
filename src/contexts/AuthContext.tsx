@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null)
   const [googleRefreshToken, setGoogleRefreshToken] = useState<string | null>(null)
+  const lastPersistedTokenFingerprintRef = useRef<string | null>(null)
   const appBaseUrl = window.location.origin
   const googleScopes = [
     'openid',
@@ -41,16 +42,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     'https://www.googleapis.com/auth/tasks.readonly',
   ].join(' ')
 
+  const persistGoogleTokens = useCallback(async (
+    userId: string | undefined,
+    accessToken: string | null,
+    refreshToken: string | null
+  ) => {
+    if (!userId || (!accessToken && !refreshToken)) return
+
+    const fingerprint = `${userId}:${accessToken ?? ''}:${refreshToken ?? ''}`
+    if (lastPersistedTokenFingerprintRef.current === fingerprint) return
+
+    const { error } = await supabase.functions.invoke('calendar-sync-outbox', {
+      body: {
+        action: 'storeTokens',
+        userId,
+        googleAccessToken: accessToken ?? undefined,
+        googleRefreshToken: refreshToken ?? undefined,
+      },
+    })
+
+    if (error) {
+      console.warn('Failed to persist Google tokens for refresh flow:', error.message)
+      return
+    }
+
+    lastPersistedTokenFingerprintRef.current = fingerprint
+  }, [])
+
   useEffect(() => {
     // Check current session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.provider_token) {
-        setGoogleAccessToken(session.provider_token)
-      }
-      if (session?.provider_refresh_token) {
-        setGoogleRefreshToken(session.provider_refresh_token)
-      }
+      const accessToken = session?.provider_token ?? null
+      const refreshToken = session?.provider_refresh_token ?? null
+      if (accessToken) setGoogleAccessToken(accessToken)
+      if (refreshToken) setGoogleRefreshToken(refreshToken)
+      void persistGoogleTokens(session?.user?.id, accessToken, refreshToken)
       setLoading(false)
     })
 
@@ -58,16 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       // Capture Google provider token whenever it's available (e.g. right after OAuth sign-in)
-      if (session?.provider_token) {
-        setGoogleAccessToken(session.provider_token)
-      }
-      if (session?.provider_refresh_token) {
-        setGoogleRefreshToken(session.provider_refresh_token)
-      }
+      const accessToken = session?.provider_token ?? null
+      const refreshToken = session?.provider_refresh_token ?? null
+      if (accessToken) setGoogleAccessToken(accessToken)
+      if (refreshToken) setGoogleRefreshToken(refreshToken)
+      void persistGoogleTokens(session?.user?.id, accessToken, refreshToken)
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [persistGoogleTokens])
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
@@ -95,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setGoogleAccessToken(null)
       setGoogleRefreshToken(null)
+      lastPersistedTokenFingerprintRef.current = null
     } catch (err) {
       console.error('Sign out failed:', err)
       toast.error('Failed to sign out')

@@ -185,14 +185,7 @@ export function useCalendarSyncSettings() {
         return null
       }
 
-      // Google provider_token is only available right after OAuth sign-in and
-      // is NOT persisted across Supabase session refreshes. We capture it in
-      // AuthContext on sign-in and retrieve it here.
       const googleAccessToken = session.provider_token ?? await refreshGoogleToken()
-      if (!googleAccessToken) {
-        toast.error('Google token expired. Please sign out and sign in with Google again.')
-        return null
-      }
 
       const { data, error: invokeError } = await supabase.functions.invoke('calendar-sync-outbox', {
         body: {

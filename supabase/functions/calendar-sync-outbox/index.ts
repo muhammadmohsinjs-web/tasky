@@ -48,7 +48,7 @@ interface CalendarConnectionRow {
 }
 
 interface SyncRequestBody {
-  action?: 'processOutbox' | 'listGoogleEvents'
+  action?: 'processOutbox' | 'listGoogleEvents' | 'storeTokens'
   userId?: string
   googleAccessToken?: string
   googleRefreshToken?: string
@@ -89,8 +89,34 @@ interface GoogleCalendarEventListResponse {
     start?: { date?: string; dateTime?: string; timeZone?: string }
     end?: { date?: string; dateTime?: string; timeZone?: string }
     htmlLink?: string
+    hangoutLink?: string
+    location?: string
+    attendees?: Array<{
+      email?: string
+      displayName?: string
+      responseStatus?: string
+      self?: boolean
+      organizer?: boolean
+    }>
+    conferenceData?: {
+      entryPoints?: Array<{
+        entryPointType?: string
+        uri?: string
+        label?: string
+      }>
+    }
     updated?: string
   }>
+}
+
+function getGoogleMeetingLink(event: NonNullable<GoogleCalendarEventListResponse['items']>[number]): string | null {
+  const conferenceUri = event.conferenceData?.entryPoints?.find((entryPoint) => (
+    entryPoint.entryPointType === 'video' && Boolean(entryPoint.uri)
+  ))?.uri
+    ?? event.conferenceData?.entryPoints?.find((entryPoint) => Boolean(entryPoint.uri))?.uri
+    ?? null
+
+  return conferenceUri ?? event.hangoutLink ?? null
 }
 
 class GoogleApiError extends Error {
@@ -118,6 +144,10 @@ const json = (status: number, body: Record<string, unknown>) =>
 function isRetryableGoogleError(error: unknown): boolean {
   if (!(error instanceof GoogleApiError)) return false
   return error.status === 408 || error.status === 409 || error.status === 429 || error.status >= 500
+}
+
+function isUnauthorizedGoogleError(error: unknown): boolean {
+  return error instanceof GoogleApiError && error.status === 401
 }
 
 function retryDelayMinutes(attemptCount: number): number {
@@ -472,10 +502,12 @@ async function persistProvidedTokens(
 async function getValidGoogleAccessToken(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  providedAccessToken?: string
+  providedAccessToken?: string,
+  forceRefresh = false
 ): Promise<string | null> {
   const connection = await getConnection(supabase, userId)
   if (!connection) {
+    if (forceRefresh) return null
     console.log('[calendar-sync-outbox] token source: provided-only (no connection row)', {
       userId,
       hasProvidedAccessToken: Boolean(providedAccessToken),
@@ -483,7 +515,7 @@ async function getValidGoogleAccessToken(
     return providedAccessToken ?? null
   }
 
-  if (providedAccessToken && !connection.google_refresh_token) {
+  if (!forceRefresh && providedAccessToken && !connection.google_refresh_token) {
     console.log('[calendar-sync-outbox] token source: provided access token (no refresh token stored)', {
       userId,
     })
@@ -491,7 +523,7 @@ async function getValidGoogleAccessToken(
   }
 
   const expiresAt = connection.google_access_token_expires_at
-  if (connection.google_access_token && expiresAt) {
+  if (!forceRefresh && connection.google_access_token && expiresAt) {
     const msRemaining = new Date(expiresAt).getTime() - Date.now()
     if (msRemaining > 60 * 1000) {
       console.log('[calendar-sync-outbox] token source: stored access token', {
@@ -538,6 +570,29 @@ async function getValidGoogleAccessToken(
   return refreshed.accessToken
 }
 
+async function withGoogleTokenRefreshRetry<T>(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  providedAccessToken: string | undefined,
+  operation: (accessToken: string) => Promise<T>
+): Promise<T> {
+  const firstToken = await getValidGoogleAccessToken(supabase, userId, providedAccessToken)
+  if (!firstToken) {
+    throw new Error('Missing Google access token and refresh token for this user')
+  }
+
+  try {
+    return await operation(firstToken)
+  } catch (error) {
+    if (!isUnauthorizedGoogleError(error)) throw error
+
+    const refreshedToken = await getValidGoogleAccessToken(supabase, userId, undefined, true)
+    if (!refreshedToken) throw error
+
+    return operation(refreshedToken)
+  }
+}
+
 async function listGoogleEvents(
   accessToken: string,
   params: {
@@ -575,16 +630,28 @@ async function listGoogleEvents(
   const eventsByCalendar = await Promise.all(
     calendars.map(async (calendar) => {
       const eventsResponse = await requestGoogleJson<GoogleCalendarEventListResponse>(
-        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${params.eventsLimit}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(params.timeMin)}&timeMax=${encodeURIComponent(params.timeMax)}`,
+        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${params.eventsLimit}&singleEvents=true&orderBy=startTime&conferenceDataVersion=1&timeMin=${encodeURIComponent(params.timeMin)}&timeMax=${encodeURIComponent(params.timeMax)}`,
         accessToken
       )
 
       const events = (eventsResponse.items ?? []).map((event) => ({
+        meetingLink: getGoogleMeetingLink(event),
+        joinLink: getGoogleMeetingLink(event),
         id: event.id,
         status: event.status ?? 'confirmed',
         summary: event.summary ?? null,
         description: event.description ?? null,
         htmlLink: event.htmlLink ?? null,
+        location: event.location ?? null,
+        attendees: (event.attendees ?? [])
+          .map((attendee) => ({
+            email: attendee.email ?? null,
+            displayName: attendee.displayName ?? null,
+            responseStatus: attendee.responseStatus ?? null,
+            self: Boolean(attendee.self),
+            organizer: Boolean(attendee.organizer),
+          }))
+          .filter((attendee) => attendee.email || attendee.displayName),
         updated: event.updated ?? null,
         start: event.start ?? null,
         end: event.end ?? null,
@@ -625,10 +692,24 @@ async function processJobsForUser(
     result.processed += 1
 
     try {
-      if (job.operation === 'upsert') {
-        await processUpsert(supabase, job, accessToken)
-      } else {
-        await processDelete(supabase, job, accessToken)
+      let effectiveAccessToken = accessToken
+      const runJob = async () => {
+        if (job.operation === 'upsert') {
+          await processUpsert(supabase, job, effectiveAccessToken)
+        } else {
+          await processDelete(supabase, job, effectiveAccessToken)
+        }
+      }
+
+      try {
+        await runJob()
+      } catch (error) {
+        if (!isUnauthorizedGoogleError(error)) throw error
+
+        const refreshedAccessToken = await getValidGoogleAccessToken(supabase, userId, undefined, true)
+        if (!refreshedAccessToken) throw error
+        effectiveAccessToken = refreshedAccessToken
+        await runJob()
       }
 
       await markJobResult(supabase, job, { status: 'done' })
@@ -766,9 +847,9 @@ Deno.serve(async (req) => {
       }
 
       await persistProvidedTokens(supabase, userId, body.googleAccessToken, body.googleRefreshToken)
-      const accessToken = await getValidGoogleAccessToken(supabase, userId, body.googleAccessToken)
-      if (!accessToken) {
-        return json(400, { error: 'Missing Google access token and refresh token for this user' })
+
+      if (action === 'storeTokens') {
+        return json(200, { ok: true, persisted: true })
       }
 
       if (action === 'listGoogleEvents') {
@@ -786,13 +867,18 @@ Deno.serve(async (req) => {
           ? new Date(body.timeMax).toISOString()
           : defaultMonthEnd.toISOString()
 
-        const payload = await listGoogleEvents(accessToken, {
-          calendarId: body.calendarId,
-          calendarsLimit,
-          eventsLimit,
-          timeMin,
-          timeMax,
-        })
+        const payload = await withGoogleTokenRefreshRetry(
+          supabase,
+          userId,
+          body.googleAccessToken,
+          (accessToken) => listGoogleEvents(accessToken, {
+            calendarId: body.calendarId,
+            calendarsLimit,
+            eventsLimit,
+            timeMin,
+            timeMax,
+          })
+        )
 
         console.log('[calendar-sync-outbox] listGoogleEvents completed', {
           userId,
@@ -800,6 +886,11 @@ Deno.serve(async (req) => {
           events: payload.events.length,
         })
         return json(200, { ok: true, ...payload })
+      }
+
+      const accessToken = await getValidGoogleAccessToken(supabase, userId, body.googleAccessToken)
+      if (!accessToken) {
+        return json(400, { error: 'Missing Google access token and refresh token for this user' })
       }
 
       await processJobsForUser(supabase, userId, accessToken, limit, result)
