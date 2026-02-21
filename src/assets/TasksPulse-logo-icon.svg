@@ -1,0 +1,16 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+
+  <!-- Calendar base -->
+  <rect x="2" y="2" width="60" height="60" rx="14" stroke="#2563EB" stroke-width="4"/>
+
+  <!-- Calendar top bar -->
+  <line x1="2" y1="18" x2="62" y2="18" stroke="#2563EB" stroke-width="4"/>
+
+  <!-- Pulse/Check -->
+  <path d="M14 40 L26 40 L34 28 L42 46 L50 40"
+        stroke="#14B8A6"
+        stroke-width="4"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+</svg>

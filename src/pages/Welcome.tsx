@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { CheckSquare, Sparkles, Calendar, BarChart3 } from 'lucide-react'
+import { Sparkles, Calendar, BarChart3 } from 'lucide-react'
+import tasksPulseLogo from '../assets/TasksPulse-logo-horizontal.svg'
 
 const features = [
   { icon: Calendar, title: 'Calendar View', desc: 'Plan and visualize tasks on a clean monthly timeline' },
@@ -30,10 +31,8 @@ export default function Welcome() {
     <div className="min-h-screen bg-[#f4f7fb] flex items-center justify-center p-6">
       <div className="max-w-md w-full">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center shadow-md mx-auto mb-4">
-            <CheckSquare className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Welcome to Tasky</h1>
+          <img src={tasksPulseLogo} alt="TasksPulse logo" className="h-16 w-auto max-w-[260px] object-contain mx-auto mb-4" />
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Welcome to TasksPulse</h1>
           <p className="text-sm text-slate-500 mt-2">Organize your work, track progress, and stay focused.</p>
         </div>
 

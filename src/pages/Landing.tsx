@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { CheckSquare, Calendar, BarChart3, ArrowRight, CheckCircle2, Zap, Shield, Clock, Sparkles } from 'lucide-react'
+import { Calendar, BarChart3, ArrowRight, CheckCircle2, Zap, Shield, Clock, Sparkles } from 'lucide-react'
+import tasksPulseLogo from '../assets/TasksPulse-logo-horizontal.svg'
 
 const FEATURES = [
   {
@@ -53,11 +54,8 @@ export default function Landing() {
     <div className="min-h-screen bg-[#f4f7fb] text-slate-700">
       <nav className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-sm">
-              <CheckSquare className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-semibold tracking-tight text-slate-900">Tasky</span>
+          <div className="flex items-center">
+            <img src={tasksPulseLogo} alt="TasksPulse logo" className="h-10 w-auto max-w-[180px] object-contain" />
           </div>
           <div className="hidden sm:flex items-center gap-8 text-sm text-slate-500">
             <a href="#features" className="hover:text-slate-800 transition-colors">
@@ -99,7 +97,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in" style={{ animationDelay: '160ms', animationFillMode: 'backwards' }}>
-            Tasky gives teams a calm, calendar-first workspace to schedule tasks, track progress, and ship consistently.
+            TasksPulse gives teams a calm, calendar-first workspace to schedule tasks, track progress, and ship consistently.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in" style={{ animationDelay: '240ms', animationFillMode: 'backwards' }}>
@@ -234,7 +232,7 @@ export default function Landing() {
 
       <footer className="border-t border-slate-200 bg-white/80 px-6 py-6">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-          <span>Tasky</span>
+          <span>TasksPulse</span>
           <div className="flex flex-wrap items-center gap-4">
             <a href="/privacy" className="hover:text-slate-800">Privacy Policy</a>
             <a href="/terms" className="hover:text-slate-800">Terms</a>

@@ -170,7 +170,7 @@ function EventCard({ event, onOpenTask }: { event: CalendarEventUI; onOpenTask: 
   const hideGoogleSourceChip = event.is_external_google_event && isGoogleHolidayCalendar(event)
   const sourceLabel = event.is_external_google_event
     ? (hideGoogleSourceChip ? null : `Google${event.provider_calendar_name ? ` • ${event.provider_calendar_name}` : ''}`)
-    : 'Tasky'
+    : 'TasksPulse'
   const hasSyncError = Boolean(event.sync_error && (event.sync_status === 'failed' || event.sync_status === 'dead'))
   const showFooter = Boolean(sourceLabel || hasSyncError)
 
@@ -442,8 +442,8 @@ export default function Events() {
             <h1>Events Workspace</h1>
             <p className="page-subtitle">
               {connection?.sync_enabled
-                ? `Showing Tasky + Google events for ${selectedCalendarLabel}`
-                : 'Showing Tasky events (Google sync disabled)'}
+                ? `Showing TasksPulse + Google events for ${selectedCalendarLabel}`
+                : 'Showing TasksPulse events (Google sync disabled)'}
             </p>
           </div>
           <div className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-3 py-1.5 text-xs font-medium text-[#38557C]">

@@ -1,7 +1,7 @@
 const fallbackSupportEmail = 'support@tasky.app'
 
 export const LEGAL_EFFECTIVE_DATE = 'February 21, 2026'
-export const APP_NAME = 'Tasky'
+export const APP_NAME = 'TasksPulse'
 export const SUPPORT_EMAIL = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined)?.trim() || fallbackSupportEmail
 
 export function getPublicAppUrl() {
