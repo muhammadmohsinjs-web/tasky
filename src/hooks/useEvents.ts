@@ -18,10 +18,39 @@ export interface EventWithTask extends CalendarEvent {
   is_external_google_event?: boolean
 }
 
-export function useEvents() {
+export interface UseEventsOptions {
+  timeMin?: string
+  timeMax?: string
+  limit?: number
+}
+
+function getDefaultRange() {
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+  const monthEnd = new Date(monthStart)
+  monthEnd.setMonth(monthEnd.getMonth() + 1)
+  return {
+    timeMin: monthStart.toISOString(),
+    timeMax: monthEnd.toISOString(),
+  }
+}
+
+export function useEvents(options?: UseEventsOptions) {
   const { user, googleRefreshToken, refreshGoogleToken } = useAuth()
   const queryClient = useQueryClient()
-  const queryKey = useMemo(() => ['events', user?.id] as const, [user?.id])
+  const range = useMemo(() => {
+    const defaults = getDefaultRange()
+    return {
+      timeMin: options?.timeMin ?? defaults.timeMin,
+      timeMax: options?.timeMax ?? defaults.timeMax,
+    }
+  }, [options?.timeMax, options?.timeMin])
+  const limit = Math.min(Math.max(options?.limit ?? 200, 20), 500)
+  const queryKey = useMemo(
+    () => ['events', user?.id, range.timeMin, range.timeMax, limit] as const,
+    [limit, range.timeMax, range.timeMin, user?.id]
+  )
 
   const { data: events = [], isLoading: loading } = useQuery({
     queryKey,
@@ -29,13 +58,8 @@ export function useEvents() {
     queryFn: async () => {
       const debugPrefix = '[useEvents]'
       const nowIso = new Date().toISOString()
-      const monthStart = new Date()
-      monthStart.setDate(1)
-      monthStart.setHours(0, 0, 0, 0)
-      const monthEnd = new Date(monthStart)
-      monthEnd.setMonth(monthEnd.getMonth() + 1)
-      const timeMinIso = monthStart.toISOString()
-      const timeMaxIso = monthEnd.toISOString()
+      const timeMinIso = range.timeMin
+      const timeMaxIso = range.timeMax
       console.info(`${debugPrefix} starting fetch`, {
         userId: user?.id ?? null,
         nowIso,
@@ -48,9 +72,10 @@ export function useEvents() {
         .from('events')
         .select(EVENT_SELECT)
         .eq('status', 'confirmed')
-        .gte('end_at', nowIso)
+        .lte('start_at', timeMaxIso)
+        .gte('end_at', timeMinIso)
         .order('start_at', { ascending: true })
-        .limit(50)
+        .limit(limit)
 
       if (error) throw error
       const typedEvents = (eventRows as CalendarEvent[]) ?? []

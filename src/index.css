@@ -169,6 +169,10 @@ a:focus-visible {
   padding: 28px 20px 40px;
 }
 
+.content-wrap-wide {
+  max-width: none;
+}
+
 .page-header {
   margin-bottom: 28px;
 }
