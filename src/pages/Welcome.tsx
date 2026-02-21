@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Sparkles, Calendar, BarChart3 } from 'lucide-react'
 import tasksPulseLogo from '../assets/TasksPulse-logo-horizontal.svg'
@@ -31,7 +31,9 @@ export default function Welcome() {
     <div className="min-h-screen bg-[#f4f7fb] flex items-center justify-center p-6">
       <div className="max-w-md w-full">
         <div className="text-center mb-8 animate-fade-in">
-          <img src={tasksPulseLogo} alt="TasksPulse logo" className="h-16 w-auto max-w-[260px] object-contain mx-auto mb-4" />
+          <Link to="/" className="inline-flex mx-auto mb-4">
+            <img src={tasksPulseLogo} alt="TasksPulse logo" className="h-16 w-auto max-w-[260px] object-contain" />
+          </Link>
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Welcome to TasksPulse</h1>
           <p className="text-sm text-slate-500 mt-2">Organize your work, track progress, and stay focused.</p>
         </div>
