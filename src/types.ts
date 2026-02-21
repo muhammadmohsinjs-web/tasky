@@ -1,5 +1,12 @@
 export type TaskStatus = 'todo' | 'inprogress' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type CalendarProvider = 'google'
+export type SyncDirection = 'task_to_google'
+export type EventSource = 'native' | 'task'
+export type EventStatus = 'confirmed' | 'cancelled'
+export type ExternalSyncState = 'pending' | 'synced' | 'error' | 'disabled'
+export type SyncOutboxOperation = 'upsert' | 'delete'
+export type SyncOutboxStatus = 'queued' | 'processing' | 'done' | 'failed' | 'dead'
 
 export interface Profile {
   id: string
@@ -75,4 +82,74 @@ export interface Task {
   updated_at?: string
   is_projected?: boolean
   source_task_id?: string | null
+}
+
+export interface CalendarConnection {
+  id: string
+  user_id: string
+  provider: CalendarProvider
+  google_calendar_id: string
+  google_refresh_token?: string | null
+  google_access_token?: string | null
+  google_access_token_expires_at?: string | null
+  sync_enabled: boolean
+  sync_direction: SyncDirection
+  last_sync_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarEvent {
+  id: string
+  user_id: string
+  title: string
+  description?: string | null
+  start_at: string
+  end_at: string
+  is_all_day: boolean
+  timezone: string
+  source: EventSource
+  status: EventStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface TaskEventLink {
+  id: string
+  user_id: string
+  task_id: string
+  event_id: string
+  relation_type: 'scheduled_from_task'
+  created_at: string
+}
+
+export interface ExternalEventMapping {
+  id: string
+  user_id: string
+  event_id: string
+  provider: CalendarProvider
+  provider_calendar_id: string
+  provider_event_id: string
+  provider_etag?: string | null
+  sync_state: ExternalSyncState
+  last_synced_at?: string | null
+  last_error?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarSyncOutbox {
+  id: number
+  user_id: string
+  provider: CalendarProvider
+  event_id?: string | null
+  operation: SyncOutboxOperation
+  payload: Record<string, unknown>
+  dedupe_key: string
+  status: SyncOutboxStatus
+  attempt_count: number
+  next_attempt_at: string
+  last_error?: string | null
+  created_at: string
+  updated_at: string
 }

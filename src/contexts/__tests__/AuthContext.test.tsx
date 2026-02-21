@@ -8,6 +8,7 @@ const mockGetSession = vi.fn()
 const mockSignInWithOAuth = vi.fn()
 const mockSignOut = vi.fn()
 const mockOnAuthStateChange = vi.fn()
+const mockInvoke = vi.fn()
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -19,6 +20,9 @@ vi.mock('../../lib/supabase', () => ({
         mockOnAuthStateChange(cb)
         return { data: { subscription: { unsubscribe: vi.fn() } } }
       },
+    },
+    functions: {
+      invoke: (name: string, payload?: unknown) => mockInvoke(name, payload),
     },
   },
 }))
@@ -42,6 +46,7 @@ describe('AuthContext', () => {
     mockGetSession.mockResolvedValue({ data: { session: null } })
     mockSignInWithOAuth.mockResolvedValue({ data: {}, error: null })
     mockSignOut.mockResolvedValue({ error: null })
+    mockInvoke.mockResolvedValue({ data: { ok: true }, error: null })
   })
 
   it('starts unauthenticated when no session exists', async () => {
@@ -76,10 +81,14 @@ describe('AuthContext', () => {
     )
     await screen.findByTestId('authenticated')
     await user.click(screen.getByText('Sign In Google'))
-    expect(mockSignInWithOAuth).toHaveBeenCalledWith({
-      provider: 'google',
-      options: { redirectTo: expect.stringContaining('/dashboard') },
-    })
+    expect(mockSignInWithOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google',
+        options: expect.objectContaining({
+          redirectTo: expect.stringContaining('/dashboard'),
+        }),
+      })
+    )
   })
 
   it('signOut calls supabase signOut', async () => {

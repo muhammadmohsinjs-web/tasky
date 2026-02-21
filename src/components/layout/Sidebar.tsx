@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X, LogOut, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Tag, BarChart3, Menu, X, LogOut, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProfile } from '../../hooks/useProfile'
 import { UserAvatar } from '../ui/UserAvatar'
@@ -8,37 +8,49 @@ import { UserAvatar } from '../ui/UserAvatar'
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview & stats' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, description: 'Manage your work' },
+  { path: '/events', label: 'Events', icon: CalendarDays, description: 'View schedule' },
   { path: '/categories', label: 'Categories', icon: Tag, description: 'Organize tasks' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, description: 'Track progress' },
 ]
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1200)
   const { signOut } = useAuth()
   const { profile } = useProfile()
 
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1200)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const showSidebar = isDesktop || mobileOpen
+
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:bg-slate-50"
-      >
-        <Menu className="w-5 h-5 text-slate-700" />
-      </button>
+      {!isDesktop && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="fixed top-4 left-4 z-50 p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:bg-slate-50"
+        >
+          <Menu className="w-5 h-5 text-slate-700" />
+        </button>
+      )}
 
-      {mobileOpen && (
+      {!isDesktop && mobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-slate-950/35 z-40 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 bg-slate-950/35 z-40 backdrop-blur-sm animate-fade-in"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
         className={`
-        fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50
+        ${isDesktop ? 'sticky top-0' : 'fixed inset-y-0'} left-0 z-50
         w-[272px] h-screen bg-white/95 backdrop-blur-xl border-r border-slate-200 flex flex-col
         transform transition-transform duration-300 ease-out
-        ${mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}
+        ${showSidebar ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
       `}
       >
         <div className="px-5 py-5 flex items-center justify-between">
@@ -53,7 +65,7 @@ export function Sidebar() {
           </div>
           <button
             onClick={() => setMobileOpen(false)}
-            className="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+            className={`${isDesktop ? 'hidden' : ''} p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer`}
           >
             <X className="w-5 h-5" />
           </button>

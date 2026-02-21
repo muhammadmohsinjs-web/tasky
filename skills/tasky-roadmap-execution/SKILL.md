@@ -11,8 +11,7 @@ description: Use when translating Tasky plans and user stories into executable s
 - Prioritization between SaaS readiness and integration roadmap
 
 ## Source docs
-- `FUTURE_PLANS.md`
-- `FUTURE_PLANS_EXECUTION.md`
+- `GOOGLE_CALENDAR_INTEGRATION_PLAN.md`
 - `USER_STORIES.md`
 - `PRODUCTION_READINESS_REVIEW.md`
 - `IMPLEMENTATION_BLUEPRINT.md`

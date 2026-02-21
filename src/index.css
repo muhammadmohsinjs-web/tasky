@@ -169,6 +169,10 @@ a:focus-visible {
   padding: 28px 20px 40px;
 }
 
+.content-wrap-wide {
+  max-width: none;
+}
+
 .page-header {
   margin-bottom: 28px;
 }
@@ -431,5 +435,11 @@ a:focus-visible {
 @media (min-width: 1024px) {
   .content-wrap {
     padding: 34px 28px 56px;
+  }
+}
+
+@media (max-width: 349px) {
+  .event-card-title {
+    font-size: 1rem;
   }
 }
