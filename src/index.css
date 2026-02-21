@@ -437,3 +437,9 @@ a:focus-visible {
     padding: 34px 28px 56px;
   }
 }
+
+@media (max-width: 349px) {
+  .event-card-title {
+    font-size: 1rem;
+  }
+}

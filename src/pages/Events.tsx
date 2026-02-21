@@ -86,6 +86,14 @@ function formatRangeLabel(anchorDate: Date, view: CalendarView) {
   })
 }
 
+function formatListGroupLabel(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
 function toEventTimeLabel(event: EventWithTask) {
   if (event.is_all_day) return 'All day'
 
@@ -145,27 +153,29 @@ function EventCard({ event, onOpenTask }: { event: CalendarEventUI; onOpenTask: 
   const descriptionText = event.description ? stripHtml(event.description) : ''
 
   return (
-    <article className="w-full min-w-0 rounded-xl border border-[#DEE7F4] bg-white p-3.5 shadow-[0_6px_16px_rgba(15,23,42,0.06)]">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#243956]">{event.title}</h3>
-        <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.classes}`}>
+    <article className="w-full min-w-0 rounded-2xl border border-[#DEE7F4] bg-white p-3 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="event-card-title min-w-0 flex-1 break-words text-sm font-semibold leading-[1.35] tracking-[-0.015em] text-[#1E3353] sm:text-base md:text-xl">
+          {event.title}
+        </h3>
+        <span className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.01em] sm:text-[11px] ${badge.classes}`}>
           {badge.label}
         </span>
       </div>
-      <p className="mt-1 text-xs font-semibold text-[#3E618E]">{event.displayTime}</p>
+      <p className="mt-2 text-xs font-semibold tracking-[-0.01em] text-[#335B8D] sm:text-sm md:text-base">{event.displayTime}</p>
       {descriptionText ? (
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#7386A2]">{descriptionText}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[#7185A3] sm:text-sm sm:leading-6">{descriptionText}</p>
       ) : null}
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#5A6F8F]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#5A6F8F] sm:text-xs md:text-sm">
         {event.is_external_google_event ? (
-          <span className="max-w-full truncate rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2 py-0.5 font-medium">
+          <span className="max-w-full truncate rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2.5 py-1 font-medium">
             Google{event.provider_calendar_name ? ` • ${event.provider_calendar_name}` : ''}
           </span>
         ) : (
-          <span className="rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2 py-0.5 font-medium">Tasky</span>
+          <span className="rounded-full border border-[#D4E1F4] bg-[#F4F8FF] px-2.5 py-1 font-medium">Tasky</span>
         )}
         {event.sync_error && (event.sync_status === 'failed' || event.sync_status === 'dead') ? (
-          <span className="rounded-full border border-[#F4D4D4] bg-[#FFF3F3] px-2 py-0.5 text-[#A33A3A]">
+          <span className="rounded-full border border-[#F4D4D4] bg-[#FFF3F3] px-2.5 py-1 text-[#A33A3A]">
             {event.sync_error.slice(0, 70)}
           </span>
         ) : null}
@@ -173,7 +183,7 @@ function EventCard({ event, onOpenTask }: { event: CalendarEventUI; onOpenTask: 
       {event.linked_task ? (
         <button
           onClick={() => onOpenTask(event.linked_task!.id)}
-          className="mt-2.5 inline-flex max-w-full items-center gap-1 overflow-hidden rounded-md border border-[#C9D8F0] bg-[#F9FBFF] px-2 py-1 text-[11px] font-medium text-[#2C4D7A] hover:bg-[#F3F8FF]"
+          className="mt-3 inline-flex max-w-full items-center gap-1 overflow-hidden rounded-lg border border-[#C9D8F0] bg-[#F9FBFF] px-2.5 py-1.5 text-[11px] font-medium text-[#2C4D7A] hover:bg-[#F3F8FF] sm:text-xs md:text-sm"
         >
           <Link2 className="h-3 w-3 shrink-0" />
           <span className="truncate">{event.linked_task.title}</span>
@@ -214,6 +224,7 @@ export default function Events() {
     timeMin: queryRange.timeMin,
     timeMax: queryRange.timeMax,
     limit: 400,
+    calendarId: connection?.google_calendar_id ?? null,
   })
 
   const visibleEvents = useMemo(() => {
@@ -328,7 +339,9 @@ export default function Events() {
             <span className="page-kicker">Calendar</span>
             <h1>Events Workspace</h1>
             <p className="page-subtitle">
-              {connection?.sync_enabled ? 'Showing Tasky + Google Calendar events' : 'Showing Tasky events (Google sync disabled)'}
+              {connection?.sync_enabled
+                ? `Showing Tasky + Google events for ${connection?.google_calendar_id ?? 'primary'}`
+                : 'Showing Tasky events (Google sync disabled)'}
             </p>
           </div>
           <div className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-3 py-1.5 text-xs font-medium text-[#38557C]">
@@ -395,21 +408,27 @@ export default function Events() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => navigatePeriod('prev')} className="btn btn-secondary !h-9 !px-3">
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-                <p className="min-w-[180px] text-center text-sm font-semibold text-[#2A4568]">{formatRangeLabel(anchorDate, calendarView)}</p>
-                <button onClick={() => navigatePeriod('next')} className="btn btn-secondary !h-9 !px-3">
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button onClick={goToToday} className="btn btn-secondary !h-9 !px-3 !text-xs">
-                  Today
-                </button>
+              <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center">
+                <p className="w-full text-center text-xs font-semibold text-[#2A4568] md:min-w-[180px] md:w-auto md:text-sm">
+                  {formatRangeLabel(anchorDate, calendarView)}
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button onClick={() => navigatePeriod('prev')} className="btn btn-secondary !h-9 !px-3">
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => navigatePeriod('next')} className="btn btn-secondary !h-9 !px-3">
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <button onClick={goToToday} className="btn btn-secondary !h-9 !px-3 !text-xs">
+                    Today
+                  </button>
+                </div>
               </div>
             </div>
 
-            <p className="mt-2 text-xs font-medium text-[#607999]">{periodCount} events in current view</p>
+            <p className="mt-2 text-[11px] font-medium tracking-[0.01em] text-[#607999] md:text-xs">
+              {periodCount} {periodCount === 1 ? 'event' : 'events'} in current view
+            </p>
           </div>
 
           {visibleEvents.length === 0 ? (
@@ -420,12 +439,8 @@ export default function Events() {
             <div className="space-y-5">
               {listGrouped.map(([date, dayEvents]) => (
                 <section key={date} className="rounded-2xl border border-[#E3EAF4] bg-[#FAFCFF] p-4">
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#4D678A]">
-                    {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
+                  <h2 className="mb-3 text-2xl font-bold leading-tight tracking-[-0.02em] text-[#142847] md:text-3xl">
+                    {formatListGroupLabel(date)}
                   </h2>
                   <div className="space-y-2">
                     {dayEvents.map((event) => (
@@ -436,7 +451,7 @@ export default function Events() {
               ))}
             </div>
           ) : (
-            <div className="grid min-w-0 gap-4 xl:grid-cols-[1.6fr_1fr]">
+            <div className="grid min-w-0 gap-4 min-[1200px]:grid-cols-[1.6fr_1fr]">
               <div className="min-w-0 overflow-hidden rounded-2xl border border-[#DDE6F3] bg-white p-3">
                 {calendarView !== 'day' ? (
                   <div className="mb-3 min-w-0 max-w-full md:hidden">
@@ -601,9 +616,9 @@ export default function Events() {
                 ) : null}
               </div>
 
-              <aside className="hidden rounded-2xl border border-[#DDE6F3] bg-[#FBFDFF] p-4 xl:block">
-                <h2 className="text-sm font-semibold text-[#2D4B72]">Selected date</h2>
-                <p className="mt-1 text-xs text-[#6A819F]">{formatDayLabel(selectedDate)}</p>
+              <aside className="rounded-2xl border border-[#DDE6F3] bg-[#FBFDFF] p-4">
+                <h2 className="text-xs font-semibold text-[#2D4B72] md:text-sm">Selected date</h2>
+                <p className="mt-1 text-[11px] text-[#6A819F] md:text-xs">{formatDayLabel(selectedDate)}</p>
                 <div className="mt-3 space-y-2">
                   {selectedDateEvents.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[#D5E2F4] bg-white p-4 text-xs text-[#7B90AD]">

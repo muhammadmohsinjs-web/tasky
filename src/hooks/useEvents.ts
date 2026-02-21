@@ -22,6 +22,7 @@ export interface UseEventsOptions {
   timeMin?: string
   timeMax?: string
   limit?: number
+  calendarId?: string | null
 }
 
 function getDefaultRange() {
@@ -47,9 +48,10 @@ export function useEvents(options?: UseEventsOptions) {
     }
   }, [options?.timeMax, options?.timeMin])
   const limit = Math.min(Math.max(options?.limit ?? 200, 20), 500)
+  const selectedCalendarId = options?.calendarId?.trim() || null
   const queryKey = useMemo(
-    () => ['events', user?.id, range.timeMin, range.timeMax, limit] as const,
-    [limit, range.timeMax, range.timeMin, user?.id]
+    () => ['events', user?.id, range.timeMin, range.timeMax, limit, selectedCalendarId] as const,
+    [limit, range.timeMax, range.timeMin, selectedCalendarId, user?.id]
   )
 
   const { data: events = [], isLoading: loading } = useQuery({
@@ -65,6 +67,7 @@ export function useEvents(options?: UseEventsOptions) {
         nowIso,
         timeMinIso,
         timeMaxIso,
+        selectedCalendarId,
         hasGoogleRefreshToken: Boolean(googleRefreshToken),
       })
 
@@ -174,6 +177,7 @@ export function useEvents(options?: UseEventsOptions) {
           userId: user?.id,
           googleAccessToken,
           googleRefreshToken,
+          calendarId: selectedCalendarId ?? undefined,
           calendarsLimit: 10,
           eventsLimit: 100,
           timeMin: timeMinIso,
@@ -228,14 +232,18 @@ export function useEvents(options?: UseEventsOptions) {
                 preview.calendars.find((calendar) => calendar.id === calendarId)?.summary ?? calendarId,
             }))
           )
+          const scopedFallbackEvents = selectedCalendarId
+            ? fallbackEvents.filter((event) => event.calendarId === selectedCalendarId)
+            : fallbackEvents
           console.info(`${debugPrefix} fallback Google fetch succeeded`, {
             calendarsCount: preview.calendars.length,
             rawCount: fallbackEvents.length,
+            scopedCount: scopedFallbackEvents.length,
           })
 
           googleData = {
             calendars: preview.calendars,
-            events: fallbackEvents,
+            events: scopedFallbackEvents,
           }
         } catch (fallbackError) {
           console.warn(`${debugPrefix} fallback Google fetch failed`, {
@@ -257,6 +265,10 @@ export function useEvents(options?: UseEventsOptions) {
           calendarSummary?: string
         }>
       })?.events) ?? [])
+        .filter((event) => {
+          if (!selectedCalendarId) return true
+          return (event.calendarId ?? null) === selectedCalendarId
+        })
         .filter((event) => {
           if (!event.id || mappedProviderEventIds.has(event.id)) return false
           if ((event.status ?? 'confirmed') === 'cancelled') return false

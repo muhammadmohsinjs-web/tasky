@@ -17,7 +17,6 @@ import type { TaskStatus } from '../types'
 
 export default function Dashboard() {
   const { tasks, loading } = useAllTasks()
-  const { events, loading: eventsLoading } = useEvents()
   const { categories } = useCategories()
   const { profile } = useProfile()
   const {
@@ -32,6 +31,9 @@ export default function Dashboard() {
     retryDeadJobs,
     backfillMissingTaskEvents,
   } = useCalendarSyncSettings()
+  const { events, loading: eventsLoading } = useEvents({
+    calendarId: connection?.google_calendar_id ?? null,
+  })
   const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()
   const [googleSyncStatus, setGoogleSyncStatus] = useState('idle')

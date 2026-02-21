@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google Calendar API Master"
+  short_description: "Expert Google Calendar API integration and reliability."
+  default_prompt: "Use $tasky-google-calendar-api-master to design or debug a robust Google Calendar API integration with proper token, sync, and rate-limit handling."
