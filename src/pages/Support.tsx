@@ -14,7 +14,7 @@ export default function Support() {
             <p className="mt-2">
               Primary support email:
               {' '}
-              <a href={legalMailto('Tasky support request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
+              <a href={legalMailto('TasksPulse support request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
             </p>
             <p className="mt-2">
               Reviewer subject line suggestion:
@@ -31,7 +31,7 @@ export default function Support() {
             <p className="mt-2">
               Full account/data deletion request: email
               {' '}
-              <a href={legalMailto('Tasky full data deletion request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
+              <a href={legalMailto('TasksPulse full data deletion request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
               {' '}
               with your account email.
             </p>

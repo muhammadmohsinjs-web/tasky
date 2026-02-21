@@ -40,7 +40,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">5. Contact</h2>
             <p className="mt-2">
-              Questions or legal notices: <a href={legalMailto('Tasky legal request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
+              Questions or legal notices: <a href={legalMailto('TasksPulse legal request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
             </p>
           </section>
         </div>

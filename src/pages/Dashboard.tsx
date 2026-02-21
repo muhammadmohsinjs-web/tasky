@@ -195,7 +195,7 @@ export default function Dashboard() {
 
   const handleDisconnectGoogle = async () => {
     const confirmed = window.confirm(
-      'Disconnect Google Calendar and delete all Google sync metadata from Tasky for this account?'
+      'Disconnect Google Calendar and delete all Google sync metadata from TasksPulse for this account?'
     )
     if (!confirmed) return
 

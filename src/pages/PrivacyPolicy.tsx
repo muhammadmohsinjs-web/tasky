@@ -56,7 +56,7 @@ export default function PrivacyPolicy() {
             <p className="mt-2">
               For full account data deletion requests, email
               {' '}
-              <a href={legalMailto('Tasky data deletion request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
+              <a href={legalMailto('TasksPulse data deletion request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
               .
             </p>
           </section>
@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">5. Contact</h2>
             <p className="mt-2">
-              Support: <a href={legalMailto('Tasky support request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
+              Support: <a href={legalMailto('TasksPulse support request')} className="text-blue-700 hover:text-blue-800">{SUPPORT_EMAIL}</a>
             </p>
             <p className="mt-2">
               Product URL: <a href={appUrl} className="text-blue-700 hover:text-blue-800">{appUrl}</a>

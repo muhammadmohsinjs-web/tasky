@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="260" viewBox="0 0 920 260" role="img" aria-label="TasksPulse calendar logo">
+  <defs>
+    <linearGradient id="iconStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#22C55E"/>
+    </linearGradient>
+
+    <style>
+      .wordmark { font-family: "Sora","Plus Jakarta Sans","Manrope","Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; font-weight: 600; letter-spacing: -0.015em; }
+      .tagline  { font-family: "Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; font-weight: 500; letter-spacing: -0.01em; }
+    </style>
+  </defs>
+
+  <!-- ICON: Calendar Pulse -->
+  <g transform="translate(64,36)">
+    <!-- Outer calendar -->
+    <rect x="8" y="24" width="168" height="168" rx="28" fill="#FFFFFF"/>
+    <rect x="8" y="24" width="168" height="168" rx="28" fill="none" stroke="url(#iconStroke)" stroke-width="14"/>
+
+    <!-- Tabs -->
+    <rect x="44" y="0" width="26" height="54" rx="13" fill="#FFFFFF"/>
+    <rect x="44" y="0" width="26" height="54" rx="13" fill="none" stroke="url(#iconStroke)" stroke-width="12"/>
+    <rect x="114" y="0" width="26" height="54" rx="13" fill="#FFFFFF"/>
+    <rect x="114" y="0" width="26" height="54" rx="13" fill="none" stroke="url(#iconStroke)" stroke-width="12"/>
+
+    <!-- Header divider -->
+    <path d="M 24 74 H 160" stroke="#0F172A" stroke-width="10" opacity="0.12" stroke-linecap="round"/>
+
+    <!-- Pulse line -->
+    <path d="M 30 126
+             H 62
+             L 76 114
+             L 92 150
+             L 110 96
+             L 128 150
+             L 142 130
+             H 162"
+          fill="none" stroke="url(#pulse)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- End dot -->
+    <circle cx="168" cy="130" r="9" fill="#14B8A6"/>
+  </g>
+
+  <!-- WORDMARK -->
+  <g transform="translate(290,112)">
+    <text class="wordmark" x="0" y="0" font-size="72">
+      <tspan fill="#2563EB">Tasks</tspan><tspan fill="#14B8A6">Pulse</tspan>
+    </text>
+    <text class="tagline" x="3" y="58" font-size="28" fill="#0F172A" opacity="0.70">
+      Get Things Done.
+    </text>
+  </g>
+</svg>
