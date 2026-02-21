@@ -37,9 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     'email',
     'profile',
     'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-    'https://www.googleapis.com/auth/tasks.readonly',
   ].join(' ')
 
   const persistGoogleTokens = useCallback(async (

@@ -72,6 +72,11 @@ export default function Welcome() {
         <p className="text-[11px] text-slate-400 text-center mt-4 animate-fade-in" style={{ animationDelay: '500ms', animationFillMode: 'backwards' }}>
           Sign in with your Google account to get started.
         </p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-500">
+          <a href="/privacy" className="hover:text-slate-800">Privacy</a>
+          <a href="/terms" className="hover:text-slate-800">Terms</a>
+          <a href="/support" className="hover:text-slate-800">Support</a>
+        </div>
       </div>
     </div>
   )
