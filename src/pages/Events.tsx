@@ -50,7 +50,7 @@ export default function Events() {
             <span className="page-kicker">Calendar</span>
             <h1>Events</h1>
             <p className="page-subtitle">
-              {connection?.sync_enabled ? 'Synced with Google Calendar' : 'Sync disabled'}
+              {connection?.sync_enabled ? 'Showing Tasky + Google Calendar events' : 'Showing Tasky events (Google sync disabled)'}
             </p>
           </div>
           <div className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-3 py-1.5 text-xs font-medium text-[#38557C]">
@@ -87,9 +87,6 @@ export default function Events() {
           {filteredEvents.length === 0 ? (
             <div className="text-center py-6 text-sm text-slate-400">
               No upcoming events.
-              <div className="mt-1 text-xs text-slate-400">
-                This page shows Tasky-managed events (from scheduled tasks), not all existing Google events.
-              </div>
             </div>
           ) : (
             <div className="space-y-5">
@@ -110,6 +107,11 @@ export default function Events() {
                         <div className="mt-1 text-xs text-[#6C7F9D]">
                           {formatEventDateTime(event.start_at)} - {formatEventDateTime(event.end_at)}
                         </div>
+                        {event.is_external_google_event ? (
+                          <div className="mt-1 text-[11px] text-[#456489]">
+                            Google Calendar event{event.provider_calendar_name ? ` • ${event.provider_calendar_name}` : ''}
+                          </div>
+                        ) : null}
                         {event.sync_status === 'failed' || event.sync_status === 'dead' ? (
                           <div className="mt-1 text-[11px] text-[#A33A3A]">
                             {event.sync_error ? `Sync error: ${event.sync_error.slice(0, 140)}` : 'Sync failed. Retry from dashboard.'}

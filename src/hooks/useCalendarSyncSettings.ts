@@ -194,53 +194,20 @@ export function useCalendarSyncSettings() {
         return null
       }
 
-      const decodeJwtPayload = (jwt: string) => {
-        try {
-          const payload = jwt.split('.')[1]
-          if (!payload) return null
-          const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
-          const json = atob(normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), '='))
-          return JSON.parse(json) as { iss?: string; sub?: string; exp?: number }
-        } catch {
-          return null
-        }
-      }
-
-      const expectedIssuer = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1`
-      const jwtPayload = decodeJwtPayload(session.access_token)
-      if (jwtPayload?.iss && jwtPayload.iss !== expectedIssuer) {
-        console.error('Supabase JWT issuer mismatch', {
-          expectedIssuer,
-          actualIssuer: jwtPayload.iss,
-          tokenSub: jwtPayload.sub ?? null,
-          tokenExp: jwtPayload.exp ?? null,
-        })
-        toast.error('Auth token/project mismatch. Sign out and sign in again.')
-        return null
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-sync-outbox`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error: invokeError } = await supabase.functions.invoke('calendar-sync-outbox', {
+        body: {
           userId: user.id,
           googleAccessToken,
           googleRefreshToken,
           limit,
-        }),
+        },
       })
 
-      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
-      if (!response.ok) {
+      if (invokeError) {
         console.error('Failed to run sync outbox processor:', {
-          status: response.status,
-          payload,
+          invokeError,
         })
-        const message = typeof payload.message === 'string' ? payload.message : 'Failed to run Google sync'
+        const message = invokeError.message || 'Failed to run Google sync'
         toast.error(message)
         return null
       }
@@ -248,7 +215,7 @@ export function useCalendarSyncSettings() {
       await markSyncCompleted()
       await invalidate()
       await invalidateOutbox()
-      return payload as {
+      return (data ?? null) as {
         ok: boolean
         processed: number
         succeeded: number

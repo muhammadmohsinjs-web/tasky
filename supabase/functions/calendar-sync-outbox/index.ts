@@ -48,11 +48,16 @@ interface CalendarConnectionRow {
 }
 
 interface SyncRequestBody {
+  action?: 'processOutbox' | 'listGoogleEvents'
   userId?: string
   googleAccessToken?: string
   googleRefreshToken?: string
   limit?: number
   userLimit?: number
+  calendarId?: string
+  calendarsLimit?: number
+  eventsLimit?: number
+  timeMin?: string
 }
 
 interface ProcessResult {
@@ -63,6 +68,28 @@ interface ProcessResult {
   skipped: number
   usersProcessed: number
   usersSkippedNoToken: number
+}
+
+interface GoogleCalendarListResponse {
+  items?: Array<{
+    id: string
+    summary?: string
+    primary?: boolean
+    timeZone?: string
+  }>
+}
+
+interface GoogleCalendarEventListResponse {
+  items?: Array<{
+    id: string
+    status?: string
+    summary?: string
+    description?: string
+    start?: { date?: string; dateTime?: string; timeZone?: string }
+    end?: { date?: string; dateTime?: string; timeZone?: string }
+    htmlLink?: string
+    updated?: string
+  }>
 }
 
 class GoogleApiError extends Error {
@@ -135,10 +162,10 @@ function toGoogleEventBody(event: CalendarEventRow) {
 async function requestGoogleJson<T>(
   path: string,
   accessToken: string,
-  options?: { method?: 'POST' | 'PUT' | 'DELETE'; body?: unknown }
+  options?: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown }
 ): Promise<T> {
   const response = await fetch(`${GOOGLE_CALENDAR_BASE_URL}${path}`, {
-    method: options?.method ?? 'POST',
+    method: options?.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -446,20 +473,38 @@ async function getValidGoogleAccessToken(
   userId: string,
   providedAccessToken?: string
 ): Promise<string | null> {
-  if (providedAccessToken) return providedAccessToken
-
   const connection = await getConnection(supabase, userId)
-  if (!connection) return null
+  if (!connection) {
+    console.log('[calendar-sync-outbox] token source: provided-only (no connection row)', {
+      userId,
+      hasProvidedAccessToken: Boolean(providedAccessToken),
+    })
+    return providedAccessToken ?? null
+  }
+
+  if (providedAccessToken && !connection.google_refresh_token) {
+    console.log('[calendar-sync-outbox] token source: provided access token (no refresh token stored)', {
+      userId,
+    })
+    return providedAccessToken
+  }
 
   const expiresAt = connection.google_access_token_expires_at
   if (connection.google_access_token && expiresAt) {
     const msRemaining = new Date(expiresAt).getTime() - Date.now()
     if (msRemaining > 60 * 1000) {
+      console.log('[calendar-sync-outbox] token source: stored access token', {
+        userId,
+        msRemaining,
+      })
       return connection.google_access_token
     }
   }
 
-  if (!connection.google_refresh_token) return null
+  if (!connection.google_refresh_token) {
+    console.log('[calendar-sync-outbox] token source: unavailable (no refresh token)', { userId })
+    return null
+  }
 
   const googleClientId = Deno.env.get('GOOGLE_OAUTH_CLIENT_ID')
   const googleClientSecret = Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET')
@@ -485,7 +530,80 @@ async function getValidGoogleAccessToken(
     .eq('provider', 'google')
 
   if (error) throw error
+  console.log('[calendar-sync-outbox] token source: refreshed with refresh token', {
+    userId,
+    expiresIn: refreshed.expiresIn,
+  })
   return refreshed.accessToken
+}
+
+async function listGoogleEvents(
+  accessToken: string,
+  params: {
+    calendarId?: string
+    calendarsLimit: number
+    eventsLimit: number
+    timeMin: string
+  }
+) {
+  console.log('[calendar-sync-outbox] listGoogleEvents start', {
+    calendarId: params.calendarId ?? null,
+    calendarsLimit: params.calendarsLimit,
+    eventsLimit: params.eventsLimit,
+    timeMin: params.timeMin,
+  })
+  let calendars: Array<{ id: string; summary: string; primary: boolean; timeZone: string | null }> = []
+
+  if (params.calendarId) {
+    calendars = [{ id: params.calendarId, summary: params.calendarId, primary: params.calendarId === 'primary', timeZone: null }]
+  } else {
+    const calendarListResponse = await requestGoogleJson<GoogleCalendarListResponse>(
+      `/users/me/calendarList?maxResults=${params.calendarsLimit}`,
+      accessToken
+    )
+
+    calendars = (calendarListResponse.items ?? []).map((calendar) => ({
+      id: calendar.id,
+      summary: calendar.summary ?? calendar.id,
+      primary: Boolean(calendar.primary),
+      timeZone: calendar.timeZone ?? null,
+    }))
+  }
+
+  const eventsByCalendar = await Promise.all(
+    calendars.map(async (calendar) => {
+      const eventsResponse = await requestGoogleJson<GoogleCalendarEventListResponse>(
+        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${params.eventsLimit}&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(params.timeMin)}`,
+        accessToken
+      )
+
+      const events = (eventsResponse.items ?? []).map((event) => ({
+        id: event.id,
+        status: event.status ?? 'confirmed',
+        summary: event.summary ?? null,
+        description: event.description ?? null,
+        htmlLink: event.htmlLink ?? null,
+        updated: event.updated ?? null,
+        start: event.start ?? null,
+        end: event.end ?? null,
+        calendarId: calendar.id,
+        calendarSummary: calendar.summary,
+        calendarPrimary: calendar.primary,
+      }))
+
+      return events
+    })
+  )
+
+  console.log('[calendar-sync-outbox] listGoogleEvents result', {
+    calendars: calendars.length,
+    events: eventsByCalendar.reduce((acc, list) => acc + list.length, 0),
+  })
+
+  return {
+    calendars,
+    events: eventsByCalendar.flat(),
+  }
 }
 
 async function processJobsForUser(
@@ -573,6 +691,7 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const action = body.action ?? 'processOutbox'
   const limit = Math.min(Math.max(body.limit ?? 25, 1), 100)
   const userLimit = Math.min(Math.max(body.userLimit ?? 20, 1), 100)
   const authHeader = req.headers.get('Authorization') ?? ''
@@ -589,6 +708,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('[calendar-sync-outbox] request received', {
+      action,
+      method: req.method,
+      hasCronSecret,
+      hasAuthHeader: Boolean(authHeader),
+      requestedUserId: body.userId ?? null,
+    })
+
     if (hasCronSecret) {
       let userIds: string[] = []
 
@@ -642,6 +769,28 @@ Deno.serve(async (req) => {
         return json(400, { error: 'Missing Google access token and refresh token for this user' })
       }
 
+      if (action === 'listGoogleEvents') {
+        const calendarsLimit = Math.min(Math.max(body.calendarsLimit ?? 10, 1), 25)
+        const eventsLimit = Math.min(Math.max(body.eventsLimit ?? 30, 1), 100)
+        const timeMin = body.timeMin && !Number.isNaN(new Date(body.timeMin).getTime())
+          ? new Date(body.timeMin).toISOString()
+          : new Date().toISOString()
+
+        const payload = await listGoogleEvents(accessToken, {
+          calendarId: body.calendarId,
+          calendarsLimit,
+          eventsLimit,
+          timeMin,
+        })
+
+        console.log('[calendar-sync-outbox] listGoogleEvents completed', {
+          userId,
+          calendars: payload.calendars.length,
+          events: payload.events.length,
+        })
+        return json(200, { ok: true, ...payload })
+      }
+
       await processJobsForUser(supabase, userId, accessToken, limit, result)
       result.usersProcessed = 1
     }
@@ -649,6 +798,10 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected outbox processor error'
+    console.error('[calendar-sync-outbox] request failed', {
+      action,
+      error: message,
+    })
     return json(500, { error: message, ...result })
   }
 })

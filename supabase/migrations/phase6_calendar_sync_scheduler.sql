@@ -15,6 +15,7 @@ CREATE OR REPLACE FUNCTION public.run_calendar_sync_cron(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   PERFORM net.http_post(
