@@ -1,0 +1,4 @@
+interface:
+  display_name: "Branding Master"
+  short_description: "Brand strategy, naming, logo, and GTM messaging."
+  default_prompt: "Use $tasky-branding-master to define app branding, generate strong name options, shape logo direction, and produce launch-ready marketing messaging."

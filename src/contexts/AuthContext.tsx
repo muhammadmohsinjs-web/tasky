@@ -110,19 +110,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
+  const clearAuthState = useCallback(() => {
+    setUser(null)
+    setGoogleAccessToken(null)
+    setGoogleRefreshToken(null)
+    lastPersistedTokenFingerprintRef.current = null
+  }, [])
+
+  const isSessionMissingSignOutError = (error: unknown) => {
+    const message = typeof error === 'object' && error && 'message' in error
+      ? String(error.message)
+      : ''
+    return message.toLowerCase().includes('session') && message.toLowerCase().includes('missing')
+  }
+
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
       if (error) {
+        if (isSessionMissingSignOutError(error)) {
+          clearAuthState()
+          return
+        }
         console.error('Sign out failed:', error)
         toast.error('Failed to sign out')
         return
       }
-      setUser(null)
-      setGoogleAccessToken(null)
-      setGoogleRefreshToken(null)
-      lastPersistedTokenFingerprintRef.current = null
+      clearAuthState()
     } catch (err) {
+      if (isSessionMissingSignOutError(err)) {
+        clearAuthState()
+        return
+      }
       console.error('Sign out failed:', err)
       toast.error('Failed to sign out')
     }
