@@ -389,6 +389,40 @@ export function useCalendarSyncSettings() {
     return created
   }, [ensureConnection, invalidateOutbox, queryClient, user?.id])
 
+  const disconnectGoogle = useCallback(async () => {
+    if (!user?.id) {
+      toast.error('Please sign in to disconnect Google Calendar')
+      return false
+    }
+
+    const { data, error: invokeError } = await supabase.functions.invoke('calendar-sync-outbox', {
+      body: {
+        action: 'disconnectGoogle',
+        userId: user.id,
+      },
+    })
+
+    if (invokeError) {
+      console.error('Failed to disconnect Google Calendar:', invokeError)
+      toast.error(invokeError.message || 'Failed to disconnect Google Calendar')
+      return false
+    }
+
+    const functionError = (data as { error?: string } | null)?.error
+    if (functionError) {
+      toast.error(functionError)
+      return false
+    }
+
+    await Promise.all([
+      invalidate(),
+      invalidateOutbox(),
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      queryClient.invalidateQueries({ queryKey: ['calendar-connection', user.id] }),
+    ])
+    return true
+  }, [invalidate, invalidateOutbox, queryClient, user?.id])
+
   return {
     connection,
     loading,
@@ -404,6 +438,7 @@ export function useCalendarSyncSettings() {
     runSyncNow,
     retryDeadJobs,
     backfillMissingTaskEvents,
+    disconnectGoogle,
     refetch: invalidate,
   }
 }

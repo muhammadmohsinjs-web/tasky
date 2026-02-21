@@ -48,7 +48,7 @@ interface CalendarConnectionRow {
 }
 
 interface SyncRequestBody {
-  action?: 'processOutbox' | 'listGoogleEvents' | 'storeTokens'
+  action?: 'processOutbox' | 'listGoogleEvents' | 'storeTokens' | 'disconnectGoogle'
   userId?: string
   googleAccessToken?: string
   googleRefreshToken?: string
@@ -127,6 +127,19 @@ class GoogleApiError extends Error {
     super(`Google Calendar API request failed (${status}): ${responseText}`)
     this.status = status
     this.responseText = responseText
+  }
+}
+
+class GoogleTokenRefreshError extends Error {
+  status: number
+  errorCode: string | null
+  errorDescription: string | null
+
+  constructor(status: number, errorCode: string | null, errorDescription: string | null) {
+    super(`Google token refresh failed (${status})`)
+    this.status = status
+    this.errorCode = errorCode
+    this.errorDescription = errorDescription
   }
 }
 
@@ -233,8 +246,18 @@ async function refreshGoogleAccessToken(
   })
 
   if (!response.ok) {
-    const responseText = await response.text()
-    throw new Error(`Failed to refresh Google token (${response.status}): ${responseText}`)
+    let errorCode: string | null = null
+    let errorDescription: string | null = null
+
+    try {
+      const payload = await response.json() as { error?: string; error_description?: string }
+      errorCode = payload.error ?? null
+      errorDescription = payload.error_description ?? null
+    } catch {
+      // Ignore non-JSON response bodies.
+    }
+
+    throw new GoogleTokenRefreshError(response.status, errorCode, errorDescription)
   }
 
   const data = await response.json() as {
@@ -554,11 +577,32 @@ async function getValidGoogleAccessToken(
     throw new Error('Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET')
   }
 
-  const refreshed = await refreshGoogleAccessToken(
-    connection.google_refresh_token,
-    googleClientId,
-    googleClientSecret
-  )
+  let refreshed: { accessToken: string; expiresIn: number; refreshToken?: string }
+  try {
+    refreshed = await refreshGoogleAccessToken(
+      connection.google_refresh_token,
+      googleClientId,
+      googleClientSecret
+    )
+  } catch (error) {
+    if (error instanceof GoogleTokenRefreshError && error.errorCode === 'invalid_grant') {
+      await supabase
+        .from('calendar_connections')
+        .update({
+          sync_enabled: false,
+          google_access_token: null,
+          google_access_token_expires_at: null,
+          google_refresh_token: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('provider', 'google')
+
+      throw new Error('Google authorization expired or revoked. Reconnect Google Calendar to continue sync.')
+    }
+
+    throw error
+  }
 
   const { error } = await supabase
     .from('calendar_connections')
@@ -577,6 +621,102 @@ async function getValidGoogleAccessToken(
     expiresIn: refreshed.expiresIn,
   })
   return refreshed.accessToken
+}
+
+async function revokeGoogleToken(token: string) {
+  const response = await fetch('https://oauth2.googleapis.com/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token }),
+  })
+
+  if (!response.ok && response.status !== 400) {
+    const responseText = await response.text()
+    throw new Error(`Failed to revoke Google token (${response.status}): ${responseText}`)
+  }
+}
+
+async function disconnectGoogleConnection(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+) {
+  const connection = await getConnection(supabase, userId)
+  if (!connection) return { revoked: false, removedMappings: 0, removedOutbox: 0, disabledConnection: false }
+
+  const tokenCandidates = [connection.google_access_token, connection.google_refresh_token]
+    .filter((token): token is string => Boolean(token))
+
+  for (const token of tokenCandidates) {
+    try {
+      await revokeGoogleToken(token)
+    } catch (error) {
+      console.warn('[calendar-sync-outbox] Google token revoke failed', {
+        userId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const { data: mappingRows, error: mappingSelectError } = await supabase
+    .from('external_event_mappings')
+    .select('event_id')
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+
+  if (mappingSelectError) throw mappingSelectError
+
+  const mappedEventIds = (mappingRows ?? [])
+    .map((row) => row.event_id as string | null)
+    .filter((eventId): eventId is string => Boolean(eventId))
+
+  if (mappedEventIds.length > 0) {
+    const { error: linksDeleteError } = await supabase
+      .from('task_event_links')
+      .delete()
+      .eq('user_id', userId)
+      .in('event_id', mappedEventIds)
+
+    if (linksDeleteError) throw linksDeleteError
+  }
+
+  const { data: deletedMappings, error: mappingsDeleteError } = await supabase
+    .from('external_event_mappings')
+    .delete()
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .select('id')
+
+  if (mappingsDeleteError) throw mappingsDeleteError
+
+  const { data: deletedOutboxRows, error: outboxDeleteError } = await supabase
+    .from('calendar_sync_outbox')
+    .delete()
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .select('id')
+
+  if (outboxDeleteError) throw outboxDeleteError
+
+  const { error: connectionUpdateError } = await supabase
+    .from('calendar_connections')
+    .update({
+      sync_enabled: false,
+      google_access_token: null,
+      google_access_token_expires_at: null,
+      google_refresh_token: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+
+  if (connectionUpdateError) throw connectionUpdateError
+
+  return {
+    revoked: tokenCandidates.length > 0,
+    removedMappings: deletedMappings?.length ?? 0,
+    removedOutbox: deletedOutboxRows?.length ?? 0,
+    disabledConnection: true,
+  }
 }
 
 async function withGoogleTokenRefreshRetry<T>(
@@ -859,6 +999,11 @@ Deno.serve(async (req) => {
 
       if (action === 'storeTokens') {
         return json(200, { ok: true, persisted: true })
+      }
+
+      if (action === 'disconnectGoogle') {
+        const disconnected = await disconnectGoogleConnection(supabase, userId)
+        return json(200, { ok: true, disconnected })
       }
 
       if (action === 'listGoogleEvents') {

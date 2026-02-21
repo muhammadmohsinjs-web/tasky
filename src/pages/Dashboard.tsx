@@ -10,7 +10,7 @@ import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -30,6 +30,7 @@ export default function Dashboard() {
     runSyncNow,
     retryDeadJobs,
     backfillMissingTaskEvents,
+    disconnectGoogle,
   } = useCalendarSyncSettings()
   const { events, loading: eventsLoading } = useEvents({
     calendarId: connection?.google_calendar_id ?? null,
@@ -192,6 +193,20 @@ export default function Dashboard() {
     toast.message('No dead jobs to retry')
   }
 
+  const handleDisconnectGoogle = async () => {
+    const confirmed = window.confirm(
+      'Disconnect Google Calendar and delete all Google sync metadata from Tasky for this account?'
+    )
+    if (!confirmed) return
+
+    const success = await disconnectGoogle()
+    if (!success) return
+
+    setGoogleSyncStatus('google disconnected')
+    setAvailableCalendars([])
+    toast.success('Google Calendar disconnected and synced Google data removed')
+  }
+
   useEffect(() => {
     if (!connection?.sync_enabled || connectionLoading) return
 
@@ -302,6 +317,14 @@ export default function Dashboard() {
               className="btn btn-secondary !h-10 !px-4"
             >
               Retry Dead Jobs
+            </button>
+            <button
+              onClick={() => void handleDisconnectGoogle()}
+              disabled={connectionLoading}
+              className="btn btn-secondary !h-10 !px-4 !text-[#8B2A2A] !border-[#EFC4C4] !bg-[#FFF4F4] hover:!bg-[#FFEAEA]"
+            >
+              <Link2Off className="h-4 w-4" />
+              Disconnect Google
             </button>
             <label className="flex h-10 items-center gap-2 rounded-xl border border-[#D9E5F6] bg-white px-3 text-xs font-medium text-[#38557C]">
               Calendar

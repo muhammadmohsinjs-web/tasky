@@ -10,6 +10,10 @@ import Categories from './pages/Categories'
 import Analytics from './pages/Analytics'
 import Welcome from './pages/Welcome'
 import NotFound from './pages/NotFound'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfService from './pages/TermsOfService'
+import Support from './pages/Support'
+import GoogleApiDisclosure from './pages/GoogleApiDisclosure'
 
 export default function App() {
   return (
@@ -18,6 +22,10 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/welcome" element={<Welcome />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
+      <Route path="/support" element={<Support />} />
+      <Route path="/google-api-disclosure" element={<GoogleApiDisclosure />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>

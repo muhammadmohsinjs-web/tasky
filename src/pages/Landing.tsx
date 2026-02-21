@@ -66,6 +66,9 @@ export default function Landing() {
             <a href="#how-it-works" className="hover:text-slate-800 transition-colors">
               How it works
             </a>
+            <a href="/privacy" className="hover:text-slate-800 transition-colors">
+              Privacy
+            </a>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/welcome')} className="btn btn-ghost hidden sm:flex">
@@ -228,6 +231,18 @@ export default function Landing() {
           </button>
         </div>
       </section>
+
+      <footer className="border-t border-slate-200 bg-white/80 px-6 py-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+          <span>Tasky</span>
+          <div className="flex flex-wrap items-center gap-4">
+            <a href="/privacy" className="hover:text-slate-800">Privacy Policy</a>
+            <a href="/terms" className="hover:text-slate-800">Terms</a>
+            <a href="/support" className="hover:text-slate-800">Support</a>
+            <a href="/google-api-disclosure" className="hover:text-slate-800">Google API Disclosure</a>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

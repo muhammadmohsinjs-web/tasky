@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 
 const GOOGLE_CALENDAR_BASE_URL = 'https://www.googleapis.com/calendar/v3'
-const GOOGLE_TASKS_BASE_URL = 'https://tasks.googleapis.com/tasks/v1'
 
 interface GoogleCalendarApiListResponse<T> {
   items?: T[]
@@ -62,23 +61,6 @@ export interface GoogleCalendarEventUpsertInput {
 export interface GoogleCalendarPreviewData {
   calendars: GoogleCalendarListItem[]
   eventsByCalendar: Record<string, GoogleCalendarEventItem[]>
-  taskLists: GoogleTaskListItem[]
-  tasksByList: Record<string, GoogleTaskItem[]>
-  tasksError?: string
-}
-
-export interface GoogleTaskListItem {
-  id: string
-  title: string
-}
-
-export interface GoogleTaskItem {
-  id: string
-  title?: string
-  status?: 'needsAction' | 'completed'
-  due?: string
-  completed?: string
-  notes?: string
 }
 
 async function requestGoogleJson<T>(
@@ -157,46 +139,9 @@ export async function fetchGoogleCalendarPreview(
     })
   )
 
-  let taskLists: GoogleTaskListItem[] = []
-  const tasksByList: Record<string, GoogleTaskItem[]> = {}
-  let tasksError: string | undefined
-
-  try {
-    const taskListsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleTaskListItem>>(
-      GOOGLE_TASKS_BASE_URL,
-      '/users/@me/lists?maxResults=10',
-      accessToken
-    )
-
-    taskLists = taskListsResponse.items ?? []
-
-    await Promise.all(
-      taskLists.map(async (taskList) => {
-        const tasksResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleTaskItem>>(
-          GOOGLE_TASKS_BASE_URL,
-          `/lists/${encodeURIComponent(taskList.id)}/tasks?maxResults=50&showCompleted=true&showHidden=true`,
-          accessToken
-        )
-
-        tasksByList[taskList.id] = tasksResponse.items ?? []
-      })
-    )
-  } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : 'Failed to fetch Google Tasks data.'
-    if (rawMessage.includes('403')) {
-      tasksError =
-        'Google Tasks API returned 403. Enable Google Tasks API in your Google Cloud project and sign in again to grant tasks.readonly scope.'
-    } else {
-      tasksError = rawMessage
-    }
-  }
-
   return {
     calendars,
     eventsByCalendar,
-    taskLists,
-    tasksByList,
-    tasksError,
   }
 }
 
