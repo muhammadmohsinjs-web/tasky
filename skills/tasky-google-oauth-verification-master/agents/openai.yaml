@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google OAuth Verification Master"
+  short_description: "Policy-compliant OAuth verification readiness and fixes."
+  default_prompt: "Use $tasky-google-oauth-verification-master to audit verification blockers and implement all missing pieces needed for Google OAuth app verification."

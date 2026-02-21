@@ -312,11 +312,21 @@ async function processUpsert(
 
   let googleEvent: GoogleEventResponse
   if (mapping?.provider_event_id) {
-    googleEvent = await requestGoogleJson<GoogleEventResponse>(
-      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(mapping.provider_event_id)}`,
-      accessToken,
-      { method: 'PUT', body }
-    )
+    try {
+      googleEvent = await requestGoogleJson<GoogleEventResponse>(
+        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(mapping.provider_event_id)}`,
+        accessToken,
+        { method: 'PUT', body }
+      )
+    } catch (error) {
+      // If the mapped Google event was deleted externally, recreate it and remap.
+      if (!(error instanceof GoogleApiError) || error.status !== 404) throw error
+      googleEvent = await requestGoogleJson<GoogleEventResponse>(
+        `/calendars/${encodeURIComponent(calendarId)}/events`,
+        accessToken,
+        { method: 'POST', body }
+      )
+    }
   } else {
     googleEvent = await requestGoogleJson<GoogleEventResponse>(
       `/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -506,6 +516,12 @@ async function getValidGoogleAccessToken(
   forceRefresh = false
 ): Promise<string | null> {
   const connection = await getConnection(supabase, userId)
+
+  if (!forceRefresh && providedAccessToken) {
+    console.log('[calendar-sync-outbox] token source: provided access token', { userId })
+    return providedAccessToken
+  }
+
   if (!connection) {
     if (forceRefresh) return null
     console.log('[calendar-sync-outbox] token source: provided-only (no connection row)', {
@@ -513,13 +529,6 @@ async function getValidGoogleAccessToken(
       hasProvidedAccessToken: Boolean(providedAccessToken),
     })
     return providedAccessToken ?? null
-  }
-
-  if (!forceRefresh && providedAccessToken && !connection.google_refresh_token) {
-    console.log('[calendar-sync-outbox] token source: provided access token (no refresh token stored)', {
-      userId,
-    })
-    return providedAccessToken
   }
 
   const expiresAt = connection.google_access_token_expires_at
@@ -818,7 +827,7 @@ Deno.serve(async (req) => {
       }
 
       for (const userId of userIds) {
-        const accessToken = await getValidGoogleAccessToken(supabase, userId, body.googleAccessToken)
+        const accessToken = await getValidGoogleAccessToken(supabase, userId)
         if (!accessToken) {
           result.usersSkippedNoToken += 1
           continue

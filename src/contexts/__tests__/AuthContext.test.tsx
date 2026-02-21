@@ -9,13 +9,20 @@ const mockSignInWithOAuth = vi.fn()
 const mockSignOut = vi.fn()
 const mockOnAuthStateChange = vi.fn()
 const mockInvoke = vi.fn()
+const mockToastError = vi.fn()
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: (message: string) => mockToastError(message),
+  },
+}))
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
       signInWithOAuth: (opts: unknown) => mockSignInWithOAuth(opts),
-      signOut: () => mockSignOut(),
+      signOut: (opts?: unknown) => mockSignOut(opts),
       onAuthStateChange: (cb: unknown) => {
         mockOnAuthStateChange(cb)
         return { data: { subscription: { unsubscribe: vi.fn() } } }
@@ -103,6 +110,24 @@ describe('AuthContext', () => {
     )
     await screen.findByTestId('authenticated')
     await user.click(screen.getByText('Sign Out'))
-    expect(mockSignOut).toHaveBeenCalled()
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('treats missing session signOut errors as signed out', async () => {
+    const user = userEvent.setup()
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: '1', email: 'test@example.com' } } },
+    })
+    mockSignOut.mockResolvedValue({ error: { message: 'Auth session missing!' } })
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    )
+
+    expect(await screen.findByTestId('authenticated')).toHaveTextContent('true')
+    await user.click(screen.getByText('Sign Out'))
+    expect(await screen.findByTestId('authenticated')).toHaveTextContent('false')
+    expect(mockToastError).not.toHaveBeenCalled()
   })
 })
