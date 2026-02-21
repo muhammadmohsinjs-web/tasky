@@ -76,10 +76,14 @@ describe('AuthContext', () => {
     )
     await screen.findByTestId('authenticated')
     await user.click(screen.getByText('Sign In Google'))
-    expect(mockSignInWithOAuth).toHaveBeenCalledWith({
-      provider: 'google',
-      options: { redirectTo: expect.stringContaining('/dashboard') },
-    })
+    expect(mockSignInWithOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google',
+        options: expect.objectContaining({
+          redirectTo: expect.stringContaining('/dashboard'),
+        }),
+      })
+    )
   })
 
   it('signOut calls supabase signOut', async () => {

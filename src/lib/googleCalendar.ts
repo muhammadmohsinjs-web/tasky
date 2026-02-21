@@ -13,6 +13,11 @@ interface GoogleCalendarDateTime {
   timeZone?: string
 }
 
+interface GoogleRequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  body?: unknown
+}
+
 export interface GoogleCalendarListItem {
   id: string
   summary: string
@@ -23,9 +28,19 @@ export interface GoogleCalendarListItem {
 export interface GoogleCalendarEventItem {
   id: string
   status: string
+  etag?: string
   summary?: string
+  description?: string
+  htmlLink?: string
   start?: GoogleCalendarDateTime
   end?: GoogleCalendarDateTime
+}
+
+export interface GoogleCalendarEventUpsertInput {
+  summary: string
+  description?: string | null
+  start: GoogleCalendarDateTime
+  end: GoogleCalendarDateTime
 }
 
 export interface GoogleCalendarPreviewData {
@@ -50,11 +65,19 @@ export interface GoogleTaskItem {
   notes?: string
 }
 
-async function fetchGoogleJson<T>(baseUrl: string, path: string, accessToken: string): Promise<T> {
+async function requestGoogleJson<T>(
+  baseUrl: string,
+  path: string,
+  accessToken: string,
+  options?: GoogleRequestOptions
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
+    method: options?.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
     },
+    ...(options?.body ? { body: JSON.stringify(options.body) } : {}),
   })
 
   if (!response.ok) {
@@ -62,25 +85,29 @@ async function fetchGoogleJson<T>(baseUrl: string, path: string, accessToken: st
     throw new Error(`Google Calendar API request failed (${response.status}): ${errorText}`)
   }
 
+  if (response.status === 204) {
+    return undefined as T
+  }
+
   return response.json() as Promise<T>
 }
 
-async function getGoogleAccessToken(): Promise<string> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  const token = session?.provider_token
-
-  if (!token) {
-    throw new Error('Missing Google provider token. Please sign out and sign in with Google again.')
-  }
-
-  return token
+async function fetchGoogleJson<T>(baseUrl: string, path: string, accessToken: string): Promise<T> {
+  return requestGoogleJson<T>(baseUrl, path, accessToken)
 }
 
-export async function fetchGoogleCalendarPreview(): Promise<GoogleCalendarPreviewData> {
-  const accessToken = await getGoogleAccessToken()
+export async function fetchGoogleCalendarPreview(googleAccessToken?: string): Promise<GoogleCalendarPreviewData> {
+  let accessToken = googleAccessToken
+
+  if (!accessToken) {
+    // Fallback: try to get from session (only works right after OAuth sign-in)
+    const { data: { session } } = await supabase.auth.getSession()
+    accessToken = session?.provider_token ?? undefined
+  }
+
+  if (!accessToken) {
+    throw new Error('Missing Google provider token. Please sign out and sign in with Google again.')
+  }
 
   const calendarsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarListItem>>(
     GOOGLE_CALENDAR_BASE_URL,
@@ -145,4 +172,59 @@ export async function fetchGoogleCalendarPreview(): Promise<GoogleCalendarPrevie
     tasksByList,
     tasksError,
   }
+}
+
+export async function createGoogleCalendarEvent(
+  calendarId: string,
+  event: GoogleCalendarEventUpsertInput,
+  accessToken: string
+): Promise<GoogleCalendarEventItem> {
+
+  return requestGoogleJson<GoogleCalendarEventItem>(
+    GOOGLE_CALENDAR_BASE_URL,
+    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        summary: event.summary,
+        description: event.description ?? undefined,
+        start: event.start,
+        end: event.end,
+      },
+    }
+  )
+}
+
+export async function updateGoogleCalendarEvent(
+  calendarId: string,
+  eventId: string,
+  event: GoogleCalendarEventUpsertInput,
+  accessToken: string
+): Promise<GoogleCalendarEventItem> {
+
+  return requestGoogleJson<GoogleCalendarEventItem>(
+    GOOGLE_CALENDAR_BASE_URL,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    accessToken,
+    {
+      method: 'PUT',
+      body: {
+        summary: event.summary,
+        description: event.description ?? undefined,
+        start: event.start,
+        end: event.end,
+      },
+    }
+  )
+}
+
+export async function deleteGoogleCalendarEvent(calendarId: string, eventId: string, accessToken: string): Promise<void> {
+
+  await requestGoogleJson<void>(
+    GOOGLE_CALENDAR_BASE_URL,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    accessToken,
+    { method: 'DELETE' }
+  )
 }

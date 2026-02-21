@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAllTasks } from '../hooks/useAllTasks'
+import { useEvents } from '../hooks/useEvents'
 import { useCategories } from '../hooks/useCategories'
 import { useProfile } from '../hooks/useProfile'
+import { useCalendarSyncSettings } from '../hooks/useCalendarSyncSettings'
 import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -15,11 +17,26 @@ import type { TaskStatus } from '../types'
 
 export default function Dashboard() {
   const { tasks, loading } = useAllTasks()
+  const { events, loading: eventsLoading } = useEvents()
   const { categories } = useCategories()
   const { profile } = useProfile()
+  const {
+    connection,
+    loading: connectionLoading,
+    outboxLoading,
+    outboxStats,
+    ensureConnection,
+    setSyncEnabled,
+    setCalendarId,
+    runSyncNow,
+    retryDeadJobs,
+    backfillMissingTaskEvents,
+  } = useCalendarSyncSettings()
   const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()
-  const [googleDebugStatus, setGoogleDebugStatus] = useState('idle')
+  const [googleSyncStatus, setGoogleSyncStatus] = useState('idle')
+  const [availableCalendars, setAvailableCalendars] = useState<{ id: string; summary: string; primary?: boolean }[]>([])
+  const autoSyncInFlightRef = useRef(false)
 
   const stats = useMemo(() => {
     const todo = tasks.filter((t) => t.status === 'todo').length
@@ -81,79 +98,111 @@ export default function Dashboard() {
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  const formatEventDateTime = (iso: string) => {
+    const parsed = new Date(iso)
+    if (Number.isNaN(parsed.getTime())) return iso
+    return parsed.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
   const handleFetchGoogleData = async () => {
     const clickedAt = new Date().toLocaleTimeString()
-    setGoogleDebugStatus(`clicked at ${clickedAt}`)
-    toast.message('Dashboard fetch button clicked')
-    console.warn('[Dashboard] Fetch button clicked')
-    console.warn('[Dashboard] Fetching Google Calendar events...')
+    setGoogleSyncStatus(`refresh requested at ${clickedAt}`)
+    toast.message('Refreshing Google calendars')
     try {
       const preview = await fetchAndLog()
-      const calendarSummaries = preview.calendars.map((calendar) => ({
-        id: calendar.id,
-        name: calendar.summary,
-        primary: Boolean(calendar.primary),
-        timezone: calendar.timeZone ?? 'UTC',
-        events: preview.eventsByCalendar[calendar.id]?.length ?? 0,
-      }))
-
-      const normalizedEvents = Object.entries(preview.eventsByCalendar)
-        .flatMap(([calendarId, events]) =>
-          events.map((event) => ({
-            calendarId,
-            id: event.id,
-            title: event.summary ?? '(No title)',
-            status: event.status,
-            start: event.start?.dateTime ?? event.start?.date ?? null,
-            end: event.end?.dateTime ?? event.end?.date ?? null,
-            allDay: Boolean(event.start?.date && !event.start?.dateTime),
-          }))
-        )
-        .sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
-
-      const eventSummary = {
-        total: normalizedEvents.length,
-        timed: normalizedEvents.filter((event) => !event.allDay).length,
-        allDay: normalizedEvents.filter((event) => event.allDay).length,
-        upcoming: normalizedEvents.slice(0, 10),
-      }
-
-      const normalizedTasks = Object.entries(preview.tasksByList).flatMap(([taskListId, taskItems]) =>
-        taskItems.map((task) => ({
-          taskListId,
-          id: task.id,
-          title: task.title ?? '(No title)',
-          status: task.status ?? 'needsAction',
-          due: task.due ?? null,
-          completedAt: task.completed ?? null,
-        }))
-      )
-
-      const taskSummary = {
-        lists: preview.taskLists.map((taskList) => ({
-          id: taskList.id,
-          title: taskList.title,
-          tasks: preview.tasksByList[taskList.id]?.length ?? 0,
-        })),
-        total: normalizedTasks.length,
-        pending: normalizedTasks.filter((task) => task.status !== 'completed').length,
-        completed: normalizedTasks.filter((task) => task.status === 'completed').length,
-        sample: normalizedTasks.slice(0, 10),
-        error: preview.tasksError ?? null,
-      }
-
-      setGoogleDebugStatus(`success: ${preview.calendars.length} calendars, ${normalizedEvents.length} events`)
-      console.group('[Dashboard] Google Snapshot')
-      console.log('calendars', calendarSummaries)
-      console.log('tasks', taskSummary)
-      console.log('events', eventSummary)
-      console.groupEnd()
+      setAvailableCalendars(preview.calendars)
+      setGoogleSyncStatus(`loaded ${preview.calendars.length} calendars`)
     } catch (error) {
-      setGoogleDebugStatus('failed: check toast/error')
-      console.warn('[Dashboard] Google Calendar fetch failed')
+      setGoogleSyncStatus('failed to refresh')
       console.error('[Dashboard] Google Calendar fetch failed', error)
     }
   }
+
+  const handleToggleSync = async () => {
+    const ensured = await ensureConnection()
+    if (!ensured) return
+
+    const nextEnabled = !(connection?.sync_enabled ?? ensured.sync_enabled)
+    const updated = await setSyncEnabled(nextEnabled)
+    if (!updated) return
+
+    if (nextEnabled) {
+      const backfilled = await backfillMissingTaskEvents(150)
+      if (backfilled > 0) {
+        toast.success(`Sync enabled. Backfilled ${backfilled} task event${backfilled === 1 ? '' : 's'}.`)
+      }
+    }
+
+    setGoogleSyncStatus(nextEnabled ? 'sync enabled' : 'sync disabled')
+    toast.success(nextEnabled ? 'Google Calendar sync enabled' : 'Google Calendar sync disabled')
+  }
+
+  const handleCalendarChange = async (calendarId: string) => {
+    const updated = await setCalendarId(calendarId)
+    if (!updated) return
+
+    setGoogleSyncStatus(`calendar set to ${calendarId}`)
+    toast.success('Sync calendar updated')
+  }
+
+  const handleRunSyncNow = async () => {
+    const result = await runSyncNow(30)
+    if (!result) return
+
+    setGoogleSyncStatus(`processed ${result.processed}, success ${result.succeeded}`)
+    if (result.dead > 0) {
+      toast.warning(`Sync finished with ${result.dead} dead jobs`)
+    } else if (result.failed > 0) {
+      toast.message(`Sync queued retries: ${result.failed}`)
+    } else {
+      toast.success(`Sync complete (${result.succeeded}/${result.processed})`)
+    }
+  }
+
+  const handleRetryDeadJobs = async () => {
+    const retried = await retryDeadJobs()
+    if (retried > 0) {
+      toast.success(`Queued ${retried} dead job${retried === 1 ? '' : 's'} for retry`)
+      setGoogleSyncStatus(`retried ${retried} dead jobs`)
+      return
+    }
+    toast.message('No dead jobs to retry')
+  }
+
+  useEffect(() => {
+    if (!connection?.sync_enabled || connectionLoading) return
+
+    const intervalMs = 2 * 60 * 1000
+    const runAutoSync = async () => {
+      if (autoSyncInFlightRef.current) return
+      if (document.visibilityState !== 'visible') return
+      if (!navigator.onLine) return
+
+      autoSyncInFlightRef.current = true
+      try {
+        const result = await runSyncNow(20)
+        if (result) {
+          setGoogleSyncStatus(`auto-sync: processed ${result.processed}, success ${result.succeeded}`)
+        }
+      } finally {
+        autoSyncInFlightRef.current = false
+      }
+    }
+
+    void runAutoSync()
+    const intervalId = window.setInterval(() => {
+      void runAutoSync()
+    }, intervalMs)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [connection?.sync_enabled, connectionLoading, runSyncNow])
 
   if (loading) {
     return <LoadingSpinner message="Loading dashboard..." />
@@ -181,23 +230,82 @@ export default function Dashboard() {
                 Overdue: {overdue}
               </span>
               <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Google debug: {googleDebugStatus}
+                Google sync: {connection?.sync_enabled ? 'enabled' : 'disabled'}
               </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Target calendar: {connection?.google_calendar_id ?? 'primary'}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Sync mode: {connection?.sync_direction ?? 'task_to_google'}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Status: {googleSyncStatus}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Outbox: {outboxLoading ? 'loading...' : `queued ${outboxStats?.queued ?? 0}, failed ${outboxStats?.failed ?? 0}, dead ${outboxStats?.dead ?? 0}`}
+              </span>
+              {outboxStats?.lastError ? (
+                <span className="inline-flex items-center rounded-full border border-[#F2D3D3] bg-[#FFF1F1] px-2.5 py-1 text-xs font-medium text-[#A33A3A]">
+                  Last sync error: {outboxStats.lastError.slice(0, 120)}
+                </span>
+              ) : null}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => navigate('/tasks')} className="btn btn-secondary !h-10 !px-4">
               Plan Today
             </button>
             <button
               onClick={() => void handleFetchGoogleData()}
-              disabled={googlePreviewLoading}
+              disabled={googlePreviewLoading || connectionLoading}
               className="btn btn-secondary !h-10 !px-4"
             >
               <CloudDownload className="h-4 w-4" />
-              {googlePreviewLoading ? 'Fetching Google...' : 'Fetch Google Data'}
+              {googlePreviewLoading ? 'Refreshing...' : 'Refresh Calendars'}
             </button>
+            <button
+              onClick={() => void handleToggleSync()}
+              disabled={connectionLoading}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              {connection?.sync_enabled ? 'Disable Sync' : 'Enable Sync'}
+            </button>
+            <button
+              onClick={() => void handleRunSyncNow()}
+              disabled={connectionLoading || !(connection?.sync_enabled)}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              Run Sync Now
+            </button>
+            <button
+              onClick={() => void handleRetryDeadJobs()}
+              disabled={connectionLoading || outboxLoading || (outboxStats?.dead ?? 0) === 0}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              Retry Dead Jobs
+            </button>
+            <label className="flex h-10 items-center gap-2 rounded-xl border border-[#D9E5F6] bg-white px-3 text-xs font-medium text-[#38557C]">
+              Calendar
+              <select
+                value={connection?.google_calendar_id ?? 'primary'}
+                onChange={(event) => void handleCalendarChange(event.target.value)}
+                disabled={connectionLoading || availableCalendars.length === 0}
+                className="bg-transparent text-xs outline-none"
+              >
+                {availableCalendars.length === 0 ? (
+                  <option value={connection?.google_calendar_id ?? 'primary'}>
+                    {connection?.google_calendar_id ?? 'primary'}
+                  </option>
+                ) : (
+                  availableCalendars.map((calendar) => (
+                    <option key={calendar.id} value={calendar.id}>
+                      {calendar.summary}{calendar.primary ? ' (Primary)' : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
             <button onClick={() => navigate('/tasks')} className="btn btn-primary !h-10 !px-4">
               <Plus className="h-4 w-4" />
               New Task
@@ -378,6 +486,53 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="panel overflow-hidden mb-8">
+        <div className="panel-header">
+          <h2 className="text-sm font-semibold text-slate-700">Upcoming Events</h2>
+          <span className="text-xs text-slate-500">{events.length}</span>
+        </div>
+        <div className="panel-body">
+          {eventsLoading ? (
+            <div className="text-center py-4 text-sm text-slate-400">Loading events...</div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-4 text-sm text-slate-400">No upcoming events</div>
+          ) : (
+            <div className="space-y-2">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className={`rounded-xl border border-[#E3EAF4] bg-[#F9FBFF] p-3 ${event.linked_task ? 'cursor-pointer hover:bg-[#F3F8FF]' : ''}`}
+                  onClick={() => {
+                    if (!event.linked_task) return
+                    sessionStorage.setItem('tasky:openTaskId', event.linked_task.id)
+                    navigate('/tasks')
+                  }}
+                  role={event.linked_task ? 'button' : undefined}
+                  tabIndex={event.linked_task ? 0 : undefined}
+                  onKeyDown={(keyboardEvent) => {
+                    if (!event.linked_task) return
+                    if (keyboardEvent.key === 'Enter') {
+                      sessionStorage.setItem('tasky:openTaskId', event.linked_task.id)
+                      navigate('/tasks')
+                    }
+                  }}
+                >
+                  <div className="text-sm font-medium text-[#243956] truncate">{event.title}</div>
+                  <div className="mt-1 text-xs text-[#6C7F9D]">
+                    {formatEventDateTime(event.start_at)} - {formatEventDateTime(event.end_at)}
+                  </div>
+                  {event.linked_task ? (
+                    <div className="mt-1 text-xs text-[#4E6384]">
+                      From task: {event.linked_task.title}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

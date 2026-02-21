@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus, WifiOff } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -216,6 +216,31 @@ export default function CalendarPage() {
     const dateKeys = Array.from(new Set(monthTasks.map(task => task.dateISO).filter((date): date is string => Boolean(date)))).sort();
     return dateKeys.map(dateKey => ({ dateKey, items: getTasksForDate(monthTasks, dateKey) }));
   }, [monthTasks]);
+
+  useEffect(() => {
+    const pendingTaskId = sessionStorage.getItem('tasky:openTaskId');
+    if (!pendingTaskId) return;
+    if (allCalendarTasks.length === 0) return;
+
+    const targetTask = allCalendarTasks.find(task => task.id === pendingTaskId);
+    if (!targetTask) return;
+
+    sessionStorage.removeItem('tasky:openTaskId');
+
+    if (targetTask.dateISO) {
+      const date = parseISODate(targetTask.dateISO);
+      setSelectedDateISO(targetTask.dateISO);
+      setMonthDate(startOfMonth(date.getFullYear(), date.getMonth()));
+      setActiveView('list');
+    } else {
+      setActiveView('backlog');
+    }
+
+    setSelectedTaskId(targetTask.id);
+    setEditingTaskId(targetTask.id);
+    setModalMode('view');
+    setIsAddModalOpen(true);
+  }, [allCalendarTasks]);
 
   const progressCompleted = useMemo(() => monthTasks.filter(task => task.status === 'completed').length, [monthTasks]);
   const progressTotal = monthTasks.length;

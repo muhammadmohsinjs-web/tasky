@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X, LogOut, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Tag, BarChart3, Menu, X, LogOut, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProfile } from '../../hooks/useProfile'
@@ -8,6 +8,7 @@ import { UserAvatar } from '../ui/UserAvatar'
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview & stats' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, description: 'Manage your work' },
+  { path: '/events', label: 'Events', icon: CalendarDays, description: 'View schedule' },
   { path: '/categories', label: 'Categories', icon: Tag, description: 'Organize tasks' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, description: 'Track progress' },
 ]

@@ -18,6 +18,9 @@ describe('ProtectedRoute', () => {
       authenticated: false,
       loading: true,
       user: null,
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      refreshGoogleToken: async () => null,
       signInWithGoogle: async () => {},
       signOut: async () => {},
     })
@@ -41,6 +44,9 @@ describe('ProtectedRoute', () => {
       authenticated: false,
       loading: false,
       user: null,
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      refreshGoogleToken: async () => null,
       signInWithGoogle: async () => {},
       signOut: async () => {},
     })
@@ -65,6 +71,9 @@ describe('ProtectedRoute', () => {
       authenticated: true,
       loading: false,
       user: { id: '1', email: 'test@example.com' } as unknown as User,
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      refreshGoogleToken: async () => null,
       signInWithGoogle: async () => {},
       signOut: async () => {},
     })
