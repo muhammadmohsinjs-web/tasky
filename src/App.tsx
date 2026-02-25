@@ -15,32 +15,34 @@ import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 import Support from './pages/Support'
 import GoogleApiDisclosure from './pages/GoogleApiDisclosure'
+import { GlobalApiLoadingIndicator } from './components/ui/GlobalApiLoadingIndicator'
 
 export default function App() {
   return (
     <>
-    <Toaster position="bottom-right" richColors visibleToasts={3} />
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/welcome" element={<Welcome />} />
-      <Route path="/privacy" element={<PrivacyPolicy />} />
-      <Route path="/terms" element={<TermsOfService />} />
-      <Route path="/support" element={<Support />} />
-      <Route path="/google-api-disclosure" element={<GoogleApiDisclosure />} />
+      <GlobalApiLoadingIndicator />
+      <Toaster position="bottom-right" richColors visibleToasts={3} />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/welcome" element={<Welcome />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/support" element={<Support />} />
+        <Route path="/google-api-disclosure" element={<GoogleApiDisclosure />} />
 
-      <Route element={<ProtectedRoute />}>
-        <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/planning" element={<Planning />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/analytics" element={<Analytics />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/planning" element={<Planning />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/analytics" element={<Analytics />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
     </>
   )
 }

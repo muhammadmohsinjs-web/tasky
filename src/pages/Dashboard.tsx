@@ -10,7 +10,7 @@ import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off, ShieldCheck } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off, ShieldCheck, Loader2 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -28,6 +28,7 @@ export default function Dashboard() {
     setSyncEnabled,
     setCalendarId,
     runSyncNow,
+    syncingNow,
     retryDeadJobs,
     replayRecoverableJobs,
     backfillMissingTaskEvents,
@@ -171,7 +172,8 @@ export default function Dashboard() {
   }
 
   const handleRunSyncNow = async () => {
-    const result = await runSyncNow(30)
+    setGoogleSyncStatus('running sync...')
+    const result = await runSyncNow(10)
     if (!result) return
 
     setGoogleSyncStatus(`processed ${result.processed}, success ${result.succeeded}`)
@@ -229,7 +231,7 @@ export default function Dashboard() {
 
       autoSyncInFlightRef.current = true
       try {
-        const result = await runSyncNow(20)
+        const result = await runSyncNow(8)
         if (result) {
           setGoogleSyncStatus(`auto-sync: processed ${result.processed}, success ${result.succeeded}`)
         }
@@ -326,10 +328,17 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => void handleRunSyncNow()}
-                disabled={connectionLoading || !(connection?.sync_enabled)}
+                disabled={connectionLoading || syncingNow || !(connection?.sync_enabled)}
                 className="btn btn-secondary !h-10 !px-4"
               >
-                Run Sync Now
+                {syncingNow ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  'Run Sync Now'
+                )}
               </button>
             </div>
 
