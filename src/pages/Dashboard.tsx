@@ -36,6 +36,7 @@ export default function Dashboard() {
   } = useCalendarSyncSettings()
   const { events, loading: eventsLoading } = useEvents({
     calendarId: connection?.google_calendar_id ?? null,
+    googleSourceOfTruth: connection?.sync_enabled ?? false,
   })
   const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()

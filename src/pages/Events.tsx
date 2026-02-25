@@ -332,6 +332,7 @@ export default function Events() {
     timeMax: queryRange.timeMax,
     limit: 400,
     calendarId: selectedCalendarId,
+    googleSourceOfTruth: connection?.sync_enabled ?? false,
   })
 
   const visibleEvents = useMemo(() => normalizeEvents(events), [events])

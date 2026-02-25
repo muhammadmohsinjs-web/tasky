@@ -2,10 +2,6 @@ import { supabase } from './supabase'
 
 const GOOGLE_CALENDAR_BASE_URL = 'https://www.googleapis.com/calendar/v3'
 
-interface GoogleCalendarApiListResponse<T> {
-  items?: T[]
-}
-
 interface GoogleCalendarDateTime {
   date?: string
   dateTime?: string
@@ -90,34 +86,10 @@ async function requestGoogleJson<T>(
   return response.json() as Promise<T>
 }
 
-async function fetchGoogleJson<T>(baseUrl: string, path: string, accessToken: string): Promise<T> {
-  return requestGoogleJson<T>(baseUrl, path, accessToken)
-}
-
 export async function fetchGoogleCalendarPreview(
   googleAccessToken?: string,
   options?: { timeMin?: string; timeMax?: string; calendarMaxResults?: number; eventsMaxResults?: number }
 ): Promise<GoogleCalendarPreviewData> {
-  let accessToken = googleAccessToken
-
-  if (!accessToken) {
-    // Fallback: try to get from session (only works right after OAuth sign-in)
-    const { data: { session } } = await supabase.auth.getSession()
-    accessToken = session?.provider_token ?? undefined
-  }
-
-  if (!accessToken) {
-    throw new Error('Missing Google provider token. Please sign out and sign in with Google again.')
-  }
-
-  const calendarsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarListItem>>(
-    GOOGLE_CALENDAR_BASE_URL,
-    `/users/me/calendarList?maxResults=${Math.min(Math.max(options?.calendarMaxResults ?? 10, 1), 25)}`,
-    accessToken
-  )
-
-  const calendars = calendarsResponse.items ?? []
-  const eventsByCalendar: Record<string, GoogleCalendarEventItem[]> = {}
   const defaultMonthStart = new Date()
   defaultMonthStart.setDate(1)
   defaultMonthStart.setHours(0, 0, 0, 0)
@@ -125,19 +97,44 @@ export async function fetchGoogleCalendarPreview(
   defaultMonthEnd.setMonth(defaultMonthEnd.getMonth() + 1)
   const timeMin = options?.timeMin ?? defaultMonthStart.toISOString()
   const timeMax = options?.timeMax ?? defaultMonthEnd.toISOString()
-  const eventsMaxResults = Math.min(Math.max(options?.eventsMaxResults ?? 50, 1), 100)
+  const calendarsLimit = Math.min(Math.max(options?.calendarMaxResults ?? 10, 1), 25)
+  const eventsLimit = Math.min(Math.max(options?.eventsMaxResults ?? 50, 1), 100)
 
-  await Promise.all(
-    calendars.map(async (calendar) => {
-      const eventsResponse = await fetchGoogleJson<GoogleCalendarApiListResponse<GoogleCalendarEventItem>>(
-        GOOGLE_CALENDAR_BASE_URL,
-        `/calendars/${encodeURIComponent(calendar.id)}/events?maxResults=${eventsMaxResults}&singleEvents=true&orderBy=startTime&conferenceDataVersion=1&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
-        accessToken
-      )
+  const { data, error } = await supabase.functions.invoke('calendar-sync-outbox', {
+    body: {
+      action: 'listGoogleEvents',
+      googleAccessToken,
+      calendarsLimit,
+      eventsLimit,
+      timeMin,
+      timeMax,
+    },
+  })
 
-      eventsByCalendar[calendar.id] = eventsResponse.items ?? []
+  if (error) throw error
+  const payload = (data ?? {}) as {
+    error?: string
+    calendars?: GoogleCalendarListItem[]
+    events?: Array<GoogleCalendarEventItem & { calendarId: string; joinLink?: string | null; meetingLink?: string | null }>
+  }
+  if (payload.error) throw new Error(payload.error)
+
+  const calendars = payload.calendars ?? []
+  const eventsByCalendar: Record<string, GoogleCalendarEventItem[]> = {}
+  calendars.forEach((calendar) => {
+    eventsByCalendar[calendar.id] = []
+  })
+
+  ;(payload.events ?? []).forEach((event) => {
+    const calendarId = event.calendarId
+    if (!calendarId) return
+    const list = eventsByCalendar[calendarId] ?? []
+    list.push({
+      ...event,
+      hangoutLink: event.meetingLink ?? event.joinLink ?? undefined,
     })
-  )
+    eventsByCalendar[calendarId] = list
+  })
 
   return {
     calendars,
