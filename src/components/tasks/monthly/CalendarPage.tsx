@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, List, Loader2, Plus, WifiOff } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Command, Inbox, List, Loader2, Plus, WifiOff, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useTasks } from '../../../hooks/useTasks';
 import { useBacklogTasks } from '../../../hooks/useBacklogTasks';
 import { useCategories } from '../../../hooks/useCategories';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import { useAuth } from '../../../contexts/AuthContext';
+import { syncTaskMeta } from '../../../lib/taskMeta';
 import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { ConfirmationDialog } from '../../design-system/feedback/ConfirmationDialog';
@@ -24,13 +26,23 @@ const initialMonth = startOfMonth(now.getFullYear(), now.getMonth());
 const todayISO = toISODate(now);
 
 type ViewMode = 'calendar' | 'list' | 'backlog';
+type SmartView = 'all' | 'inbox' | 'today' | 'upcoming' | 'overdue' | 'backlog';
 const ALL_CATEGORY_FILTER = 'all';
 const UNCATEGORIZED_FILTER = '__uncategorized__';
+const UPCOMING_WINDOW_DAYS = 7;
 const STATUS_FILTER_LABELS: Record<'all' | TaskStatus, string> = {
   all: 'All Status',
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
+};
+const SMART_VIEW_LABELS: Record<SmartView, string> = {
+  all: 'All',
+  inbox: 'Inbox',
+  today: 'Today',
+  upcoming: 'Upcoming',
+  overdue: 'Overdue',
+  backlog: 'Backlog',
 };
 
 /* ── Status mapping between DB and Calendar UI ── */
@@ -81,14 +93,27 @@ function formatTimeLabel(value: string | null | undefined): string {
   return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
 }
 
+function matchesSmartView(task: CalendarTask, view: SmartView, today: string, upcomingLimit: string): boolean {
+  if (view === 'all') return true;
+  if (view === 'backlog') return task.dateISO === null;
+  if (view === 'inbox') return task.dateISO === null && task.status === 'pending';
+  if (view === 'today') return task.dateISO === today;
+  if (view === 'overdue') return Boolean(task.dateISO && task.dateISO < today && task.status !== 'completed');
+  if (view === 'upcoming') return Boolean(task.dateISO && task.dateISO > today && task.dateISO <= upcomingLimit);
+  return true;
+}
+
 export default function CalendarPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isOnline = useOnlineStatus();
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [monthDate, setMonthDate] = useState(initialMonth);
   const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [activeView, setActiveView] = useState<ViewMode>('list');
+  const [smartView, setSmartView] = useState<SmartView>('all');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_FILTER);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -97,6 +122,9 @@ export default function CalendarPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<CalendarTask | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [bulkDate, setBulkDate] = useState(todayISO);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   const {
     tasks: scheduledDbTasks,
@@ -107,6 +135,10 @@ export default function CalendarPage() {
     addTask: addScheduledTask,
     addTasks: addScheduledTasks,
     updateTask: updateScheduledTask,
+    bulkUpdateStatus: bulkUpdateScheduledStatus,
+    bulkReschedule: bulkRescheduleScheduledTasks,
+    bulkMoveToBacklog: bulkMoveScheduledToBacklog,
+    bulkDelete: bulkDeleteScheduledTasks,
     refetch: refetchScheduledTasks,
   } = useTasks(monthDate.getFullYear(), monthDate.getMonth());
   const {
@@ -118,6 +150,9 @@ export default function CalendarPage() {
     addTask: addBacklogTask,
     addTasks: addBacklogTasks,
     updateTask: updateBacklogTask,
+    bulkUpdateStatus: bulkUpdateBacklogStatus,
+    bulkDelete: bulkDeleteBacklogTasks,
+    scheduleTasks: scheduleBacklogTasks,
     refetch: refetchBacklogTasks,
   } = useBacklogTasks();
   const { categories } = useCategories();
@@ -132,6 +167,8 @@ export default function CalendarPage() {
 
   const loading = scheduledLoading || backlogLoading;
   const loadError = scheduledError || backlogError;
+  const todayKey = toISODate(new Date());
+  const upcomingLimitISO = toISODate(new Date(Date.now() + UPCOMING_WINDOW_DAYS * 24 * 60 * 60 * 1000));
 
   const handleDeleteTask = useCallback((taskId: string) => {
     if (!isOnline) {
@@ -155,6 +192,12 @@ export default function CalendarPage() {
     }
 
     if (selectedTaskId === taskId) setSelectedTaskId(null);
+    setSelectedTaskIds((prev) => {
+      if (!prev.has(taskId)) return prev;
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
     setPendingDeleteTask(null);
   }, [backlogDbTasks, deleteBacklogTask, deleteScheduledTask, pendingDeleteTask, selectedTaskId]);
 
@@ -199,23 +242,108 @@ export default function CalendarPage() {
     });
   }, [allCalendarTasks, searchQuery, statusFilter, categoryFilter]);
 
-  const scheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
-  const backlogTasks = useMemo(() => filteredTasks.filter(task => task.dateISO === null), [filteredTasks]);
-  const tasksForSelectedDate = useMemo(() => getTasksForDate(scheduledTasks, selectedDateISO), [scheduledTasks, selectedDateISO]);
+  const smartViewTasks = useMemo(
+    () => filteredTasks.filter((task) => matchesSmartView(task, smartView, todayKey, upcomingLimitISO)),
+    [filteredTasks, smartView, todayKey, upcomingLimitISO]
+  );
+
+  const calendarScheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
+  const scheduledTasks = useMemo(() => smartViewTasks.filter(task => task.dateISO !== null), [smartViewTasks]);
+  const backlogTasks = useMemo(() => smartViewTasks.filter(task => task.dateISO === null), [smartViewTasks]);
+  const tasksForSelectedDate = useMemo(() => getTasksForDate(calendarScheduledTasks, selectedDateISO), [calendarScheduledTasks, selectedDateISO]);
   const visibleSidebarTasks = useMemo(() => filterTasksByQuery(tasksForSelectedDate, searchQuery), [tasksForSelectedDate, searchQuery]);
 
   const monthTasks = useMemo(() => {
-    return scheduledTasks.filter(task => {
+    return calendarScheduledTasks.filter(task => {
       if (!task.dateISO) return false;
       const date = parseISODate(task.dateISO);
       return date.getFullYear() === monthDate.getFullYear() && date.getMonth() === monthDate.getMonth();
     });
-  }, [scheduledTasks, monthDate]);
+  }, [calendarScheduledTasks, monthDate]);
 
-  const groupedMonthTasks = useMemo(() => {
-    const dateKeys = Array.from(new Set(monthTasks.map(task => task.dateISO).filter((date): date is string => Boolean(date)))).sort();
-    return dateKeys.map(dateKey => ({ dateKey, items: getTasksForDate(monthTasks, dateKey) }));
-  }, [monthTasks]);
+  const groupedVisibleScheduledTasks = useMemo(() => {
+    const dateKeys = Array.from(new Set(scheduledTasks.map(task => task.dateISO).filter((date): date is string => Boolean(date)))).sort();
+    return dateKeys.map(dateKey => ({ dateKey, items: getTasksForDate(scheduledTasks, dateKey) }));
+  }, [scheduledTasks]);
+
+  const backlogTaskIdSet = useMemo(() => new Set(backlogDbTasks.map((task) => task.id)), [backlogDbTasks]);
+  const selectedCount = selectedTaskIds.size;
+  const visibleSelectableIds = useMemo(() => {
+    if (activeView === 'list') return groupedVisibleScheduledTasks.flatMap((group) => group.items.map((task) => task.id));
+    if (activeView === 'backlog') return backlogTasks.map((task) => task.id);
+    return visibleSidebarTasks.map((task) => task.id);
+  }, [activeView, backlogTasks, groupedVisibleScheduledTasks, visibleSidebarTasks]);
+  const allVisibleSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((id) => selectedTaskIds.has(id));
+
+  const clearSelection = useCallback(() => {
+    setSelectedTaskIds(new Set());
+  }, []);
+
+  const toggleTaskSelection = useCallback((taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleSelectableIds.forEach((id) => next.delete(id));
+      } else {
+        visibleSelectableIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [allVisibleSelected, visibleSelectableIds]);
+
+  const getSelectedPartitions = useCallback(() => {
+    const ids = Array.from(selectedTaskIds);
+    const backlogIds = ids.filter((id) => backlogTaskIdSet.has(id));
+    const scheduledIds = ids.filter((id) => !backlogTaskIdSet.has(id));
+    return { scheduledIds, backlogIds };
+  }, [backlogTaskIdSet, selectedTaskIds]);
+
+  const applyBulkMarkDone = useCallback(async () => {
+    const { scheduledIds, backlogIds } = getSelectedPartitions();
+    await Promise.all([
+      scheduledIds.length > 0 ? bulkUpdateScheduledStatus(scheduledIds, 'done') : Promise.resolve(true),
+      backlogIds.length > 0 ? bulkUpdateBacklogStatus(backlogIds, 'done') : Promise.resolve(true),
+    ]);
+    clearSelection();
+  }, [bulkUpdateBacklogStatus, bulkUpdateScheduledStatus, clearSelection, getSelectedPartitions]);
+
+  const applyBulkMoveToBacklog = useCallback(async () => {
+    const { scheduledIds } = getSelectedPartitions();
+    if (scheduledIds.length === 0) return;
+    await bulkMoveScheduledToBacklog(scheduledIds);
+    clearSelection();
+  }, [bulkMoveScheduledToBacklog, clearSelection, getSelectedPartitions]);
+
+  const applyBulkScheduleDate = useCallback(async () => {
+    const { scheduledIds, backlogIds } = getSelectedPartitions();
+    if (!bulkDate) {
+      toast.error('Select a date for scheduling');
+      return;
+    }
+    await Promise.all([
+      scheduledIds.length > 0 ? bulkRescheduleScheduledTasks(scheduledIds, bulkDate) : Promise.resolve(true),
+      backlogIds.length > 0 ? scheduleBacklogTasks(backlogIds, bulkDate) : Promise.resolve(true),
+    ]);
+    clearSelection();
+  }, [bulkDate, bulkRescheduleScheduledTasks, clearSelection, getSelectedPartitions, scheduleBacklogTasks]);
+
+  const applyBulkDelete = useCallback(async () => {
+    const { scheduledIds, backlogIds } = getSelectedPartitions();
+    await Promise.all([
+      scheduledIds.length > 0 ? bulkDeleteScheduledTasks(scheduledIds) : Promise.resolve(true),
+      backlogIds.length > 0 ? bulkDeleteBacklogTasks(backlogIds) : Promise.resolve(true),
+    ]);
+    clearSelection();
+  }, [bulkDeleteBacklogTasks, bulkDeleteScheduledTasks, clearSelection, getSelectedPartitions]);
 
   useEffect(() => {
     const pendingTaskId = sessionStorage.getItem('tasky:openTaskId');
@@ -250,7 +378,7 @@ export default function CalendarPage() {
     if (categoryFilter === UNCATEGORIZED_FILTER) return 'Uncategorized';
     return categories.find(category => category.id === categoryFilter)?.name ?? 'All Categories';
   }, [categories, categoryFilter]);
-  const hasActiveFilters = categoryFilter !== ALL_CATEGORY_FILTER || statusFilter !== 'all' || searchQuery.trim().length > 0;
+  const hasActiveFilters = categoryFilter !== ALL_CATEGORY_FILTER || statusFilter !== 'all' || searchQuery.trim().length > 0 || smartView !== 'all';
 
   const setMonthAndYear = (year: number, monthIndex: number) => {
     const currentSelectedDay = parseISODate(selectedDateISO).getDate();
@@ -298,6 +426,81 @@ export default function CalendarPage() {
   const handleRetryLoad = async () => {
     await Promise.all([refetchScheduledTasks(), refetchBacklogTasks()]);
   };
+
+  useEffect(() => {
+    const isTextInputTarget = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const hasMeta = event.metaKey || event.ctrlKey;
+
+      if (hasMeta && key === 'k') {
+        event.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      if (event.key === 'Escape' && isCommandPaletteOpen) {
+        setIsCommandPaletteOpen(false);
+        return;
+      }
+
+      if (isTextInputTarget(event)) return;
+      if (!isOnline) return;
+
+      if (key === 'n') {
+        event.preventDefault();
+        setEditingTaskId(null);
+        setModalMode('create');
+        setIsAddModalOpen(true);
+        return;
+      }
+
+      if (key === '/') {
+        event.preventDefault();
+        if (activeView === 'calendar') setActiveView('list');
+        window.setTimeout(() => searchInputRef.current?.focus(), 10);
+        return;
+      }
+
+      if (selectedCount === 0) return;
+
+      if (key === 'x') {
+        event.preventDefault();
+        void applyBulkMarkDone();
+        return;
+      }
+
+      if (key === 'b') {
+        event.preventDefault();
+        void applyBulkMoveToBacklog();
+        return;
+      }
+
+      if (key === 'd') {
+        event.preventDefault();
+        setBulkDate(todayKey);
+        void applyBulkScheduleDate();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    activeView,
+    applyBulkMarkDone,
+    applyBulkMoveToBacklog,
+    applyBulkScheduleDate,
+    isCommandPaletteOpen,
+    isOnline,
+    selectedCount,
+    todayKey,
+  ]);
 
   return (
     <main className="min-h-screen bg-[#EEF3FA] px-3 py-4 md:px-5 md:py-5">
@@ -349,6 +552,13 @@ export default function CalendarPage() {
               </div>
 
               <div className="flex items-center gap-2 xl:justify-self-end">
+                <button
+                  type="button"
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                  <Command className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold">Commands</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsBulkAddOpen(true)}
@@ -412,6 +622,7 @@ export default function CalendarPage() {
                           setCategoryFilter(ALL_CATEGORY_FILTER);
                           setStatusFilter('all');
                           setSearchQuery('');
+                          setSmartView('all');
                         }}
                         className="inline-flex h-8 items-center rounded-md border border-[#C7D4EA] bg-[#F4F8FF] px-2.5 text-[12px] font-semibold text-[#314563] transition hover:bg-white">
                         Clear
@@ -421,6 +632,7 @@ export default function CalendarPage() {
 
                   {activeView !== 'calendar' ? (
                     <input
+                      ref={searchInputRef}
                       type="search"
                       value={searchQuery}
                       onChange={event => setSearchQuery(event.target.value)}
@@ -474,9 +686,95 @@ export default function CalendarPage() {
                   </label>
                 </div>
               ) : null}
+
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {(Object.keys(SMART_VIEW_LABELS) as SmartView[]).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => {
+                      setSmartView(view);
+                      if ((view === 'inbox' || view === 'backlog') && activeView === 'calendar') {
+                        setActiveView('backlog');
+                      }
+                    }}
+                    className={`inline-flex h-8 items-center rounded-md border px-2.5 text-[12px] font-semibold transition ${
+                      smartView === view
+                        ? 'border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
+                        : 'border-[#D4DEEE] bg-white text-[#4C5C77] hover:bg-[#F8FAFD]'
+                    }`}
+                  >
+                    {SMART_VIEW_LABELS[view]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
+
+        {selectedCount > 0 ? (
+          <section className="mb-3 rounded-xl border border-[#D7E3F7] bg-[#F2F7FF] px-3 py-3 shadow-[0_4px_16px_rgba(30,64,175,0.08)] md:px-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleSelectAllVisible}
+                  className="inline-flex h-8 items-center rounded-md border border-[#C7D5EE] bg-white px-2.5 text-[12px] font-semibold text-[#2C4670]"
+                >
+                  {allVisibleSelected ? 'Unselect Visible' : 'Select Visible'}
+                </button>
+                <span className="inline-flex items-center rounded-full bg-[#DBE9FF] px-2.5 py-1 text-[12px] font-semibold text-[#184593]">
+                  {selectedCount} selected
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void applyBulkMarkDone()}
+                  className="inline-flex h-8 items-center rounded-md border border-[#C7D5EE] bg-white px-2.5 text-[12px] font-semibold text-[#2C4670]"
+                >
+                  <Check className="mr-1 h-3.5 w-3.5" />
+                  Mark done
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyBulkMoveToBacklog()}
+                  className="inline-flex h-8 items-center rounded-md border border-[#C7D5EE] bg-white px-2.5 text-[12px] font-semibold text-[#2C4670]"
+                >
+                  Move to backlog
+                </button>
+                <input
+                  type="date"
+                  value={bulkDate}
+                  onChange={(event) => setBulkDate(event.target.value)}
+                  className="h-8 rounded-md border border-[#C7D5EE] bg-white px-2 text-[12px] text-[#2C4670]"
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyBulkScheduleDate()}
+                  className="inline-flex h-8 items-center rounded-md border border-[#C7D5EE] bg-white px-2.5 text-[12px] font-semibold text-[#2C4670]"
+                >
+                  Schedule
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyBulkDelete()}
+                  className="inline-flex h-8 items-center rounded-md border border-red-300 bg-white px-2.5 text-[12px] font-semibold text-red-600"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="inline-flex h-8 items-center rounded-md border border-[#C7D5EE] bg-white px-2.5 text-[12px] font-semibold text-[#2C4670]"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {activeView === 'calendar' ? (
           <section className="overflow-hidden rounded-[18px] border border-[#D8E1EE] bg-white shadow-[0_10px_24px_rgba(40,56,90,0.07)]">
@@ -567,6 +865,9 @@ export default function CalendarPage() {
                       onToggleStatus={handleToggleStatus}
                       onToggleFilters={() => setShowFilters((prev) => !prev)}
                       hasActiveFilters={hasActiveFilters}
+                      selectionMode={true}
+                      selectedTaskIds={selectedTaskIds}
+                      onToggleSelectTask={toggleTaskSelection}
                     />
                   </div>
                 </div>
@@ -591,11 +892,11 @@ export default function CalendarPage() {
                   Retry
                 </button>
               </div>
-            ) : groupedMonthTasks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No scheduled tasks match current filters for this month.</div>
+            ) : groupedVisibleScheduledTasks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No scheduled tasks match current filters.</div>
             ) : (
               <div className="space-y-5">
-                {groupedMonthTasks.map(group => (
+                {groupedVisibleScheduledTasks.map(group => (
                   <div key={group.dateKey}>
                     <p className="mb-2 text-[12px] font-semibold text-[#5A6780]">{parseISODate(group.dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                     <div className="space-y-2.5">
@@ -604,11 +905,14 @@ export default function CalendarPage() {
                           key={task.id}
                           task={task}
                           isSelected={selectedTaskId === task.id}
+                          isChecked={selectedTaskIds.has(task.id)}
                           onSelect={setSelectedTaskId}
                           onView={handleViewTask}
                           onEdit={handleEditTask}
                           onDelete={handleDeleteTask}
                           onToggleStatus={handleToggleStatus}
+                          onToggleSelect={toggleTaskSelection}
+                          selectionMode={true}
                         />
                       ))}
                     </div>
@@ -644,11 +948,14 @@ export default function CalendarPage() {
                     key={task.id}
                     task={task}
                     isSelected={selectedTaskId === task.id}
+                    isChecked={selectedTaskIds.has(task.id)}
                     onSelect={setSelectedTaskId}
                     onView={handleViewTask}
                     onEdit={handleEditTask}
                     onDelete={handleDeleteTask}
                     onToggleStatus={handleToggleStatus}
+                    onToggleSelect={toggleTaskSelection}
+                    selectionMode={true}
                   />
                 ))}
               </div>
@@ -656,6 +963,60 @@ export default function CalendarPage() {
           </section>
         ) : null}
       </div>
+
+      {isCommandPaletteOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-24"
+          onClick={() => setIsCommandPaletteOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-[#D6E3F6] bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.28)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#213856]">
+                <Command className="h-4 w-4" />
+                Command Palette
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsCommandPaletteOpen(false)}
+                className="rounded-md p-1 text-[#607A9C] hover:bg-[#F1F5FB]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid gap-2">
+              <PaletteAction label="Create task" hint="N" onRun={() => {
+                setEditingTaskId(null);
+                setModalMode('create');
+                setIsAddModalOpen(true);
+                setIsCommandPaletteOpen(false);
+              }} />
+              <PaletteAction label="Open list view" hint="L" onRun={() => {
+                setActiveView('list');
+                setIsCommandPaletteOpen(false);
+              }} />
+              <PaletteAction label="Open backlog view" hint="B" onRun={() => {
+                setActiveView('backlog');
+                setSmartView('backlog');
+                setIsCommandPaletteOpen(false);
+              }} />
+              <PaletteAction label="Focus search" hint="/" onRun={() => {
+                if (activeView === 'calendar') setActiveView('list');
+                setIsCommandPaletteOpen(false);
+                window.setTimeout(() => searchInputRef.current?.focus(), 10);
+              }} />
+              {selectedCount > 0 ? (
+                <PaletteAction label="Mark selected done" hint="X" onRun={() => {
+                  void applyBulkMarkDone();
+                  setIsCommandPaletteOpen(false);
+                }} />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <AddTaskModal
         isOpen={isAddModalOpen}
@@ -685,6 +1046,7 @@ export default function CalendarPage() {
             status: dbStatus,
             priority: payload.priority,
             links: payload.links,
+            recurrence: payload.recurrence,
           };
 
           if (editingTask) {
@@ -697,9 +1059,19 @@ export default function CalendarPage() {
             }
             if (!updated) return false;
 
+            await syncTaskMeta({
+              taskId: editingTask.id,
+              userId: user?.id,
+              subtasks: payload.subtasks,
+              tags: payload.tags,
+              reminderAt: payload.reminderAt,
+              recurrence: payload.recurrence,
+              taskDate: payload.dateISO,
+            });
+
             if (payload.files.length > 0) {
               await uploadFilesForTask(editingTask.id, payload.files);
-              await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+              await queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
             }
 
             if (payload.dateISO) {
@@ -722,6 +1094,7 @@ export default function CalendarPage() {
                   time: payload.time,
                   status: dbStatus,
                   links: payload.links,
+                  recurrence: payload.recurrence,
                 }
               )
             : await addBacklogTask(
@@ -734,14 +1107,25 @@ export default function CalendarPage() {
                   time: payload.time,
                   status: dbStatus,
                   links: payload.links,
+                  recurrence: payload.recurrence,
                 }
               );
 
           if (!created) return false;
 
+          await syncTaskMeta({
+            taskId: created.id,
+            userId: user?.id,
+            subtasks: payload.subtasks,
+            tags: payload.tags,
+            reminderAt: payload.reminderAt,
+            recurrence: payload.recurrence,
+            taskDate: payload.dateISO,
+          });
+
           if (payload.files.length > 0) {
             await uploadFilesForTask(created.id, payload.files);
-            await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            await queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
           }
 
           if (payload.dateISO) {
@@ -825,6 +1209,19 @@ function CircularProgress({ value }: { value: number }) {
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-[#223756]">{normalized}%</span>
     </div>
+  );
+}
+
+function PaletteAction({ label, hint, onRun }: { label: string; hint: string; onRun: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRun}
+      className="flex items-center justify-between rounded-xl border border-[#D8E4F5] bg-white px-3 py-2 text-left hover:bg-[#F6FAFF]"
+    >
+      <span className="text-sm font-medium text-[#2D466B]">{label}</span>
+      <span className="rounded-md border border-[#D3DEEF] bg-[#F5F8FD] px-2 py-0.5 text-[11px] font-semibold text-[#5A7091]">{hint}</span>
+    </button>
   );
 }
 

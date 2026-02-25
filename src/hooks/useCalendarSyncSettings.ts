@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,12 +7,41 @@ import { supabase } from '../lib/supabase'
 import type { CalendarConnection, SyncDirection } from '../types'
 
 const GOOGLE_PROVIDER = 'google' as const
+const STALE_PROCESSING_MINUTES = 15
+
+async function extractFunctionInvokeErrorMessage(error: unknown): Promise<string | null> {
+  if (!error || typeof error !== 'object' || !('context' in error)) return null
+
+  const context = (error as { context?: unknown }).context
+  if (!(context instanceof Response)) return null
+
+  try {
+    const payload = await context.clone().json() as { error?: string }
+    if (payload.error && payload.error.trim().length > 0) {
+      return payload.error.trim()
+    }
+  } catch {
+    // Ignore non-JSON payloads.
+  }
+
+  try {
+    const text = (await context.clone().text()).trim()
+    if (text.length > 0) {
+      return text.slice(0, 240)
+    }
+  } catch {
+    // Ignore body parsing failures.
+  }
+
+  return null
+}
 
 export function useCalendarSyncSettings() {
   const { user, googleRefreshToken, refreshGoogleToken } = useAuth()
   const queryClient = useQueryClient()
   const queryKey = useMemo(() => ['calendar-connection', user?.id], [user?.id])
   const outboxQueryKey = useMemo(() => ['calendar-sync-outbox', user?.id], [user?.id])
+  const [syncingNow, setSyncingNow] = useState(false)
 
   const { data: connection = null, isLoading: loading, error } = useQuery({
     queryKey,
@@ -37,8 +66,19 @@ export function useCalendarSyncSettings() {
     enabled: !!user?.id,
     queryFn: async () => {
       if (!user?.id) return null
+      const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const staleBeforeIso = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString()
 
-      const [queuedCountRes, failedCountRes, deadCountRes, latestErrorRes] = await Promise.all([
+      const [
+        queuedCountRes,
+        failedCountRes,
+        deadCountRes,
+        latestErrorRes,
+        done24hRes,
+        failed24hRes,
+        dead24hRes,
+        staleProcessingRes,
+      ] = await Promise.all([
         supabase
           .from('calendar_sync_outbox')
           .select('id', { count: 'exact', head: true })
@@ -66,12 +106,51 @@ export function useCalendarSyncSettings() {
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('calendar_sync_outbox')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('provider', GOOGLE_PROVIDER)
+          .eq('status', 'done')
+          .gte('updated_at', sinceIso),
+        supabase
+          .from('calendar_sync_outbox')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('provider', GOOGLE_PROVIDER)
+          .eq('status', 'failed')
+          .gte('updated_at', sinceIso),
+        supabase
+          .from('calendar_sync_outbox')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('provider', GOOGLE_PROVIDER)
+          .eq('status', 'dead')
+          .gte('updated_at', sinceIso),
+        supabase
+          .from('calendar_sync_outbox')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('provider', GOOGLE_PROVIDER)
+          .eq('status', 'processing')
+          .lt('updated_at', staleBeforeIso),
       ])
 
       if (queuedCountRes.error) throw queuedCountRes.error
       if (failedCountRes.error) throw failedCountRes.error
       if (deadCountRes.error) throw deadCountRes.error
       if (latestErrorRes.error) throw latestErrorRes.error
+      if (done24hRes.error) throw done24hRes.error
+      if (failed24hRes.error) throw failed24hRes.error
+      if (dead24hRes.error) throw dead24hRes.error
+      if (staleProcessingRes.error) throw staleProcessingRes.error
+
+      const done24h = done24hRes.count ?? 0
+      const failed24h = failed24hRes.count ?? 0
+      const dead24h = dead24hRes.count ?? 0
+      const processed24h = done24h + failed24h + dead24h
+      const successRate24h = processed24h > 0 ? Math.round((done24h / processed24h) * 100) : 100
+      const deadRate24h = processed24h > 0 ? Number(((dead24h / processed24h) * 100).toFixed(1)) : 0
 
       return {
         queued: queuedCountRes.count ?? 0,
@@ -79,6 +158,13 @@ export function useCalendarSyncSettings() {
         dead: deadCountRes.count ?? 0,
         lastError: latestErrorRes.data?.last_error ?? null,
         lastErrorAt: latestErrorRes.data?.updated_at ?? null,
+        done24h,
+        failed24h,
+        dead24h,
+        processed24h,
+        successRate24h,
+        deadRate24h,
+        staleProcessing: staleProcessingRes.count ?? 0,
       }
     },
   })
@@ -171,50 +257,57 @@ export function useCalendarSyncSettings() {
 
   const runSyncNow = useCallback(
     async (limit = 25) => {
-      if (!user?.id) {
-        toast.error('Please sign in to run calendar sync')
-        return null
-      }
+      setSyncingNow(true)
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      try {
+        if (!user?.id) {
+          toast.error('Please sign in to run calendar sync')
+          return null
+        }
 
-      if (!session?.access_token) {
-        toast.error('Session expired. Please sign in again.')
-        return null
-      }
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
 
-      const googleAccessToken = session.provider_token ?? await refreshGoogleToken()
+        if (!session?.access_token) {
+          toast.error('Session expired. Please sign in again.')
+          return null
+        }
 
-      const { data, error: invokeError } = await supabase.functions.invoke('calendar-sync-outbox', {
-        body: {
-          userId: user.id,
-          googleAccessToken,
-          googleRefreshToken,
-          limit,
-        },
-      })
+        const googleAccessToken = session.provider_token ?? await refreshGoogleToken()
 
-      if (invokeError) {
-        console.error('Failed to run sync outbox processor:', {
-          invokeError,
+        const { data, error: invokeError } = await supabase.functions.invoke('calendar-sync-outbox', {
+          body: {
+            userId: user.id,
+            googleAccessToken,
+            googleRefreshToken,
+            limit,
+          },
         })
-        const message = invokeError.message || 'Failed to run Google sync'
-        toast.error(message)
-        return null
-      }
 
-      await markSyncCompleted()
-      await invalidate()
-      await invalidateOutbox()
-      return (data ?? null) as {
-        ok: boolean
-        processed: number
-        succeeded: number
-        failed: number
-        dead: number
-        skipped: number
+        if (invokeError) {
+          console.error('Failed to run sync outbox processor:', {
+            invokeError,
+          })
+          const detailedMessage = await extractFunctionInvokeErrorMessage(invokeError)
+          const message = detailedMessage || invokeError.message || 'Failed to run Google sync'
+          toast.error(message)
+          return null
+        }
+
+        await markSyncCompleted()
+        await invalidate()
+        await invalidateOutbox()
+        return (data ?? null) as {
+          ok: boolean
+          processed: number
+          succeeded: number
+          failed: number
+          dead: number
+          skipped: number
+        }
+      } finally {
+        setSyncingNow(false)
       }
     },
     [googleRefreshToken, invalidate, invalidateOutbox, markSyncCompleted, refreshGoogleToken, user?.id]
@@ -247,6 +340,54 @@ export function useCalendarSyncSettings() {
     return data?.length ?? 0
   }, [invalidateOutbox, user?.id])
 
+  const replayRecoverableJobs = useCallback(async () => {
+    if (!user?.id) return 0
+    const nowIso = new Date().toISOString()
+    const staleBeforeIso = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString()
+
+    const [recoverDeadFailedRes, recoverStaleProcessingRes] = await Promise.all([
+      supabase
+        .from('calendar_sync_outbox')
+        .update({
+          status: 'queued',
+          attempt_count: 0,
+          last_error: null,
+          next_attempt_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('user_id', user.id)
+        .eq('provider', GOOGLE_PROVIDER)
+        .in('status', ['dead', 'failed'])
+        .select('id'),
+      supabase
+        .from('calendar_sync_outbox')
+        .update({
+          status: 'queued',
+          last_error: null,
+          next_attempt_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('user_id', user.id)
+        .eq('provider', GOOGLE_PROVIDER)
+        .eq('status', 'processing')
+        .lt('updated_at', staleBeforeIso)
+        .select('id'),
+    ])
+
+    if (recoverDeadFailedRes.error || recoverStaleProcessingRes.error) {
+      console.error('Failed to replay recoverable sync jobs:', {
+        deadFailedError: recoverDeadFailedRes.error,
+        staleProcessingError: recoverStaleProcessingRes.error,
+      })
+      toast.error('Failed to replay recoverable sync jobs')
+      return 0
+    }
+
+    const recovered = (recoverDeadFailedRes.data?.length ?? 0) + (recoverStaleProcessingRes.data?.length ?? 0)
+    await invalidateOutbox()
+    return recovered
+  }, [invalidateOutbox, user?.id])
+
   const backfillMissingTaskEvents = useCallback(async (limit = 100) => {
     if (!user?.id) return 0
 
@@ -259,6 +400,7 @@ export function useCalendarSyncSettings() {
         .select('id,title,description,notes,date,end_date,time')
         .eq('user_id', user.id)
         .not('date', 'is', null)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(safeLimit),
       supabase
@@ -404,7 +546,8 @@ export function useCalendarSyncSettings() {
 
     if (invokeError) {
       console.error('Failed to disconnect Google Calendar:', invokeError)
-      toast.error(invokeError.message || 'Failed to disconnect Google Calendar')
+      const detailedMessage = await extractFunctionInvokeErrorMessage(invokeError)
+      toast.error(detailedMessage || invokeError.message || 'Failed to disconnect Google Calendar')
       return false
     }
 
@@ -436,7 +579,9 @@ export function useCalendarSyncSettings() {
     setSyncDirection,
     markSyncCompleted,
     runSyncNow,
+    syncingNow,
     retryDeadJobs,
+    replayRecoverableJobs,
     backfillMissingTaskEvents,
     disconnectGoogle,
     refetch: invalidate,

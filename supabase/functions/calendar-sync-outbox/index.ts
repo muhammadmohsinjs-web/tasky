@@ -4,6 +4,9 @@ const GOOGLE_CALENDAR_BASE_URL = 'https://www.googleapis.com/calendar/v3'
 const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const MAX_ATTEMPTS = 6
 const RETRY_MINUTES = [1, 5, 15, 30, 60, 180]
+const STALE_PROCESSING_MINUTES = 15
+const GOOGLE_HTTP_TIMEOUT_MS = 12_000
+const USER_REQUEST_LIMIT_CAP = 10
 
 type OutboxStatus = 'queued' | 'processing' | 'done' | 'failed' | 'dead'
 type OutboxOperation = 'upsert' | 'delete'
@@ -69,6 +72,7 @@ interface ProcessResult {
   skipped: number
   usersProcessed: number
   usersSkippedNoToken: number
+  recoveredLocks: number
 }
 
 interface GoogleCalendarListResponse {
@@ -143,6 +147,15 @@ class GoogleTokenRefreshError extends Error {
   }
 }
 
+class RequestTimeoutError extends Error {
+  timeoutMs: number
+
+  constructor(timeoutMs: number) {
+    super(`Upstream request timed out after ${timeoutMs}ms`)
+    this.timeoutMs = timeoutMs
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
@@ -155,6 +168,7 @@ const json = (status: number, body: Record<string, unknown>) =>
   })
 
 function isRetryableGoogleError(error: unknown): boolean {
+  if (error instanceof RequestTimeoutError) return true
   if (!(error instanceof GoogleApiError)) return false
   return error.status === 408 || error.status === 409 || error.status === 429 || error.status >= 500
 }
@@ -203,12 +217,31 @@ function toGoogleEventBody(event: CalendarEventRow) {
   }
 }
 
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs = GOOGLE_HTTP_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new RequestTimeoutError(timeoutMs)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 async function requestGoogleJson<T>(
   path: string,
   accessToken: string,
   options?: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown }
 ): Promise<T> {
-  const response = await fetch(`${GOOGLE_CALENDAR_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${GOOGLE_CALENDAR_BASE_URL}${path}`, {
     method: options?.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -234,7 +267,7 @@ async function refreshGoogleAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<{ accessToken: string; expiresIn: number; refreshToken?: string }> {
-  const response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+  const response = await fetchWithTimeout(GOOGLE_OAUTH_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -474,6 +507,31 @@ async function claimJobs(
   return claimed
 }
 
+async function recoverStuckProcessingJobs(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString()
+  const nowIso = new Date().toISOString()
+
+  const { data, error } = await supabase
+    .from('calendar_sync_outbox')
+    .update({
+      status: 'failed',
+      next_attempt_at: nowIso,
+      last_error: `Recovered stale processing lock after ${STALE_PROCESSING_MINUTES} minutes`,
+      updated_at: nowIso,
+    })
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .eq('status', 'processing')
+    .lt('updated_at', staleBefore)
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
+}
+
 async function getConnection(
   supabase: ReturnType<typeof createClient>,
   userId: string
@@ -624,7 +682,7 @@ async function getValidGoogleAccessToken(
 }
 
 async function revokeGoogleToken(token: string) {
-  const response = await fetch('https://oauth2.googleapis.com/revoke', {
+  const response = await fetchWithTimeout('https://oauth2.googleapis.com/revoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ token }),
@@ -831,6 +889,11 @@ async function processJobsForUser(
   limit: number,
   result: ProcessResult
 ) {
+  const recoveredLocks = await recoverStuckProcessingJobs(supabase, userId)
+  if (recoveredLocks > 0) {
+    result.recoveredLocks += recoveredLocks
+  }
+
   const jobs = await claimJobs(supabase, userId, limit)
   if (!jobs.length) {
     result.skipped += 1
@@ -924,7 +987,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const action = body.action ?? 'processOutbox'
-  const limit = Math.min(Math.max(body.limit ?? 25, 1), 100)
+  const requestedLimit = Math.min(Math.max(body.limit ?? 25, 1), 100)
   const userLimit = Math.min(Math.max(body.userLimit ?? 20, 1), 100)
   const authHeader = req.headers.get('Authorization') ?? ''
   const hasCronSecret = Boolean(cronSecret) && req.headers.get('x-sync-secret') === cronSecret
@@ -937,6 +1000,7 @@ Deno.serve(async (req) => {
     skipped: 0,
     usersProcessed: 0,
     usersSkippedNoToken: 0,
+    recoveredLocks: 0,
   }
 
   try {
@@ -946,6 +1010,7 @@ Deno.serve(async (req) => {
       hasCronSecret,
       hasAuthHeader: Boolean(authHeader),
       requestedUserId: body.userId ?? null,
+      requestedLimit,
     })
 
     if (hasCronSecret) {
@@ -973,7 +1038,7 @@ Deno.serve(async (req) => {
           continue
         }
 
-        await processJobsForUser(supabase, userId, accessToken, limit, result)
+        await processJobsForUser(supabase, userId, accessToken, requestedLimit, result)
         result.usersProcessed += 1
       }
     } else {
@@ -1047,7 +1112,8 @@ Deno.serve(async (req) => {
         return json(400, { error: 'Missing Google access token and refresh token for this user' })
       }
 
-      await processJobsForUser(supabase, userId, accessToken, limit, result)
+      const effectiveLimit = Math.min(requestedLimit, USER_REQUEST_LIMIT_CAP)
+      await processJobsForUser(supabase, userId, accessToken, effectiveLimit, result)
       result.usersProcessed = 1
     }
 

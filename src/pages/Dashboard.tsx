@@ -10,7 +10,7 @@ import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off, ShieldCheck, Loader2 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -28,12 +28,15 @@ export default function Dashboard() {
     setSyncEnabled,
     setCalendarId,
     runSyncNow,
+    syncingNow,
     retryDeadJobs,
+    replayRecoverableJobs,
     backfillMissingTaskEvents,
     disconnectGoogle,
   } = useCalendarSyncSettings()
   const { events, loading: eventsLoading } = useEvents({
     calendarId: connection?.google_calendar_id ?? null,
+    googleSourceOfTruth: connection?.sync_enabled ?? false,
   })
   const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()
@@ -170,7 +173,8 @@ export default function Dashboard() {
   }
 
   const handleRunSyncNow = async () => {
-    const result = await runSyncNow(30)
+    setGoogleSyncStatus('running sync...')
+    const result = await runSyncNow(10)
     if (!result) return
 
     setGoogleSyncStatus(`processed ${result.processed}, success ${result.succeeded}`)
@@ -191,6 +195,16 @@ export default function Dashboard() {
       return
     }
     toast.message('No dead jobs to retry')
+  }
+
+  const handleReplayRecoverableJobs = async () => {
+    const recovered = await replayRecoverableJobs()
+    if (recovered > 0) {
+      toast.success(`Queued ${recovered} recoverable sync job${recovered === 1 ? '' : 's'}`)
+      setGoogleSyncStatus(`replayed ${recovered} recoverable jobs`)
+      return
+    }
+    toast.message('No recoverable sync jobs found')
   }
 
   const handleDisconnectGoogle = async () => {
@@ -218,7 +232,7 @@ export default function Dashboard() {
 
       autoSyncInFlightRef.current = true
       try {
-        const result = await runSyncNow(20)
+        const result = await runSyncNow(8)
         if (result) {
           setGoogleSyncStatus(`auto-sync: processed ${result.processed}, success ${result.succeeded}`)
         }
@@ -241,11 +255,20 @@ export default function Dashboard() {
     return <LoadingSpinner message="Loading dashboard..." />
   }
 
+  const syncDeadRate = outboxStats?.deadRate24h ?? 0
+  const syncSuccessRate = outboxStats?.successRate24h ?? 100
+  const syncHealthTone = outboxLoading
+    ? 'border-[#D9E5F6] bg-[#F6FAFF] text-[#38557C]'
+    : syncDeadRate > 0.5
+      ? 'border-[#F2D3D3] bg-[#FFF1F1] text-[#A33A3A]'
+      : 'border-[#D4E3F8] bg-[#EEF5FF] text-[#1D4F95]'
+  const syncHealthLabel = outboxLoading ? 'Sync health loading' : syncDeadRate > 0.5 ? 'Needs attention' : 'Healthy'
+
   return (
     <div className="content-wrap">
       <div className="page-header">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.95fr)]">
+          <section className="rounded-[28px] border border-[#D8E4F5] bg-[radial-gradient(circle_at_0%_0%,#f8fbff_0%,#eef4ff_52%,#f7faff_100%)] p-6 shadow-[0_12px_30px_rgba(43,71,120,0.08)]">
             <span className="page-kicker">Overview</span>
             <h1>
               {greeting}
@@ -254,85 +277,79 @@ export default function Dashboard() {
             <p className="page-subtitle">
               {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <article className="rounded-2xl border border-[#D4E3F8] bg-white/80 px-3.5 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5C7395]">Due Today</p>
+                <p className="mt-1 text-2xl font-semibold text-[#1C3C68]">{dueToday}</p>
+              </article>
+              <article className="rounded-2xl border border-[#F2D3D3] bg-[#FFF6F6] px-3.5 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A74A4A]">Overdue</p>
+                <p className="mt-1 text-2xl font-semibold text-[#A33A3A]">{overdue}</p>
+              </article>
+              <article className={`rounded-2xl border px-3.5 py-3 ${syncHealthTone}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide">Sync Health</p>
+                <p className="mt-1 text-xl font-semibold">{syncHealthLabel}</p>
+              </article>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-full border border-[#D4E3F8] bg-[#EEF5FF] px-2.5 py-1 text-xs font-medium text-[#1D4F95]">
                 <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                Due today: {dueToday}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-[#F2D3D3] bg-[#FFF1F1] px-2.5 py-1 text-xs font-medium text-[#A33A3A]">
-                Overdue: {overdue}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
                 Google sync: {connection?.sync_enabled ? 'enabled' : 'disabled'}
               </span>
               <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Target calendar: {connection?.google_calendar_id ?? 'primary'}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Sync mode: {connection?.sync_direction ?? 'task_to_google'}
+                Calendar: {connection?.google_calendar_id ?? 'primary'}
               </span>
               <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
                 Status: {googleSyncStatus}
               </span>
-              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Outbox: {outboxLoading ? 'loading...' : `queued ${outboxStats?.queued ?? 0}, failed ${outboxStats?.failed ?? 0}, dead ${outboxStats?.dead ?? 0}`}
-              </span>
-              {outboxStats?.lastError ? (
-                <span className="inline-flex items-center rounded-full border border-[#F2D3D3] bg-[#FFF1F1] px-2.5 py-1 text-xs font-medium text-[#A33A3A]">
-                  Last sync error: {outboxStats.lastError.slice(0, 120)}
-                </span>
-              ) : null}
             </div>
-          </div>
+          </section>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => navigate('/tasks')} className="btn btn-secondary !h-10 !px-4">
-              Plan Today
-            </button>
-            <button
-              onClick={() => void handleFetchGoogleData()}
-              disabled={googlePreviewLoading || connectionLoading}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              <CloudDownload className="h-4 w-4" />
-              {googlePreviewLoading ? 'Refreshing...' : 'Refresh Calendars'}
-            </button>
-            <button
-              onClick={() => void handleToggleSync()}
-              disabled={connectionLoading}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              {connection?.sync_enabled ? 'Disable Sync' : 'Enable Sync'}
-            </button>
-            <button
-              onClick={() => void handleRunSyncNow()}
-              disabled={connectionLoading || !(connection?.sync_enabled)}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              Run Sync Now
-            </button>
-            <button
-              onClick={() => void handleRetryDeadJobs()}
-              disabled={connectionLoading || outboxLoading || (outboxStats?.dead ?? 0) === 0}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              Retry Dead Jobs
-            </button>
-            <button
-              onClick={() => void handleDisconnectGoogle()}
-              disabled={connectionLoading}
-              className="btn btn-secondary !h-10 !px-4 !text-[#8B2A2A] !border-[#EFC4C4] !bg-[#FFF4F4] hover:!bg-[#FFEAEA]"
-            >
-              <Link2Off className="h-4 w-4" />
-              Disconnect Google
-            </button>
-            <label className="flex h-10 items-center gap-2 rounded-xl border border-[#D9E5F6] bg-white px-3 text-xs font-medium text-[#38557C]">
+          <section className="rounded-[24px] border border-[#D8E4F5] bg-white p-5 shadow-[0_10px_26px_rgba(43,71,120,0.08)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#617999]">Command Deck</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button onClick={() => navigate('/tasks')} className="btn btn-primary !h-11 !px-4 sm:col-span-2">
+                <Plus className="h-4 w-4" />
+                New Task
+              </button>
+              <button onClick={() => navigate('/tasks')} className="btn btn-secondary !h-10 !px-4">
+                Plan Today
+              </button>
+              <button onClick={() => navigate('/planning')} className="btn btn-secondary !h-10 !px-4">
+                Weekly Cockpit
+              </button>
+              <button
+                onClick={() => void handleToggleSync()}
+                disabled={connectionLoading}
+                className="btn btn-secondary !h-10 !px-4"
+              >
+                {connection?.sync_enabled ? 'Disable Sync' : 'Enable Sync'}
+              </button>
+              <button
+                onClick={() => void handleRunSyncNow()}
+                disabled={connectionLoading || syncingNow || !(connection?.sync_enabled)}
+                className="btn btn-secondary !h-10 !px-4"
+              >
+                {syncingNow ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  'Run Sync Now'
+                )}
+              </button>
+            </div>
+
+            <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border border-[#D9E5F6] bg-[#F8FBFF] px-3 text-xs font-medium text-[#38557C]">
               Calendar
               <select
                 value={connection?.google_calendar_id ?? 'primary'}
                 onChange={(event) => void handleCalendarChange(event.target.value)}
                 disabled={connectionLoading || googlePreviewLoading}
-                className="bg-transparent text-xs outline-none"
+                className="w-full bg-transparent text-xs outline-none"
               >
                 {availableCalendars.length === 0 ? (
                   <option value={connection?.google_calendar_id ?? 'primary'}>
@@ -347,9 +364,82 @@ export default function Dashboard() {
                 )}
               </select>
             </label>
-            <button onClick={() => navigate('/tasks')} className="btn btn-primary !h-10 !px-4">
-              <Plus className="h-4 w-4" />
-              New Task
+          </section>
+        </div>
+      </div>
+
+      <div className="panel mb-6 overflow-hidden">
+        <div className="panel-header">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Sync Mission Control</h2>
+            <p className="mt-1 text-xs text-[#6C7F9D]">Operational sync telemetry and recovery actions.</p>
+          </div>
+        </div>
+        <div className="panel-body space-y-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Outbox</p>
+              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">
+                {outboxLoading ? 'Loading...' : `Q ${outboxStats?.queued ?? 0} • F ${outboxStats?.failed ?? 0} • D ${outboxStats?.dead ?? 0}`}
+              </p>
+            </article>
+            <article className="rounded-xl border border-[#D4E3F8] bg-[#EEF5FF] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#486896]">SLO 24h</p>
+              <p className="mt-1 inline-flex items-center text-sm font-semibold text-[#1D4F95]">
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                {syncSuccessRate}% success
+              </p>
+            </article>
+            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Processed 24h</p>
+              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">{outboxStats?.processed24h ?? 0}</p>
+            </article>
+            <article className={`rounded-xl border px-3 py-2.5 ${syncDeadRate > 0.5 ? 'border-[#F2D3D3] bg-[#FFF1F1]' : 'border-[#DEE7F4] bg-[#F8FBFF]'}`}>
+              <p className={`text-[11px] font-semibold uppercase tracking-wide ${syncDeadRate > 0.5 ? 'text-[#A74A4A]' : 'text-[#627A9C]'}`}>Dead Rate</p>
+              <p className={`mt-1 text-sm font-semibold ${syncDeadRate > 0.5 ? 'text-[#A33A3A]' : 'text-[#1E3B66]'}`}>{syncDeadRate}%</p>
+            </article>
+            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Stale Locks</p>
+              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">{outboxStats?.staleProcessing ?? 0}</p>
+            </article>
+          </div>
+
+          {outboxStats?.lastError ? (
+            <div className="rounded-xl border border-[#F2D3D3] bg-[#FFF1F1] px-3 py-2 text-xs text-[#A33A3A]">
+              Last sync error: {outboxStats.lastError.slice(0, 180)}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => void handleFetchGoogleData()}
+              disabled={googlePreviewLoading || connectionLoading}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              <CloudDownload className="h-4 w-4" />
+              {googlePreviewLoading ? 'Refreshing...' : 'Refresh Calendars'}
+            </button>
+            <button
+              onClick={() => void handleRetryDeadJobs()}
+              disabled={connectionLoading || outboxLoading || (outboxStats?.dead ?? 0) === 0}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              Retry Dead Jobs
+            </button>
+            <button
+              onClick={() => void handleReplayRecoverableJobs()}
+              disabled={connectionLoading || outboxLoading || ((outboxStats?.dead ?? 0) + (outboxStats?.failed ?? 0) + (outboxStats?.staleProcessing ?? 0) === 0)}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              Replay Recoverable
+            </button>
+            <button
+              onClick={() => void handleDisconnectGoogle()}
+              disabled={connectionLoading}
+              className="btn btn-secondary !h-10 !px-4 !text-[#8B2A2A] !border-[#EFC4C4] !bg-[#FFF4F4] hover:!bg-[#FFEAEA]"
+            >
+              <Link2Off className="h-4 w-4" />
+              Disconnect Google
             </button>
           </div>
         </div>

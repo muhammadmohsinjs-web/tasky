@@ -7,7 +7,7 @@ import type { Category } from '../types'
 export function useCategories() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const queryKey = ['categories']
+  const queryKey = ['categories', user?.id ?? 'anon']
 
   const { data: categories = [], isLoading: loading } = useQuery({
     queryKey,

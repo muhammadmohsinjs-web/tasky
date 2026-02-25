@@ -4,11 +4,11 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import { queryClient } from './lib/queryClient'
-import { registerServiceWorker } from './lib/registerServiceWorker'
+import { installGlobalFetchTracker } from './lib/networkActivity'
 import './index.css'
 import App from './App.tsx'
 
-registerServiceWorker()
+installGlobalFetchTracker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

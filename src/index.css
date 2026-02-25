@@ -156,6 +156,13 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+.bulk-add-task-input:focus,
+.bulk-add-task-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: #cbd8ec !important;
+}
+
 .app-shell {
   min-height: 100vh;
   display: flex;

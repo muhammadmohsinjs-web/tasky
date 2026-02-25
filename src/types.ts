@@ -34,6 +34,40 @@ export interface TaskAttachment {
   created_at: string
 }
 
+export type SubtaskStatus = 'todo' | 'done'
+export interface TaskSubtask {
+  id: string
+  task_id: string
+  user_id?: string
+  title: string
+  status: SubtaskStatus
+  sort_order: number
+  created_at: string
+  updated_at?: string
+}
+
+export interface Tag {
+  id: string
+  user_id?: string
+  name: string
+  normalized_name: string
+  color?: string | null
+  created_at: string
+}
+
+export interface Reminder {
+  id: string
+  user_id?: string
+  task_id: string
+  remind_at: string
+  channel: 'in_app' | 'email'
+  state: 'pending' | 'sent' | 'snoozed' | 'dismissed'
+  snoozed_until?: string | null
+  sent_at?: string | null
+  created_at: string
+  updated_at?: string
+}
+
 export interface Category {
   id: string
   user_id?: string
@@ -80,8 +114,20 @@ export interface Task {
   attachments?: TaskAttachment[]
   created_at: string
   updated_at?: string
+  completed_at?: string | null
+  deleted_at?: string | null
   is_projected?: boolean
   source_task_id?: string | null
+}
+
+export interface TaskActivityLog {
+  id: number
+  user_id: string
+  task_id?: string | null
+  action_type: 'soft_delete' | 'bulk_soft_delete' | 'restore'
+  action_payload: Record<string, unknown>
+  created_at: string
+  expires_at?: string | null
 }
 
 export interface CalendarConnection {
@@ -152,4 +198,27 @@ export interface CalendarSyncOutbox {
   last_error?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface RecurrenceRuleRow {
+  id: string
+  user_id: string
+  task_id: string
+  rule: RecurrenceRule
+  timezone: string
+  next_run_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TaskOccurrence {
+  id: string
+  user_id: string
+  rule_id: string
+  task_id: string
+  occurrence_date: string
+  occurrence_key: string
+  state: 'projected' | 'materialized' | 'completed' | 'skipped'
+  materialized_task_id?: string | null
+  created_at: string
 }
