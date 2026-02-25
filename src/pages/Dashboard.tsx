@@ -10,7 +10,7 @@ import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off, ShieldCheck } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -29,6 +29,7 @@ export default function Dashboard() {
     setCalendarId,
     runSyncNow,
     retryDeadJobs,
+    replayRecoverableJobs,
     backfillMissingTaskEvents,
     disconnectGoogle,
   } = useCalendarSyncSettings()
@@ -193,6 +194,16 @@ export default function Dashboard() {
     toast.message('No dead jobs to retry')
   }
 
+  const handleReplayRecoverableJobs = async () => {
+    const recovered = await replayRecoverableJobs()
+    if (recovered > 0) {
+      toast.success(`Queued ${recovered} recoverable sync job${recovered === 1 ? '' : 's'}`)
+      setGoogleSyncStatus(`replayed ${recovered} recoverable jobs`)
+      return
+    }
+    toast.message('No recoverable sync jobs found')
+  }
+
   const handleDisconnectGoogle = async () => {
     const confirmed = window.confirm(
       'Disconnect Google Calendar and delete all Google sync metadata from TasksPulse for this account?'
@@ -277,6 +288,18 @@ export default function Dashboard() {
               <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
                 Outbox: {outboxLoading ? 'loading...' : `queued ${outboxStats?.queued ?? 0}, failed ${outboxStats?.failed ?? 0}, dead ${outboxStats?.dead ?? 0}`}
               </span>
+              <span className="inline-flex items-center rounded-full border border-[#D4E3F8] bg-[#EEF5FF] px-2.5 py-1 text-xs font-medium text-[#1D4F95]">
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                Sync SLO (24h): {outboxLoading ? 'loading...' : `${outboxStats?.successRate24h ?? 100}% success`}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
+                Processed 24h: {outboxStats?.processed24h ?? 0} • Dead rate: {outboxStats?.deadRate24h ?? 0}%
+              </span>
+              {(outboxStats?.staleProcessing ?? 0) > 0 ? (
+                <span className="inline-flex items-center rounded-full border border-[#F7D8AE] bg-[#FFF4E7] px-2.5 py-1 text-xs font-medium text-[#995C00]">
+                  Stale processing locks: {outboxStats?.staleProcessing ?? 0}
+                </span>
+              ) : null}
               {outboxStats?.lastError ? (
                 <span className="inline-flex items-center rounded-full border border-[#F2D3D3] bg-[#FFF1F1] px-2.5 py-1 text-xs font-medium text-[#A33A3A]">
                   Last sync error: {outboxStats.lastError.slice(0, 120)}
@@ -288,6 +311,9 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => navigate('/tasks')} className="btn btn-secondary !h-10 !px-4">
               Plan Today
+            </button>
+            <button onClick={() => navigate('/planning')} className="btn btn-secondary !h-10 !px-4">
+              Weekly Cockpit
             </button>
             <button
               onClick={() => void handleFetchGoogleData()}
@@ -317,6 +343,13 @@ export default function Dashboard() {
               className="btn btn-secondary !h-10 !px-4"
             >
               Retry Dead Jobs
+            </button>
+            <button
+              onClick={() => void handleReplayRecoverableJobs()}
+              disabled={connectionLoading || outboxLoading || ((outboxStats?.dead ?? 0) + (outboxStats?.failed ?? 0) + (outboxStats?.staleProcessing ?? 0) === 0)}
+              className="btn btn-secondary !h-10 !px-4"
+            >
+              Replay Recoverable
             </button>
             <button
               onClick={() => void handleDisconnectGoogle()}

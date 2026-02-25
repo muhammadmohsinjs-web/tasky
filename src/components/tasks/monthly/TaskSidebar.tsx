@@ -19,6 +19,9 @@ interface TaskSidebarProps {
   onToggleStatus?: (taskId: string) => void;
   onToggleFilters?: () => void;
   hasActiveFilters?: boolean;
+  selectionMode?: boolean;
+  selectedTaskIds?: Set<string>;
+  onToggleSelectTask?: (taskId: string) => void;
 }
 
 export function TaskSidebar({
@@ -37,6 +40,9 @@ export function TaskSidebar({
   onToggleStatus,
   onToggleFilters,
   hasActiveFilters = false,
+  selectionMode = false,
+  selectedTaskIds,
+  onToggleSelectTask,
 }: TaskSidebarProps) {
   const counts = getTaskCounts(tasks);
 
@@ -133,11 +139,14 @@ export function TaskSidebar({
               key={task.id}
               task={task}
               isSelected={selectedTaskId === task.id}
+              isChecked={selectedTaskIds?.has(task.id) ?? false}
               onSelect={onSelectTask}
               onView={onViewTask}
               onEdit={onEditTask}
               onDelete={onDeleteTask}
               onToggleStatus={onToggleStatus}
+              selectionMode={selectionMode}
+              onToggleSelect={onToggleSelectTask}
             />
           ))
         )}

@@ -154,31 +154,80 @@ export function useTasks(year: number, month: number) {
   }) => {
     if (!user?.id) return
 
-    const dedupeKey = `${params.operation}:${params.task.id}:${params.eventId}:${Date.now()}:${crypto.randomUUID()}`
+    const nowIso = new Date().toISOString()
+    const payload = {
+      task_id: params.task.id,
+      event_id: params.eventId,
+      title: params.task.title,
+      description: params.task.description ?? null,
+      notes: params.task.notes ?? null,
+      date: params.task.date,
+      end_date: params.task.end_date ?? null,
+      time: params.task.time ?? null,
+      calendar_id: params.calendarId,
+    }
 
-    const { error } = await supabase.from('calendar_sync_outbox').insert({
+    const { data: updatedRows, error: updateError } = await supabase
+      .from('calendar_sync_outbox')
+      .update({
+        payload,
+        status: 'queued',
+        next_attempt_at: nowIso,
+        last_error: null,
+        updated_at: nowIso,
+      })
+      .eq('user_id', user.id)
+      .eq('provider', 'google')
+      .eq('event_id', params.eventId)
+      .eq('operation', params.operation)
+      .in('status', ['queued', 'failed'])
+      .select('id')
+
+    if (updateError) {
+      console.error('Failed to update existing calendar sync job:', updateError)
+      return
+    }
+
+    if ((updatedRows?.length ?? 0) > 0) return
+
+    const dedupeKey = `${params.operation}:${params.task.id}:${params.eventId}:${nowIso}:${crypto.randomUUID()}`
+    const { error: insertError } = await supabase.from('calendar_sync_outbox').insert({
       user_id: user.id,
       provider: 'google',
       event_id: params.eventId,
       operation: params.operation,
-      payload: {
-        task_id: params.task.id,
-        event_id: params.eventId,
-        title: params.task.title,
-        description: params.task.description ?? null,
-        notes: params.task.notes ?? null,
-        date: params.task.date,
-        end_date: params.task.end_date ?? null,
-        time: params.task.time ?? null,
-        calendar_id: params.calendarId,
-      },
+      payload,
       dedupe_key: dedupeKey,
       status: 'queued',
     })
 
-    if (error) {
-      console.error('Failed to enqueue calendar sync job:', error)
+    if (!insertError) return
+
+    // Race-safe fallback: if another request inserted the same active job first,
+    // update that row with the latest payload and retry metadata.
+    if ((insertError as { code?: string }).code === '23505') {
+      const { error: raceUpdateError } = await supabase
+        .from('calendar_sync_outbox')
+        .update({
+          payload,
+          status: 'queued',
+          next_attempt_at: nowIso,
+          last_error: null,
+          updated_at: nowIso,
+        })
+        .eq('user_id', user.id)
+        .eq('provider', 'google')
+        .eq('event_id', params.eventId)
+        .eq('operation', params.operation)
+        .in('status', ['queued', 'failed'])
+
+      if (raceUpdateError) {
+        console.error('Failed to resolve outbox dedupe race:', raceUpdateError)
+      }
+      return
     }
+
+    console.error('Failed to enqueue calendar sync job:', insertError)
   }, [user?.id])
 
   const upsertTaskEventAndQueue = useCallback(async (task: Task) => {

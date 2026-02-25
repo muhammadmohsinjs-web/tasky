@@ -4,6 +4,7 @@ const GOOGLE_CALENDAR_BASE_URL = 'https://www.googleapis.com/calendar/v3'
 const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const MAX_ATTEMPTS = 6
 const RETRY_MINUTES = [1, 5, 15, 30, 60, 180]
+const STALE_PROCESSING_MINUTES = 15
 
 type OutboxStatus = 'queued' | 'processing' | 'done' | 'failed' | 'dead'
 type OutboxOperation = 'upsert' | 'delete'
@@ -69,6 +70,7 @@ interface ProcessResult {
   skipped: number
   usersProcessed: number
   usersSkippedNoToken: number
+  recoveredLocks: number
 }
 
 interface GoogleCalendarListResponse {
@@ -474,6 +476,31 @@ async function claimJobs(
   return claimed
 }
 
+async function recoverStuckProcessingJobs(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString()
+  const nowIso = new Date().toISOString()
+
+  const { data, error } = await supabase
+    .from('calendar_sync_outbox')
+    .update({
+      status: 'failed',
+      next_attempt_at: nowIso,
+      last_error: `Recovered stale processing lock after ${STALE_PROCESSING_MINUTES} minutes`,
+      updated_at: nowIso,
+    })
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .eq('status', 'processing')
+    .lt('updated_at', staleBefore)
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
+}
+
 async function getConnection(
   supabase: ReturnType<typeof createClient>,
   userId: string
@@ -831,6 +858,11 @@ async function processJobsForUser(
   limit: number,
   result: ProcessResult
 ) {
+  const recoveredLocks = await recoverStuckProcessingJobs(supabase, userId)
+  if (recoveredLocks > 0) {
+    result.recoveredLocks += recoveredLocks
+  }
+
   const jobs = await claimJobs(supabase, userId, limit)
   if (!jobs.length) {
     result.skipped += 1
@@ -937,6 +969,7 @@ Deno.serve(async (req) => {
     skipped: 0,
     usersProcessed: 0,
     usersSkippedNoToken: 0,
+    recoveredLocks: 0,
   }
 
   try {

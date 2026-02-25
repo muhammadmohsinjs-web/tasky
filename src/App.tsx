@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
+import Planning from './pages/Planning'
 import Events from './pages/Events'
 import Categories from './pages/Categories'
 import Analytics from './pages/Analytics'
@@ -31,6 +32,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/planning" element={<Planning />} />
           <Route path="/events" element={<Events />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/analytics" element={<Analytics />} />

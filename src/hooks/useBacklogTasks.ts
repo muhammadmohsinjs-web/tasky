@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
 import { confirmAction } from '../lib/confirm'
 import { countLabel, statusLabel } from './taskShared'
-import type { Task, TaskStatus, TaskPriority, TaskLink } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
 
 export function useBacklogTasks() {
   const queryClient = useQueryClient()
@@ -88,7 +88,15 @@ export function useBacklogTasks() {
     title: string,
     categoryId: string,
     priority: TaskPriority = 'medium',
-    extras?: { description?: string | null; notes?: string | null; time?: string | null; status?: TaskStatus; links?: TaskLink[] }
+    extras?: {
+      description?: string | null
+      notes?: string | null
+      time?: string | null
+      status?: TaskStatus
+      links?: TaskLink[]
+      recurrence?: RecurrenceRule | null
+      source_task_id?: string | null
+    }
   ) => {
     const normalizedTitle = title.trim()
     if (!normalizedTitle) {
@@ -107,6 +115,8 @@ export function useBacklogTasks() {
       notes: extras?.notes ?? null,
       time: extras?.time ?? null,
       links: extras?.links ?? [],
+      recurrence: extras?.recurrence ?? null,
+      source_task_id: extras?.source_task_id ?? null,
       completed_at: null,
       deleted_at: null,
     }
@@ -181,6 +191,8 @@ export function useBacklogTasks() {
       status?: TaskStatus
       priority?: TaskPriority
       links?: TaskLink[]
+      recurrence?: RecurrenceRule | null
+      source_task_id?: string | null
     }
   ) => {
     const task = tasks.find((t) => t.id === id)

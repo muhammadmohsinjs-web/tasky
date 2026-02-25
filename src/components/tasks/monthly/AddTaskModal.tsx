@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
-import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus } from '../../../types';
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus, RecurrenceRule } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
+import { loadTaskMeta, type TaskSubtaskDraft } from '../../../lib/taskMeta';
 import { formatMonthLabel, generateMonthGrid, parseISODate, toISODate } from './calendarHelpers';
 import type { TaskStatus } from './types';
 
@@ -16,6 +17,10 @@ interface TaskFormPayload {
   dateISO: string | null;
   links: TaskLink[];
   files: File[];
+  subtasks: TaskSubtaskDraft[];
+  tags: string[];
+  reminderAt: string | null;
+  recurrence: RecurrenceRule | null;
 }
 
 interface AddTaskModalProps {
@@ -39,6 +44,18 @@ function getCurrentTimeValue() {
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+function toDatetimeLocalValue(iso: string | null | undefined) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 interface CalendarDateInputProps {
@@ -234,6 +251,16 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
   const [linkError, setLinkError] = useState('');
   const [titleError, setTitleError] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [subtasks, setSubtasks] = useState<TaskSubtaskDraft[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [reminderAt, setReminderAt] = useState('');
+  const [recurrenceEnabled, setRecurrenceEnabled] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceRule['frequency']>('weekly');
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [loadingMeta, setLoadingMeta] = useState(false);
   const existingAttachments = task?.attachments ?? [];
   const isBacklogTask = !dateISO;
 
@@ -245,6 +272,8 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
   useEffect(() => {
     if (!isOpen) return;
+    let active = true;
+    const initialRecurrence = task?.recurrence ?? null;
 
     setTitle(task?.title ?? '');
     setDescription(task?.description ?? '');
@@ -260,6 +289,41 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setLinkError('');
     setTitleError('');
     setFiles([]);
+    setSubtasks([]);
+    setNewSubtaskTitle('');
+    setTags([]);
+    setTagInput('');
+    setReminderAt('');
+    setRecurrenceEnabled(Boolean(initialRecurrence));
+    setRecurrenceFrequency(initialRecurrence?.frequency ?? 'weekly');
+    setRecurrenceInterval(initialRecurrence?.interval ?? 1);
+    setRecurrenceEndDate(initialRecurrence?.end_date ?? '');
+    setLoadingMeta(false);
+
+    if (task?.id) {
+      setLoadingMeta(true);
+      void loadTaskMeta(task.id)
+        .then((meta) => {
+          if (!active) return;
+          setSubtasks(meta.subtasks);
+          setTags(meta.tags);
+          setReminderAt(toDatetimeLocalValue(meta.reminderAt));
+        })
+        .catch(() => {
+          if (!active) return;
+          setSubtasks([]);
+          setTags([]);
+          setReminderAt('');
+        })
+        .finally(() => {
+          if (!active) return;
+          setLoadingMeta(false);
+        });
+    }
+
+    return () => {
+      active = false;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultDateISO, isOpen, mode, task]);
 
@@ -294,6 +358,42 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setLinks(prev => prev.filter((_, i) => i !== index));
   };
 
+  const addSubtask = () => {
+    const normalized = newSubtaskTitle.trim();
+    if (!normalized) return;
+    setSubtasks((prev) => [
+      ...prev,
+      { title: normalized, status: 'todo', sort_order: prev.length },
+    ]);
+    setNewSubtaskTitle('');
+  };
+
+  const toggleSubtaskStatus = (index: number) => {
+    setSubtasks((prev) => prev.map((item, i) => (i === index
+      ? { ...item, status: item.status === 'done' ? 'todo' : 'done' }
+      : item)));
+  };
+
+  const removeSubtask = (index: number) => {
+    setSubtasks((prev) => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, sort_order: i })));
+  };
+
+  const addTag = () => {
+    const normalized = tagInput.trim().replace(/\s+/g, ' ');
+    if (!normalized) return;
+    const exists = tags.some((tag) => tag.toLowerCase() === normalized.toLowerCase());
+    if (exists) {
+      setTagInput('');
+      return;
+    }
+    setTags((prev) => [...prev, normalized]);
+    setTagInput('');
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
+  };
+
   const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files;
     if (!selected || selected.length === 0) return;
@@ -324,6 +424,14 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
     setSubmitting(true);
     setTitleError('');
+    const recurrence: RecurrenceRule | null =
+      recurrenceEnabled && dateISO
+        ? {
+            frequency: recurrenceFrequency,
+            interval: Math.max(1, recurrenceInterval),
+            end_date: recurrenceEndDate || null,
+          }
+        : null;
     let didSave = false;
     try {
       didSave = await onSubmit({
@@ -337,6 +445,14 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
         dateISO: dateISO || null,
         links,
         files,
+        subtasks: subtasks.map((item, index) => ({
+          ...item,
+          title: item.title.trim(),
+          sort_order: index,
+        })).filter((item) => item.title.length > 0),
+        tags,
+        reminderAt: reminderAt ? new Date(reminderAt).toISOString() : null,
+        recurrence,
       });
     } finally {
       setSubmitting(false);
@@ -518,6 +634,182 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                 ) : null}
               </div>
             )}
+          </section>
+
+          <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">
+            <h3 className="mb-3 text-sm font-semibold text-[#233553]">Execution Engine</h3>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-[#314866]">Reminder</span>
+                <input
+                  type="datetime-local"
+                  value={reminderAt}
+                  onChange={(event) => setReminderAt(event.target.value)}
+                  readOnly={isViewMode}
+                  className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                />
+              </label>
+
+              <div className="rounded-xl border border-[#D8E3F3] bg-white px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[#314866]">Recurrence</p>
+                  <button
+                    type="button"
+                    disabled={isViewMode || isBacklogTask}
+                    onClick={() => setRecurrenceEnabled((prev) => !prev)}
+                    className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                      recurrenceEnabled ? 'bg-[#EAF2FF] text-[#1F4C9A]' : 'bg-[#F3F5F9] text-[#607A9C]'
+                    }`}
+                  >
+                    {recurrenceEnabled ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-[#607A9C]">
+                  Backlog tasks cannot recur until scheduled.
+                </p>
+              </div>
+            </div>
+
+            {recurrenceEnabled ? (
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">Frequency</span>
+                  <select
+                    value={recurrenceFrequency}
+                    onChange={(event) => setRecurrenceFrequency(event.target.value as RecurrenceRule['frequency'])}
+                    disabled={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">Interval</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recurrenceInterval}
+                    onChange={(event) => setRecurrenceInterval(Math.max(1, Number(event.target.value) || 1))}
+                    readOnly={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">End date</span>
+                  <input
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(event) => setRecurrenceEndDate(event.target.value)}
+                    readOnly={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <div className="mt-4">
+              <span className="mb-1 block text-sm font-medium text-[#314866]">Tags</span>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#CFDBEA] bg-white px-2 py-2">
+                  {tags.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[#EAF2FF] px-2 py-1 text-xs font-semibold text-[#1F4C9A]">
+                      {tag}
+                      {!isViewMode ? (
+                        <button type="button" onClick={() => removeTag(tag)} className="text-[#3E67A9] hover:text-red-500">
+                          <X className="h-3 w-3" />
+                        </button>
+                      ) : null}
+                    </span>
+                  ))}
+                  {!isViewMode ? (
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(event) => setTagInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ',') {
+                          event.preventDefault();
+                          addTag();
+                        }
+                      }}
+                      className="h-8 min-w-[140px] flex-1 border-none bg-transparent px-1 text-sm text-[#1E2F47] focus:outline-none"
+                      placeholder="Type tag and press Enter"
+                    />
+                  ) : null}
+                </div>
+                {!isViewMode ? (
+                  <button
+                    type="button"
+                    onClick={addTag}
+                    disabled={!tagInput.trim()}
+                    className="inline-flex h-8 items-center rounded-lg border border-[#C7D3E6] bg-white px-3 text-xs font-semibold text-[#2F4767] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Add tag
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <span className="mb-1 block text-sm font-medium text-[#314866]">Subtasks</span>
+              {loadingMeta ? (
+                <p className="text-xs text-[#607A9C]">Loading execution details...</p>
+              ) : null}
+              <div className="space-y-2">
+                {subtasks.map((item, index) => (
+                  <div key={`${item.id ?? 'new'}-${index}`} className="flex items-center gap-2 rounded-lg border border-[#DEE6F2] bg-white px-2 py-1.5">
+                    <button
+                      type="button"
+                      disabled={isViewMode}
+                      onClick={() => toggleSubtaskStatus(index)}
+                      className={`h-5 w-5 rounded border text-[10px] font-bold ${
+                        item.status === 'done' ? 'border-[#5CA57C] bg-[#E6F6ED] text-[#1E5A3A]' : 'border-[#C7D3E6] bg-white text-[#607A9C]'
+                      }`}
+                    >
+                      {item.status === 'done' ? '✓' : ''}
+                    </button>
+                    <span className={`flex-1 text-sm ${item.status === 'done' ? 'text-[#74869F] line-through' : 'text-[#324A68]'}`}>
+                      {item.title}
+                    </span>
+                    {!isViewMode ? (
+                      <button type="button" onClick={() => removeSubtask(index)} className="p-1 text-[#7D8EA8] hover:text-red-500">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+
+                {!isViewMode ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          addSubtask();
+                        }
+                      }}
+                      className="h-10 flex-1 rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] placeholder:text-[#91A1B9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      placeholder="Add subtask"
+                    />
+                    <button
+                      type="button"
+                      onClick={addSubtask}
+                      disabled={!newSubtaskTitle.trim()}
+                      className="inline-flex h-10 items-center rounded-xl bg-[#1F67E8] px-3 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">
