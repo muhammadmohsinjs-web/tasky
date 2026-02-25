@@ -1,16 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 import { useAllTasks } from '../hooks/useAllTasks'
-import { useEvents } from '../hooks/useEvents'
 import { useCategories } from '../hooks/useCategories'
 import { useProfile } from '../hooks/useProfile'
-import { useCalendarSyncSettings } from '../hooks/useCalendarSyncSettings'
-import { useGoogleCalendarPreview } from '../hooks/useGoogleCalendarPreview'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { CategoryBadge } from '../components/ui/CategoryBadge'
-import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame, CalendarClock, CloudDownload, Link2Off, ShieldCheck, Loader2 } from 'lucide-react'
+import { ListTodo, Circle, Clock, CheckCircle2, Plus, ArrowRight, Flame } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { STATUS_CONFIG } from '../lib/constants'
 import type { TaskStatus } from '../types'
@@ -19,31 +15,7 @@ export default function Dashboard() {
   const { tasks, loading } = useAllTasks()
   const { categories } = useCategories()
   const { profile } = useProfile()
-  const {
-    connection,
-    loading: connectionLoading,
-    outboxLoading,
-    outboxStats,
-    ensureConnection,
-    setSyncEnabled,
-    setCalendarId,
-    runSyncNow,
-    syncingNow,
-    retryDeadJobs,
-    replayRecoverableJobs,
-    backfillMissingTaskEvents,
-    disconnectGoogle,
-  } = useCalendarSyncSettings()
-  const { events, loading: eventsLoading } = useEvents({
-    calendarId: connection?.google_calendar_id ?? null,
-    googleSourceOfTruth: connection?.sync_enabled ?? false,
-  })
-  const { loading: googlePreviewLoading, fetchAndLog } = useGoogleCalendarPreview()
   const navigate = useNavigate()
-  const [googleSyncStatus, setGoogleSyncStatus] = useState('idle')
-  const [availableCalendars, setAvailableCalendars] = useState<{ id: string; summary: string; primary?: boolean }[]>([])
-  const autoSyncInFlightRef = useRef(false)
-  const calendarsHydratedRef = useRef(false)
 
   const stats = useMemo(() => {
     const todo = tasks.filter((t) => t.status === 'todo').length
@@ -105,164 +77,9 @@ export default function Dashboard() {
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
-  const formatEventDateTime = (iso: string) => {
-    const parsed = new Date(iso)
-    if (Number.isNaN(parsed.getTime())) return iso
-    return parsed.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-
-  const handleFetchGoogleData = async () => {
-    const clickedAt = new Date().toLocaleTimeString()
-    setGoogleSyncStatus(`refresh requested at ${clickedAt}`)
-    toast.message('Refreshing Google calendars')
-    try {
-      const preview = await fetchAndLog()
-      setAvailableCalendars(preview.calendars)
-      setGoogleSyncStatus(`loaded ${preview.calendars.length} calendars`)
-    } catch (error) {
-      setGoogleSyncStatus('failed to refresh')
-      console.error('[Dashboard] Google Calendar fetch failed', error)
-    }
-  }
-
-  useEffect(() => {
-    if (connectionLoading) return
-    if (calendarsHydratedRef.current) return
-
-    calendarsHydratedRef.current = true
-    void (async () => {
-      try {
-        const preview = await fetchAndLog({ silent: true })
-        setAvailableCalendars(preview.calendars)
-      } catch (error) {
-        console.warn('[Dashboard] Initial calendar preload failed', error)
-      }
-    })()
-  }, [connectionLoading, fetchAndLog])
-
-  const handleToggleSync = async () => {
-    const ensured = await ensureConnection()
-    if (!ensured) return
-
-    const nextEnabled = !(connection?.sync_enabled ?? ensured.sync_enabled)
-    const updated = await setSyncEnabled(nextEnabled)
-    if (!updated) return
-
-    if (nextEnabled) {
-      const backfilled = await backfillMissingTaskEvents(150)
-      if (backfilled > 0) {
-        toast.success(`Sync enabled. Backfilled ${backfilled} task event${backfilled === 1 ? '' : 's'}.`)
-      }
-    }
-
-    setGoogleSyncStatus(nextEnabled ? 'sync enabled' : 'sync disabled')
-    toast.success(nextEnabled ? 'Google Calendar sync enabled' : 'Google Calendar sync disabled')
-  }
-
-  const handleCalendarChange = async (calendarId: string) => {
-    const updated = await setCalendarId(calendarId)
-    if (!updated) return
-
-    setGoogleSyncStatus(`calendar set to ${calendarId}`)
-    toast.success('Sync calendar updated')
-  }
-
-  const handleRunSyncNow = async () => {
-    setGoogleSyncStatus('running sync...')
-    const result = await runSyncNow(10)
-    if (!result) return
-
-    setGoogleSyncStatus(`processed ${result.processed}, success ${result.succeeded}`)
-    if (result.dead > 0) {
-      toast.warning(`Sync finished with ${result.dead} dead jobs`)
-    } else if (result.failed > 0) {
-      toast.message(`Sync queued retries: ${result.failed}`)
-    } else {
-      toast.success(`Sync complete (${result.succeeded}/${result.processed})`)
-    }
-  }
-
-  const handleRetryDeadJobs = async () => {
-    const retried = await retryDeadJobs()
-    if (retried > 0) {
-      toast.success(`Queued ${retried} dead job${retried === 1 ? '' : 's'} for retry`)
-      setGoogleSyncStatus(`retried ${retried} dead jobs`)
-      return
-    }
-    toast.message('No dead jobs to retry')
-  }
-
-  const handleReplayRecoverableJobs = async () => {
-    const recovered = await replayRecoverableJobs()
-    if (recovered > 0) {
-      toast.success(`Queued ${recovered} recoverable sync job${recovered === 1 ? '' : 's'}`)
-      setGoogleSyncStatus(`replayed ${recovered} recoverable jobs`)
-      return
-    }
-    toast.message('No recoverable sync jobs found')
-  }
-
-  const handleDisconnectGoogle = async () => {
-    const confirmed = window.confirm(
-      'Disconnect Google Calendar and delete all Google sync metadata from TasksPulse for this account?'
-    )
-    if (!confirmed) return
-
-    const success = await disconnectGoogle()
-    if (!success) return
-
-    setGoogleSyncStatus('google disconnected')
-    setAvailableCalendars([])
-    toast.success('Google Calendar disconnected and synced Google data removed')
-  }
-
-  useEffect(() => {
-    if (!connection?.sync_enabled || connectionLoading) return
-
-    const intervalMs = 2 * 60 * 1000
-    const runAutoSync = async () => {
-      if (autoSyncInFlightRef.current) return
-      if (document.visibilityState !== 'visible') return
-      if (!navigator.onLine) return
-
-      autoSyncInFlightRef.current = true
-      try {
-        const result = await runSyncNow(8)
-        if (result) {
-          setGoogleSyncStatus(`auto-sync: processed ${result.processed}, success ${result.succeeded}`)
-        }
-      } finally {
-        autoSyncInFlightRef.current = false
-      }
-    }
-
-    void runAutoSync()
-    const intervalId = window.setInterval(() => {
-      void runAutoSync()
-    }, intervalMs)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [connection?.sync_enabled, connectionLoading, runSyncNow])
-
   if (loading) {
     return <LoadingSpinner message="Loading dashboard..." />
   }
-
-  const syncDeadRate = outboxStats?.deadRate24h ?? 0
-  const syncSuccessRate = outboxStats?.successRate24h ?? 100
-  const syncHealthTone = outboxLoading
-    ? 'border-[#D9E5F6] bg-[#F6FAFF] text-[#38557C]'
-    : syncDeadRate > 0.5
-      ? 'border-[#F2D3D3] bg-[#FFF1F1] text-[#A33A3A]'
-      : 'border-[#D4E3F8] bg-[#EEF5FF] text-[#1D4F95]'
-  const syncHealthLabel = outboxLoading ? 'Sync health loading' : syncDeadRate > 0.5 ? 'Needs attention' : 'Healthy'
 
   return (
     <div className="content-wrap">
@@ -287,23 +104,10 @@ export default function Dashboard() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A74A4A]">Overdue</p>
                 <p className="mt-1 text-2xl font-semibold text-[#A33A3A]">{overdue}</p>
               </article>
-              <article className={`rounded-2xl border px-3.5 py-3 ${syncHealthTone}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide">Sync Health</p>
-                <p className="mt-1 text-xl font-semibold">{syncHealthLabel}</p>
+              <article className="rounded-2xl border border-[#D4E3F8] bg-[#EEF5FF] px-3.5 py-3 text-[#1D4F95]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide">Completion</p>
+                <p className="mt-1 text-xl font-semibold">{completionRate}%</p>
               </article>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-[#D4E3F8] bg-[#EEF5FF] px-2.5 py-1 text-xs font-medium text-[#1D4F95]">
-                <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                Google sync: {connection?.sync_enabled ? 'enabled' : 'disabled'}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Calendar: {connection?.google_calendar_id ?? 'primary'}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-[#D9E5F6] bg-[#F6FAFF] px-2.5 py-1 text-xs font-medium text-[#38557C]">
-                Status: {googleSyncStatus}
-              </span>
             </div>
           </section>
 
@@ -320,128 +124,8 @@ export default function Dashboard() {
               <button onClick={() => navigate('/planning')} className="btn btn-secondary !h-10 !px-4">
                 Weekly Cockpit
               </button>
-              <button
-                onClick={() => void handleToggleSync()}
-                disabled={connectionLoading}
-                className="btn btn-secondary !h-10 !px-4"
-              >
-                {connection?.sync_enabled ? 'Disable Sync' : 'Enable Sync'}
-              </button>
-              <button
-                onClick={() => void handleRunSyncNow()}
-                disabled={connectionLoading || syncingNow || !(connection?.sync_enabled)}
-                className="btn btn-secondary !h-10 !px-4"
-              >
-                {syncingNow ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  'Run Sync Now'
-                )}
-              </button>
             </div>
-
-            <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border border-[#D9E5F6] bg-[#F8FBFF] px-3 text-xs font-medium text-[#38557C]">
-              Calendar
-              <select
-                value={connection?.google_calendar_id ?? 'primary'}
-                onChange={(event) => void handleCalendarChange(event.target.value)}
-                disabled={connectionLoading || googlePreviewLoading}
-                className="w-full bg-transparent text-xs outline-none"
-              >
-                {availableCalendars.length === 0 ? (
-                  <option value={connection?.google_calendar_id ?? 'primary'}>
-                    {connection?.google_calendar_id ?? 'primary'}
-                  </option>
-                ) : (
-                  availableCalendars.map((calendar) => (
-                    <option key={calendar.id} value={calendar.id}>
-                      {calendar.summary}{calendar.primary ? ' (Primary)' : ''}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
           </section>
-        </div>
-      </div>
-
-      <div className="panel mb-6 overflow-hidden">
-        <div className="panel-header">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-700">Sync Mission Control</h2>
-            <p className="mt-1 text-xs text-[#6C7F9D]">Operational sync telemetry and recovery actions.</p>
-          </div>
-        </div>
-        <div className="panel-body space-y-4">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Outbox</p>
-              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">
-                {outboxLoading ? 'Loading...' : `Q ${outboxStats?.queued ?? 0} • F ${outboxStats?.failed ?? 0} • D ${outboxStats?.dead ?? 0}`}
-              </p>
-            </article>
-            <article className="rounded-xl border border-[#D4E3F8] bg-[#EEF5FF] px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#486896]">SLO 24h</p>
-              <p className="mt-1 inline-flex items-center text-sm font-semibold text-[#1D4F95]">
-                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                {syncSuccessRate}% success
-              </p>
-            </article>
-            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Processed 24h</p>
-              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">{outboxStats?.processed24h ?? 0}</p>
-            </article>
-            <article className={`rounded-xl border px-3 py-2.5 ${syncDeadRate > 0.5 ? 'border-[#F2D3D3] bg-[#FFF1F1]' : 'border-[#DEE7F4] bg-[#F8FBFF]'}`}>
-              <p className={`text-[11px] font-semibold uppercase tracking-wide ${syncDeadRate > 0.5 ? 'text-[#A74A4A]' : 'text-[#627A9C]'}`}>Dead Rate</p>
-              <p className={`mt-1 text-sm font-semibold ${syncDeadRate > 0.5 ? 'text-[#A33A3A]' : 'text-[#1E3B66]'}`}>{syncDeadRate}%</p>
-            </article>
-            <article className="rounded-xl border border-[#DEE7F4] bg-[#F8FBFF] px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#627A9C]">Stale Locks</p>
-              <p className="mt-1 text-sm font-semibold text-[#1E3B66]">{outboxStats?.staleProcessing ?? 0}</p>
-            </article>
-          </div>
-
-          {outboxStats?.lastError ? (
-            <div className="rounded-xl border border-[#F2D3D3] bg-[#FFF1F1] px-3 py-2 text-xs text-[#A33A3A]">
-              Last sync error: {outboxStats.lastError.slice(0, 180)}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => void handleFetchGoogleData()}
-              disabled={googlePreviewLoading || connectionLoading}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              <CloudDownload className="h-4 w-4" />
-              {googlePreviewLoading ? 'Refreshing...' : 'Refresh Calendars'}
-            </button>
-            <button
-              onClick={() => void handleRetryDeadJobs()}
-              disabled={connectionLoading || outboxLoading || (outboxStats?.dead ?? 0) === 0}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              Retry Dead Jobs
-            </button>
-            <button
-              onClick={() => void handleReplayRecoverableJobs()}
-              disabled={connectionLoading || outboxLoading || ((outboxStats?.dead ?? 0) + (outboxStats?.failed ?? 0) + (outboxStats?.staleProcessing ?? 0) === 0)}
-              className="btn btn-secondary !h-10 !px-4"
-            >
-              Replay Recoverable
-            </button>
-            <button
-              onClick={() => void handleDisconnectGoogle()}
-              disabled={connectionLoading}
-              className="btn btn-secondary !h-10 !px-4 !text-[#8B2A2A] !border-[#EFC4C4] !bg-[#FFF4F4] hover:!bg-[#FFEAEA]"
-            >
-              <Link2Off className="h-4 w-4" />
-              Disconnect Google
-            </button>
-          </div>
         </div>
       </div>
 
@@ -617,53 +301,6 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="panel overflow-hidden mb-8">
-        <div className="panel-header">
-          <h2 className="text-sm font-semibold text-slate-700">Upcoming Events</h2>
-          <span className="text-xs text-slate-500">{events.length}</span>
-        </div>
-        <div className="panel-body">
-          {eventsLoading ? (
-            <div className="text-center py-4 text-sm text-slate-400">Loading events...</div>
-          ) : events.length === 0 ? (
-            <div className="text-center py-4 text-sm text-slate-400">No upcoming events</div>
-          ) : (
-            <div className="space-y-2">
-              {events.map((event) => (
-                <div
-                  key={event.id}
-                  className={`rounded-xl border border-[#E3EAF4] bg-[#F9FBFF] p-3 ${event.linked_task ? 'cursor-pointer hover:bg-[#F3F8FF]' : ''}`}
-                  onClick={() => {
-                    if (!event.linked_task) return
-                    sessionStorage.setItem('tasky:openTaskId', event.linked_task.id)
-                    navigate('/tasks')
-                  }}
-                  role={event.linked_task ? 'button' : undefined}
-                  tabIndex={event.linked_task ? 0 : undefined}
-                  onKeyDown={(keyboardEvent) => {
-                    if (!event.linked_task) return
-                    if (keyboardEvent.key === 'Enter') {
-                      sessionStorage.setItem('tasky:openTaskId', event.linked_task.id)
-                      navigate('/tasks')
-                    }
-                  }}
-                >
-                  <div className="text-sm font-medium text-[#243956] truncate">{event.title}</div>
-                  <div className="mt-1 text-xs text-[#6C7F9D]">
-                    {formatEventDateTime(event.start_at)} - {formatEventDateTime(event.end_at)}
-                  </div>
-                  {event.linked_task ? (
-                    <div className="mt-1 text-xs text-[#4E6384]">
-                      From task: {event.linked_task.title}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

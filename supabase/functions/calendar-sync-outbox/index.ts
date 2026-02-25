@@ -7,6 +7,7 @@ const RETRY_MINUTES = [1, 5, 15, 30, 60, 180]
 const STALE_PROCESSING_MINUTES = 15
 const GOOGLE_HTTP_TIMEOUT_MS = 12_000
 const USER_REQUEST_LIMIT_CAP = 10
+const CALENDAR_SYNC_ACTIVE = false
 
 type OutboxStatus = 'queued' | 'processing' | 'done' | 'failed' | 'dead'
 type OutboxOperation = 'upsert' | 'delete'
@@ -1014,6 +1015,10 @@ Deno.serve(async (req) => {
     })
 
     if (hasCronSecret) {
+      if (!CALENDAR_SYNC_ACTIVE) {
+        return json(200, { ok: true, disabled: true, message: 'Google Calendar sync is disabled', ...result })
+      }
+
       let userIds: string[] = []
 
       if (body.userId) {
@@ -1060,9 +1065,11 @@ Deno.serve(async (req) => {
         return json(403, { error: 'Cannot process outbox for another user' })
       }
 
-      await persistProvidedTokens(supabase, userId, body.googleAccessToken, body.googleRefreshToken)
-
       if (action === 'storeTokens') {
+        if (!CALENDAR_SYNC_ACTIVE) {
+          return json(200, { ok: true, persisted: false, disabled: true })
+        }
+        await persistProvidedTokens(supabase, userId, body.googleAccessToken, body.googleRefreshToken)
         return json(200, { ok: true, persisted: true })
       }
 
@@ -1072,6 +1079,10 @@ Deno.serve(async (req) => {
       }
 
       if (action === 'listGoogleEvents') {
+        if (!CALENDAR_SYNC_ACTIVE) {
+          return json(409, { error: 'Google Calendar sync is disabled' })
+        }
+
         const calendarsLimit = Math.min(Math.max(body.calendarsLimit ?? 10, 1), 25)
         const eventsLimit = Math.min(Math.max(body.eventsLimit ?? 30, 1), 100)
         const defaultMonthStart = new Date()
@@ -1106,6 +1117,12 @@ Deno.serve(async (req) => {
         })
         return json(200, { ok: true, ...payload })
       }
+
+      if (!CALENDAR_SYNC_ACTIVE) {
+        return json(409, { error: 'Google Calendar sync is disabled' })
+      }
+
+      await persistProvidedTokens(supabase, userId, body.googleAccessToken, body.googleRefreshToken)
 
       const accessToken = await getValidGoogleAccessToken(supabase, userId, body.googleAccessToken)
       if (!accessToken) {

@@ -17,17 +17,17 @@ export default function PrivacyPolicy() {
               {APP_NAME} collects account profile details (name, email, avatar), tasks, categories, and product usage metadata required to operate the app.
             </p>
             <p className="mt-2">
-              When you connect Google Calendar, {APP_NAME} accesses and stores the minimum Google data needed for calendar sync: OAuth tokens, selected calendar ID, event IDs, sync status, and event fields required to create, read, update, or delete synced calendar events.
+              When you sign in with Google, {APP_NAME} receives basic identity scopes (<code>openid email profile</code>) for authentication and account identity.
             </p>
           </section>
 
           <section>
             <h2 className="text-base font-semibold text-slate-900">2. Data usage</h2>
             <p className="mt-2">
-              {APP_NAME} uses Google user data only to provide calendar-related features you request, including listing calendars for selection and syncing tasks with calendar events.
+              {APP_NAME} uses Google user data only for secure sign-in and account identification.
             </p>
             <p className="mt-2">
-              Google Calendar data is processed to keep task and calendar states consistent, prevent duplicate sync operations, and show accurate schedule information in the app.
+              Google Calendar sync is currently disabled in the product. We do not request Google Calendar API scopes in the active app flow.
             </p>
             <p className="mt-2">
               {APP_NAME} does not sell Google user data, does not use Google user data for advertising, and does not use Google user data to train generalized AI or ML models.
@@ -50,7 +50,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">3. Data storage and security</h2>
             <p className="mt-2">
-              Data is transmitted over HTTPS and stored in Supabase-managed infrastructure used by {APP_NAME}. OAuth access tokens are short-lived, and refresh tokens are stored only to maintain user-approved background sync.
+              Data is transmitted over HTTPS and stored in Supabase-managed infrastructure used by {APP_NAME}. OAuth access tokens are short-lived and used to maintain authenticated sessions.
             </p>
             <p className="mt-2">
               Access to stored data is limited to systems and personnel required to operate, secure, and support {APP_NAME}.
@@ -70,7 +70,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">5. Data retention</h2>
             <p className="mt-2">
-              Google OAuth tokens and sync metadata are retained while your Google connection is active and are removed when you disconnect Google Calendar from {APP_NAME}.
+              Google OAuth identity data is retained while your account is active to support authentication.
             </p>
             <p className="mt-2">
               Task and account data remain available until you delete them or request account deletion.
@@ -80,7 +80,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">6. Your controls and deletion requests</h2>
             <p className="mt-2">
-              You can disconnect Google at any time from the Dashboard using <strong>Disconnect Google</strong>. This revokes stored Google tokens and deletes synced Google metadata in {APP_NAME}.
+              You can revoke Google access from your Google Account security settings at any time.
             </p>
             <p className="mt-2">
               For full account data deletion requests, email
