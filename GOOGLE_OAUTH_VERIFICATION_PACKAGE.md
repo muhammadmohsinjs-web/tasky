@@ -14,10 +14,10 @@ Last updated: February 21, 2026
   - UI entry points: Dashboard calendar selector and calendar refresh.
   - Code: `src/pages/Dashboard.tsx`, `src/hooks/useGoogleCalendarPreview.ts`, `supabase/functions/calendar-sync-outbox/index.ts`.
 
-- `https://www.googleapis.com/auth/calendar.events`
-  - Create/update/delete synced calendar events from tasks and read event details for merged events view.
-  - UI entry points: Dashboard sync actions, Events page, task scheduling flow.
-  - Code: `src/hooks/useCalendarSyncSettings.ts`, `src/hooks/useEvents.ts`, `src/hooks/useTasks.ts`, `supabase/functions/calendar-sync-outbox/index.ts`.
+- `https://www.googleapis.com/auth/calendar.events.readonly`
+  - Read event details for merged calendar and events views.
+  - UI entry points: Dashboard calendar refresh and Events page.
+  - Code: `src/hooks/useGoogleCalendarPreview.ts`, `src/hooks/useEvents.ts`, `supabase/functions/calendar-sync-outbox/index.ts`.
 
 ## 2) Public policy/support URLs (set in OAuth consent screen)
 

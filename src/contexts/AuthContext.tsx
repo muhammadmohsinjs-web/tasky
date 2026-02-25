@@ -32,7 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [googleRefreshToken, setGoogleRefreshToken] = useState<string | null>(null);
   const lastPersistedTokenFingerprintRef = useRef<string | null>(null);
   const appBaseUrl = window.location.origin;
-  const googleScopes = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.calendarlist.readonly'].join(' ');
+  const googleScopes = [
+    'openid',
+    'email',
+    'profile',
+    'https://www.googleapis.com/auth/calendar.events.readonly',
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  ].join(' ');
 
   const persistGoogleTokens = useCallback(async (userId: string | undefined, accessToken: string | null, refreshToken: string | null) => {
     if (!userId || (!accessToken && !refreshToken)) return;

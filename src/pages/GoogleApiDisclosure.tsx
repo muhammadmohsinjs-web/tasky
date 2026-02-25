@@ -13,7 +13,7 @@ export default function GoogleApiDisclosure() {
             <h2 className="text-base font-semibold text-slate-900">Scopes and purpose</h2>
             <p className="mt-2"><code>openid email profile</code>: authentication and account identity.</p>
             <p className="mt-2"><code>https://www.googleapis.com/auth/calendar.calendarlist.readonly</code>: list calendars so users can choose a target calendar.</p>
-            <p className="mt-2"><code>https://www.googleapis.com/auth/calendar.events</code>: create/update/delete synced events for task scheduling and read event details for the events view.</p>
+            <p className="mt-2"><code>https://www.googleapis.com/auth/calendar.events.readonly</code>: read event details for calendar and events views.</p>
           </section>
 
           <section>

@@ -50,7 +50,7 @@ Out of scope for MVP:
 - Full attendee editing UI parity with Google.
 
 ## 3. Fundamental Google Calendar Workflow (must align app behavior)
-1. User authorizes via OAuth (`calendar.readonly` for import, `calendar` for bidirectional).
+1. User authorizes via OAuth (`calendar.calendarlist.readonly` and `calendar.events.readonly` for read-only calendar import and display).
 2. App stores connection + encrypted tokens.
 3. User selects calendars to sync.
 4. Initial import:
