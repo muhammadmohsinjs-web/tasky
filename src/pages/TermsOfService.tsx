@@ -12,7 +12,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">1. Service scope</h2>
             <p className="mt-2">
-              {APP_NAME} is a task planning and calendar sync product. You may use it only in compliance with applicable laws and these terms.
+              {APP_NAME} is a task planning product. You may use it only in compliance with applicable laws and these terms.
             </p>
           </section>
 
@@ -26,7 +26,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-base font-semibold text-slate-900">3. Google integration</h2>
             <p className="mt-2">
-              If you connect Google, you authorize {APP_NAME} to access only the scopes shown on the consent screen for calendar synchronization features. You can revoke access any time from Google account settings or by disconnecting inside {APP_NAME}.
+              If you sign in with Google, you authorize {APP_NAME} to access only identity scopes shown on the consent screen for authentication. You can revoke access any time from Google account settings.
             </p>
           </section>
 

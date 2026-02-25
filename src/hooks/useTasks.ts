@@ -8,6 +8,8 @@ import { confirmAction } from '../lib/confirm'
 import { countLabel, statusLabel } from './taskShared'
 import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
 
+const CALENDAR_SYNC_ACTIVE = false
+
 export function useTasks(year: number, month: number) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
@@ -94,6 +96,7 @@ export function useTasks(year: number, month: number) {
   }, [user?.id])
 
   const getActiveGoogleConnection = useCallback(async () => {
+    if (!CALENDAR_SYNC_ACTIVE) return null
     if (!user?.id) return null
 
     const { data, error } = await supabase
@@ -152,6 +155,7 @@ export function useTasks(year: number, month: number) {
     eventId: string
     calendarId: string
   }) => {
+    if (!CALENDAR_SYNC_ACTIVE) return
     if (!user?.id) return
 
     const nowIso = new Date().toISOString()

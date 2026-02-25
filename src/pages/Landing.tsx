@@ -227,9 +227,8 @@ export default function Landing() {
             <p className="text-xs font-semibold text-blue-700 uppercase tracking-[0.16em] mb-3">Transparency and trust</p>
             <h2 className="text-3xl sm:text-4xl font-semibold text-slate-900 tracking-tight mb-4">How {APP_NAME} uses Google data</h2>
             <p className="text-slate-600 leading-relaxed">
-              {APP_NAME} helps you plan tasks, schedule work, and keep delivery predictable across your calendar and task lists.
-              If you connect Google Calendar, we only request the minimum Google Calendar permissions needed to sync events for
-              the features you enable.
+              {APP_NAME} is currently focused on tasks. Google sign-in is used only for account authentication and identity.
+              Calendar sync features are disabled in the active product flow.
             </p>
           </div>
 
@@ -237,15 +236,13 @@ export default function Landing() {
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="text-sm font-semibold text-slate-900 mb-2">What we access</h3>
               <p className="text-sm text-slate-600">
-                Calendar lists and event data required to create, update, and delete synced events between {APP_NAME} and your
-                selected Google calendars.
+                Basic identity scopes required for authentication: <code>openid</code>, <code>email</code>, and <code>profile</code>.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="text-sm font-semibold text-slate-900 mb-2">What we do not do</h3>
               <p className="text-sm text-slate-600">
-                We do not sell Google user data and we do not request broader access than required for core calendar sync
-                functionality.
+                We do not sell Google user data and we do not request calendar scopes while calendar sync is disabled.
               </p>
             </div>
           </div>

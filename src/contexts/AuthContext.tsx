@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -30,32 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
   const [googleRefreshToken, setGoogleRefreshToken] = useState<string | null>(null);
-  const lastPersistedTokenFingerprintRef = useRef<string | null>(null);
   const appBaseUrl = window.location.origin;
-  const googleScopes = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.calendarlist.readonly'].join(' ');
-
-  const persistGoogleTokens = useCallback(async (userId: string | undefined, accessToken: string | null, refreshToken: string | null) => {
-    if (!userId || (!accessToken && !refreshToken)) return;
-
-    const fingerprint = `${userId}:${accessToken ?? ''}:${refreshToken ?? ''}`;
-    if (lastPersistedTokenFingerprintRef.current === fingerprint) return;
-
-    const { error } = await supabase.functions.invoke('calendar-sync-outbox', {
-      body: {
-        action: 'storeTokens',
-        userId,
-        googleAccessToken: accessToken ?? undefined,
-        googleRefreshToken: refreshToken ?? undefined,
-      },
-    });
-
-    if (error) {
-      console.warn('Failed to persist Google tokens for refresh flow:', error.message);
-      return;
-    }
-
-    lastPersistedTokenFingerprintRef.current = fingerprint;
-  }, []);
+  const googleScopes = ['openid', 'email', 'profile'].join(' ');
 
   useEffect(() => {
     // Check current session on mount
@@ -65,7 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const refreshToken = session?.provider_refresh_token ?? null;
       if (accessToken) setGoogleAccessToken(accessToken);
       if (refreshToken) setGoogleRefreshToken(refreshToken);
-      void persistGoogleTokens(session?.user?.id, accessToken, refreshToken);
       setLoading(false);
     });
 
@@ -79,11 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const refreshToken = session?.provider_refresh_token ?? null;
       if (accessToken) setGoogleAccessToken(accessToken);
       if (refreshToken) setGoogleRefreshToken(refreshToken);
-      void persistGoogleTokens(session?.user?.id, accessToken, refreshToken);
     });
 
     return () => subscription.unsubscribe();
-  }, [persistGoogleTokens]);
+  }, []);
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
@@ -91,11 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: {
         redirectTo: `${appBaseUrl}/dashboard`,
         scopes: googleScopes,
-        queryParams: {
-          access_type: 'offline',
-          include_granted_scopes: 'false',
-          prompt: 'consent',
-        },
       },
     });
   };
@@ -104,7 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setGoogleAccessToken(null);
     setGoogleRefreshToken(null);
-    lastPersistedTokenFingerprintRef.current = null;
   }, []);
 
   const isSessionMissingSignOutError = (error: unknown) => {

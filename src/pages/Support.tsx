@@ -19,14 +19,14 @@ export default function Support() {
             <p className="mt-2">
               Reviewer subject line suggestion:
               {' '}
-              <a href={legalMailto('Google OAuth verification review')} className="text-blue-700 hover:text-blue-800">Google OAuth verification review</a>
+              <a href={legalMailto('Google OAuth app review')} className="text-blue-700 hover:text-blue-800">Google OAuth app review</a>
             </p>
           </section>
 
           <section>
             <h2 className="text-base font-semibold text-slate-900">Data deletion options</h2>
             <p className="mt-2">
-              In-product Google data deletion: open Dashboard and click <strong>Disconnect Google</strong>.
+              Revoke Google account access from your Google Account security settings.
             </p>
             <p className="mt-2">
               Full account/data deletion request: email
