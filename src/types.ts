@@ -80,8 +80,20 @@ export interface Task {
   attachments?: TaskAttachment[]
   created_at: string
   updated_at?: string
+  completed_at?: string | null
+  deleted_at?: string | null
   is_projected?: boolean
   source_task_id?: string | null
+}
+
+export interface TaskActivityLog {
+  id: number
+  user_id: string
+  task_id?: string | null
+  action_type: 'soft_delete' | 'bulk_soft_delete' | 'restore'
+  action_payload: Record<string, unknown>
+  created_at: string
+  expires_at?: string | null
 }
 
 export interface CalendarConnection {

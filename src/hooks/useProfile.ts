@@ -6,7 +6,7 @@ import type { Profile, StreakData } from '../types'
 export function useProfile() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const queryKey = ['profile']
+  const queryKey = ['profile', user?.id ?? 'anon']
 
   const { data: profile = null, isLoading: loading } = useQuery({
     queryKey,

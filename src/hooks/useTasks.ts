@@ -5,14 +5,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
 import { confirmAction } from '../lib/confirm'
+import { countLabel, statusLabel } from './taskShared'
 import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
 
 export function useTasks(year: number, month: number) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const queryKey = useMemo(() => ['tasks', year, month] as const, [year, month])
-  const countLabel = (count: number) => `${count} ${count === 1 ? 'task' : 'tasks'}`
-  const statusLabel = (status: TaskStatus) => (status === 'done' ? 'Done' : status === 'inprogress' ? 'In Progress' : 'To Do')
+  const queryKey = useMemo(() => ['tasks', user?.id ?? 'anon', year, month] as const, [month, user?.id, year])
 
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
   const endDate =
@@ -22,10 +21,12 @@ export function useTasks(year: number, month: number) {
 
   const { data: tasks = [], isLoading: loading, error } = useQuery({
     queryKey,
+    enabled: !!user?.id,
     queryFn: async ({ signal }) => {
       const { data, error } = await supabase
         .from('tasks')
         .select(TASK_SELECT)
+        .is('deleted_at', null)
         .not('date', 'is', null)
         .lt('date', endDate)
         .or(`and(end_date.is.null,date.gte.${startDate}),end_date.gte.${startDate}`)
@@ -52,7 +53,7 @@ export function useTasks(year: number, month: number) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['tasks'] })
+          queryClient.invalidateQueries({ queryKey: ['tasks', user.id] })
         }
       )
       .subscribe()
@@ -67,8 +68,30 @@ export function useTasks(year: number, month: number) {
   }, [queryClient, queryKey])
 
   const invalidateAllTasks = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['tasks'] })
-  }, [queryClient])
+    if (!user?.id) return
+    queryClient.invalidateQueries({ queryKey: ['tasks', user.id] })
+  }, [queryClient, user?.id])
+
+  const logTaskActivity = useCallback(async (params: {
+    actionType: 'soft_delete' | 'bulk_soft_delete' | 'restore'
+    taskId?: string | null
+    payload: Record<string, unknown>
+    expiresAt?: string | null
+  }) => {
+    if (!user?.id) return
+
+    const { error } = await supabase.from('task_activity_log').insert({
+      user_id: user.id,
+      task_id: params.taskId ?? null,
+      action_type: params.actionType,
+      action_payload: params.payload,
+      expires_at: params.expiresAt ?? null,
+    })
+
+    if (error) {
+      console.error('Failed to write task activity log:', error)
+    }
+  }, [user?.id])
 
   const getActiveGoogleConnection = useCallback(async () => {
     if (!user?.id) return null
@@ -332,6 +355,8 @@ export function useTasks(year: number, month: number) {
       recurrence: extras?.recurrence ?? null,
       source_task_id: extras?.source_task_id ?? null,
       sort_order: extras?.sort_order ?? 0,
+      completed_at: null,
+      deleted_at: null,
     }
 
     const { data, error } = await supabase
@@ -382,8 +407,9 @@ export function useTasks(year: number, month: number) {
   const updateTaskStatus = async (id: string, newStatus: TaskStatus) => {
     const { error } = await supabase
       .from('tasks')
-      .update({ status: newStatus })
+      .update({ status: newStatus, completed_at: newStatus === 'done' ? new Date().toISOString() : null })
       .eq('id', id)
+      .is('deleted_at', null)
 
     if (error) {
       console.error('Failed to update task status:', error)
@@ -417,6 +443,7 @@ export function useTasks(year: number, month: number) {
 
     // Conflict detection: only update if updated_at matches
     let query = supabase.from('tasks').update(updates).eq('id', id)
+    query = query.is('deleted_at', null)
     if (task?.updated_at) {
       query = query.eq('updated_at', task.updated_at)
     }
@@ -448,6 +475,32 @@ export function useTasks(year: number, month: number) {
     return true
   }
 
+  const restoreTasks = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return false
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: null, updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .select(TASK_SELECT)
+
+    if (error) {
+      console.error('Failed to restore tasks:', error)
+      toast.error('Failed to undo delete')
+      return false
+    }
+
+    const restoredTasks = (data as unknown as Task[]) ?? []
+    await Promise.all(restoredTasks.filter((task) => task.date).map((task) => upsertTaskEventAndQueue(task)))
+    await logTaskActivity({
+      actionType: 'restore',
+      payload: { task_ids: ids },
+    })
+    invalidateAllTasks()
+    toast.success(`${countLabel(ids.length)} restored`)
+    return true
+  }, [invalidateAllTasks, logTaskActivity, upsertTaskEventAndQueue])
+
   const deleteTask = async (id: string, options?: { skipConfirm?: boolean }) => {
     if (!options?.skipConfirm) {
       const taskTitle = tasks.find((task) => task.id === id)?.title
@@ -460,7 +513,12 @@ export function useTasks(year: number, month: number) {
       await unlinkTaskEventAndQueueDelete(taskToDelete)
     }
 
-    const { error } = await supabase.from('tasks').delete().eq('id', id)
+    const deletedAt = new Date().toISOString()
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: deletedAt })
+      .eq('id', id)
+      .is('deleted_at', null)
 
     if (error) {
       console.error('Failed to delete task:', error)
@@ -468,8 +526,21 @@ export function useTasks(year: number, month: number) {
       return
     }
 
+    await logTaskActivity({
+      actionType: 'soft_delete',
+      taskId: id,
+      payload: { task_id: id, deleted_at: deletedAt },
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    })
     invalidateAllTasks()
-    toast.success('Task deleted')
+    toast('Task deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          void restoreTasks([id])
+        },
+      },
+    })
   }
 
   const bulkUpdateStatus = async (ids: string[], status: TaskStatus) => {
@@ -479,6 +550,7 @@ export function useTasks(year: number, month: number) {
       .from('tasks')
       .update({ status })
       .in('id', ids)
+      .is('deleted_at', null)
 
     if (error) {
       console.error('Failed to bulk update status:', error)
@@ -498,6 +570,7 @@ export function useTasks(year: number, month: number) {
       .from('tasks')
       .update({ date })
       .in('id', ids)
+      .is('deleted_at', null)
       .select(TASK_SELECT)
 
     if (error) {
@@ -520,6 +593,7 @@ export function useTasks(year: number, month: number) {
       .from('tasks')
       .update({ date: null })
       .in('id', ids)
+      .is('deleted_at', null)
       .select(TASK_SELECT)
 
     if (error) {
@@ -545,6 +619,7 @@ export function useTasks(year: number, month: number) {
       .from('tasks')
       .select(TASK_SELECT)
       .in('id', ids)
+      .is('deleted_at', null)
 
     if (tasksToDeleteError) {
       console.error('Failed to load tasks before bulk delete:', tasksToDeleteError)
@@ -554,10 +629,12 @@ export function useTasks(year: number, month: number) {
 
     await Promise.all(((tasksToDelete as unknown as Task[]) ?? []).map((task) => unlinkTaskEventAndQueueDelete(task)))
 
+    const deletedAt = new Date().toISOString()
     const { error } = await supabase
       .from('tasks')
-      .delete()
+      .update({ deleted_at: deletedAt })
       .in('id', ids)
+      .is('deleted_at', null)
 
     if (error) {
       console.error('Failed to bulk delete tasks:', error)
@@ -565,14 +642,26 @@ export function useTasks(year: number, month: number) {
       return false
     }
 
+    await logTaskActivity({
+      actionType: 'bulk_soft_delete',
+      payload: { task_ids: ids, deleted_at: deletedAt },
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    })
     invalidateAllTasks()
-    toast.success(`${countLabel(ids.length)} deleted`)
+    toast(`${countLabel(ids.length)} deleted`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          void restoreTasks(ids)
+        },
+      },
+    })
     return true
   }
 
   const reorderTasks = async (_dateStr: string, orderedIds: string[]) => {
     const updates = orderedIds.map((id, index) =>
-      supabase.from('tasks').update({ sort_order: index }).eq('id', id)
+      supabase.from('tasks').update({ sort_order: index }).eq('id', id).is('deleted_at', null)
     )
 
     const results = await Promise.all(updates)

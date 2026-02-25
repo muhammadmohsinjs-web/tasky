@@ -259,6 +259,7 @@ export function useCalendarSyncSettings() {
         .select('id,title,description,notes,date,end_date,time')
         .eq('user_id', user.id)
         .not('date', 'is', null)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(safeLimit),
       supabase
