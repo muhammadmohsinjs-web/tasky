@@ -94,6 +94,7 @@ export function useBacklogTasks() {
       time?: string | null
       end_time?: string | null
       task_type?: TaskType
+      goal_id?: string | null
       status?: TaskStatus
       links?: TaskLink[]
       recurrence?: RecurrenceRule | null
@@ -118,6 +119,7 @@ export function useBacklogTasks() {
       time: extras?.time ?? null,
       end_time: extras?.end_time ?? null,
       task_type: extras?.task_type ?? 'task',
+      goal_id: extras?.goal_id ?? null,
       links: extras?.links ?? [],
       recurrence: extras?.recurrence ?? null,
       source_task_id: extras?.source_task_id ?? null,
@@ -192,6 +194,7 @@ export function useBacklogTasks() {
       time?: string | null
       end_time?: string | null
       task_type?: TaskType
+      goal_id?: string | null
       category_id?: string | null
       date?: string | null
       status?: TaskStatus

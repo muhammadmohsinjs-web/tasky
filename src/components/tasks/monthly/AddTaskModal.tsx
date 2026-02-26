@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
-import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus, RecurrenceRule, TaskType } from '../../../types';
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus, RecurrenceRule, TaskType, GoalStatus } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
 import { loadTaskMeta, type TaskSubtaskDraft } from '../../../lib/taskMeta';
 import { formatMonthLabel, generateMonthGrid, parseISODate, toISODate } from './calendarHelpers';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { TaskStatus } from './types';
 
 interface TaskFormPayload {
@@ -14,6 +16,7 @@ interface TaskFormPayload {
   end_time: string | null;
   task_type: TaskType;
   categoryId: string;
+  goal_id: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   dateISO: string | null;
@@ -30,10 +33,18 @@ interface AddTaskModalProps {
   mode: 'create' | 'edit' | 'view';
   defaultDateISO: string;
   defaultTaskType?: TaskType;
+  defaultGoalId?: string | null;
+  lockGoalId?: boolean;
   task: Task | null;
   categories: Category[];
   onClose: () => void;
   onSubmit: (payload: TaskFormPayload) => Promise<boolean> | boolean;
+}
+
+interface GoalOption {
+  id: string
+  title: string
+  status: GoalStatus
 }
 
 const DAY_OPTIONS = [
@@ -246,9 +257,21 @@ function CalendarDateInput({ value, onChange, disabled }: CalendarDateInputProps
   );
 }
 
-export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = 'task', task, categories, onClose, onSubmit }: AddTaskModalProps) {
+export function AddTaskModal({
+  isOpen,
+  mode,
+  defaultDateISO,
+  defaultTaskType = 'task',
+  defaultGoalId = null,
+  lockGoalId = false,
+  task,
+  categories,
+  onClose,
+  onSubmit,
+}: AddTaskModalProps) {
   const isViewMode = mode === 'view';
   const isEditMode = mode === 'edit';
+  const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -258,6 +281,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
   const [status, setStatus] = useState<TaskStatus>('pending');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [categoryId, setCategoryId] = useState('');
+  const [goalId, setGoalId] = useState('');
   const [links, setLinks] = useState<TaskLink[]>([]);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkLabel, setNewLinkLabel] = useState('');
@@ -277,6 +301,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
   const [endTime, setEndTime] = useState('');
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const [goalOptions, setGoalOptions] = useState<GoalOption[]>([]);
   const existingAttachments = task?.attachments ?? [];
   const isBacklogTask = !dateISO;
 
@@ -300,6 +325,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
     setStatus(task ? dbToCalendarStatus(task.status) : 'pending');
     setPriority(task?.priority ?? 'medium');
     setCategoryId(task?.category_id ?? categories[0]?.id ?? '');
+    setGoalId(task?.goal_id ?? defaultGoalId ?? '');
     setLinks(task?.links ?? []);
     setNewLinkUrl('');
     setNewLinkLabel('');
@@ -346,7 +372,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
       active = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, defaultDateISO, defaultTaskType, isOpen, mode, task]);
+  }, [categories, defaultDateISO, defaultGoalId, defaultTaskType, isOpen, mode, task]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -357,6 +383,30 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose, submitting]);
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) return;
+
+    let active = true;
+    void supabase
+      .from('goals')
+      .select('id,title,status')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setGoalOptions([]);
+          return;
+        }
+        setGoalOptions((data as GoalOption[] | null) ?? []);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, user?.id]);
 
   useEffect(() => {
     if (!isOpen || taskType !== 'habit') return;
@@ -444,6 +494,11 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
     ));
   };
 
+  const activeGoals = useMemo(
+    () => goalOptions.filter((goal) => goal.status === 'active' || goal.id === goalId),
+    [goalOptions, goalId],
+  );
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -486,6 +541,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
         end_time: isHabit ? (endTime.trim() || null) : null,
         task_type: taskType,
         categoryId,
+        goal_id: taskType === 'task' ? (goalId || null) : null,
         status: isHabit ? 'pending' : status,
         priority,
         dateISO: finalDateISO,
@@ -635,6 +691,28 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = '
                 </select>
               </label>
             </div>
+
+            {taskType === 'task' ? (
+              <label className="mt-3 block">
+                <span className="mb-1 block text-sm font-medium text-[#314866]">Goal (optional)</span>
+                <select
+                  value={goalId}
+                  onChange={(event) => setGoalId(event.target.value)}
+                  disabled={isViewMode || lockGoalId}
+                  className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-[#F5F8FC]"
+                >
+                  <option value="">Select a goal...</option>
+                  {activeGoals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.title}
+                    </option>
+                  ))}
+                </select>
+                {lockGoalId ? (
+                  <p className="mt-1 text-xs text-[#607A9C]">Goal is locked for tasks created from this goal page.</p>
+                ) : null}
+              </label>
+            ) : null}
           </section>
 
           <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">

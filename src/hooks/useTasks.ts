@@ -381,6 +381,7 @@ export function useTasks(year: number, month: number) {
       time?: string | null
       end_time?: string | null
       task_type?: TaskType
+      goal_id?: string | null
       status?: TaskStatus
       links?: TaskLink[]
       end_date?: string | null
@@ -407,6 +408,7 @@ export function useTasks(year: number, month: number) {
       time: extras?.time ?? null,
       end_time: extras?.end_time ?? null,
       task_type: extras?.task_type ?? 'task',
+      goal_id: extras?.goal_id ?? null,
       links: extras?.links ?? [],
       end_date: extras?.end_date ?? null,
       recurrence: extras?.recurrence ?? null,
@@ -487,6 +489,7 @@ export function useTasks(year: number, month: number) {
       time?: string | null
       end_time?: string | null
       task_type?: TaskType
+      goal_id?: string | null
       category_id?: string | null
       date?: string | null
       end_date?: string | null

@@ -144,6 +144,7 @@ export default function Cockpit() {
     end_time: string | null
     task_type: TaskType
     categoryId: string
+    goal_id: string | null
     status: CalendarStatus
     priority: TaskPriority
     dateISO: string | null
@@ -169,6 +170,7 @@ export default function Cockpit() {
           end_time: payload.end_time,
           task_type: payload.task_type,
           category_id: payload.categoryId || null,
+          goal_id: payload.goal_id,
           date: payload.dateISO,
           status: dbStatus,
           priority: payload.priority,
@@ -195,13 +197,14 @@ export default function Cockpit() {
       notes: payload.notes,
       time: payload.time,
       end_time: payload.end_time,
+      task_type: payload.task_type,
       category_id: payload.categoryId || null,
+      goal_id: payload.goal_id,
       date: payload.dateISO ?? todayStr,
       status: dbStatus,
       priority: payload.priority,
       links: payload.links,
       recurrence: payload.recurrence,
-      task_type: payload.task_type,
       user_id: user.id,
     })
 

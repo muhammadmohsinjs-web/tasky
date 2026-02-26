@@ -76,7 +76,7 @@ export const CATEGORY_PALETTE = [
   { name: 'Sky', color: 'bg-sky-100 text-sky-700', accent: 'border-l-sky-400', hex: '#0ea5e9' },
 ]
 
-export const TASK_SELECT = 'id,title,description,notes,time,end_time,task_type,category_id,date,end_date,recurrence,source_task_id,goal_id,status,priority,sort_order,links,created_at,updated_at,completed_at,deleted_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at), attachments:task_attachments(id,task_id,user_id,file_name,file_url,file_type,file_size,created_at)'
+export const TASK_SELECT = 'id,title,description,notes,time,end_time,task_type,category_id,date,end_date,recurrence,source_task_id,goal_id,status,priority,sort_order,links,created_at,updated_at,completed_at,deleted_at, category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at), goal:goals(id,title,description,start_date,end_date,status,color,sort_order,created_at,updated_at), attachments:task_attachments(id,task_id,user_id,file_name,file_url,file_type,file_size,created_at)'
 export const GOAL_SELECT = 'id,title,description,start_date,end_date,status,color,sort_order,created_at,updated_at'
 export const EVENT_SELECT = 'id,user_id,title,description,start_at,end_at,is_all_day,timezone,source,status,created_at,updated_at'
 export const CALENDAR_CONNECTION_SELECT = 'id,user_id,provider,google_calendar_id,sync_enabled,sync_direction,last_sync_at,created_at,updated_at'
