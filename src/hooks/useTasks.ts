@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
 import { confirmAction } from '../lib/confirm'
 import { countLabel, statusLabel } from './taskShared'
-import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule, TaskType } from '../types'
 
 const CALENDAR_SYNC_ACTIVE = false
 
@@ -379,6 +379,8 @@ export function useTasks(year: number, month: number) {
       description?: string | null
       notes?: string | null
       time?: string | null
+      end_time?: string | null
+      task_type?: TaskType
       status?: TaskStatus
       links?: TaskLink[]
       end_date?: string | null
@@ -403,6 +405,8 @@ export function useTasks(year: number, month: number) {
       description: extras?.description ?? null,
       notes: extras?.notes ?? null,
       time: extras?.time ?? null,
+      end_time: extras?.end_time ?? null,
+      task_type: extras?.task_type ?? 'task',
       links: extras?.links ?? [],
       end_date: extras?.end_date ?? null,
       recurrence: extras?.recurrence ?? null,
@@ -481,6 +485,8 @@ export function useTasks(year: number, month: number) {
       description?: string | null
       notes?: string | null
       time?: string | null
+      end_time?: string | null
+      task_type?: TaskType
       category_id?: string | null
       date?: string | null
       end_date?: string | null

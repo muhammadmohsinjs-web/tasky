@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileIcon, Image as ImageIcon, Inbox, Link as LinkIcon, Paperclip, Plus, X } from 'lucide-react';
-import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus, RecurrenceRule } from '../../../types';
+import type { Category, Task, TaskLink, TaskPriority, TaskStatus as DbTaskStatus, RecurrenceRule, TaskType } from '../../../types';
 import { PRIORITY_CONFIG } from '../../../lib/constants';
 import { loadTaskMeta, type TaskSubtaskDraft } from '../../../lib/taskMeta';
 import { formatMonthLabel, generateMonthGrid, parseISODate, toISODate } from './calendarHelpers';
@@ -11,6 +11,8 @@ interface TaskFormPayload {
   description: string | null;
   notes: string | null;
   time: string | null;
+  end_time: string | null;
+  task_type: TaskType;
   categoryId: string;
   status: TaskStatus;
   priority: TaskPriority;
@@ -27,11 +29,22 @@ interface AddTaskModalProps {
   isOpen: boolean;
   mode: 'create' | 'edit' | 'view';
   defaultDateISO: string;
+  defaultTaskType?: TaskType;
   task: Task | null;
   categories: Category[];
   onClose: () => void;
   onSubmit: (payload: TaskFormPayload) => Promise<boolean> | boolean;
 }
+
+const DAY_OPTIONS = [
+  { label: 'S', value: 0 },
+  { label: 'M', value: 1 },
+  { label: 'T', value: 2 },
+  { label: 'W', value: 3 },
+  { label: 'T', value: 4 },
+  { label: 'F', value: 5 },
+  { label: 'S', value: 6 },
+] as const;
 
 function dbToCalendarStatus(status: DbTaskStatus): TaskStatus {
   if (status === 'inprogress') return 'in_progress';
@@ -233,7 +246,7 @@ function CalendarDateInput({ value, onChange, disabled }: CalendarDateInputProps
   );
 }
 
-export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, onClose, onSubmit }: AddTaskModalProps) {
+export function AddTaskModal({ isOpen, mode, defaultDateISO, defaultTaskType = 'task', task, categories, onClose, onSubmit }: AddTaskModalProps) {
   const isViewMode = mode === 'view';
   const isEditMode = mode === 'edit';
   const [submitting, setSubmitting] = useState(false);
@@ -260,15 +273,19 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceRule['frequency']>('weekly');
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [taskType, setTaskType] = useState<TaskType>('task');
+  const [endTime, setEndTime] = useState('');
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const existingAttachments = task?.attachments ?? [];
   const isBacklogTask = !dateISO;
 
   const heading = useMemo(() => {
-    if (isViewMode) return 'Task Details';
-    return isEditMode ? 'Edit Task' : 'Create Task';
-  }, [isEditMode, isViewMode]);
-  const showStatusField = isEditMode || isViewMode;
+    const typeLabel = taskType === 'habit' ? 'Habit' : 'Task';
+    if (isViewMode) return `${typeLabel} Details`;
+    return isEditMode ? `Edit ${typeLabel}` : `Create ${typeLabel}`;
+  }, [isEditMode, isViewMode, taskType]);
+  const showStatusField = (isEditMode || isViewMode) && taskType !== 'habit';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -294,8 +311,12 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setTags([]);
     setTagInput('');
     setReminderAt('');
-    setRecurrenceEnabled(Boolean(initialRecurrence));
-    setRecurrenceFrequency(initialRecurrence?.frequency ?? 'weekly');
+    const resolvedTaskType = task?.task_type ?? defaultTaskType ?? 'task';
+    setTaskType(resolvedTaskType);
+    setEndTime(task?.end_time ?? '');
+    setDaysOfWeek(initialRecurrence?.days_of_week ?? []);
+    setRecurrenceEnabled(resolvedTaskType === 'habit' ? true : Boolean(initialRecurrence));
+    setRecurrenceFrequency(initialRecurrence?.frequency ?? 'daily');
     setRecurrenceInterval(initialRecurrence?.interval ?? 1);
     setRecurrenceEndDate(initialRecurrence?.end_date ?? '');
     setLoadingMeta(false);
@@ -325,7 +346,7 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
       active = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultDateISO, isOpen, mode, task]);
+  }, [categories, defaultDateISO, defaultTaskType, isOpen, mode, task]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -336,6 +357,15 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose, submitting]);
+
+  useEffect(() => {
+    if (!isOpen || taskType !== 'habit') return;
+    setRecurrenceEnabled(true);
+    setStatus('pending');
+    if (!dateISO) {
+      setDateISO(defaultDateISO || new Date().toISOString().slice(0, 10));
+    }
+  }, [taskType, isOpen, dateISO, defaultDateISO]);
 
   if (!isOpen) return null;
 
@@ -406,6 +436,14 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const toggleDayOfWeek = (day: number) => {
+    setDaysOfWeek((prev) => (
+      prev.includes(day)
+        ? prev.filter((value) => value !== day)
+        : [...prev, day].sort((a, b) => a - b)
+    ));
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -424,14 +462,20 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
     setSubmitting(true);
     setTitleError('');
+    const isHabit = taskType === 'habit';
+    const habitAnchorDate = defaultDateISO || new Date().toISOString().slice(0, 10);
     const recurrence: RecurrenceRule | null =
-      recurrenceEnabled && dateISO
+      (isHabit || (recurrenceEnabled && dateISO))
         ? {
             frequency: recurrenceFrequency,
             interval: Math.max(1, recurrenceInterval),
             end_date: recurrenceEndDate || null,
+            ...(recurrenceFrequency === 'weekly' && daysOfWeek.length > 0
+              ? { days_of_week: daysOfWeek }
+              : {}),
           }
         : null;
+    const finalDateISO = isHabit ? habitAnchorDate : (dateISO || null);
     let didSave = false;
     try {
       didSave = await onSubmit({
@@ -439,10 +483,12 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
         description: description.trim() || null,
         notes: notes.trim() || null,
         time: time.trim() || null,
+        end_time: isHabit ? (endTime.trim() || null) : null,
+        task_type: taskType,
         categoryId,
-        status,
+        status: isHabit ? 'pending' : status,
         priority,
-        dateISO: dateISO || null,
+        dateISO: finalDateISO,
         links,
         files,
         subtasks: subtasks.map((item, index) => ({
@@ -488,6 +534,36 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                   Status defaults to Pending
                 </span>
               ) : null}
+            </div>
+
+            <div className="mb-3 rounded-xl border border-[#D8E3F3] bg-white p-1.5">
+              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#556985]">Type</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isViewMode}
+                  onClick={() => setTaskType('task')}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    taskType === 'task'
+                      ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
+                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                  } ${isViewMode ? 'cursor-default' : ''}`}
+                >
+                  Task
+                </button>
+                <button
+                  type="button"
+                  disabled={isViewMode}
+                  onClick={() => setTaskType('habit')}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    taskType === 'habit'
+                      ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
+                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                  } ${isViewMode ? 'cursor-default' : ''}`}
+                >
+                  Habit
+                </button>
+              </div>
             </div>
 
             <label className="block">
@@ -563,56 +639,10 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
 
           <section className="rounded-2xl border border-[#E4EBF6] bg-[#FBFCFF] p-4">
             <h3 className="mb-3 text-sm font-semibold text-[#233553]">Schedule</h3>
-            <div className="mb-3 rounded-xl border border-[#D8E3F3] bg-white p-1.5">
-              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#556985]">Task type</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={isViewMode}
-                  onClick={() => setDateISO(defaultDateISO || new Date().toISOString().slice(0, 10))}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
-                    !isBacklogTask
-                      ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
-                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
-                  } ${isViewMode ? 'cursor-default' : ''}`}>
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <CalendarDays className="h-4 w-4" />
-                    Scheduled
-                  </span>
-                  {!isBacklogTask ? <span className="rounded-full bg-[#CFE0FF] px-2 py-0.5 text-[10px] font-semibold text-[#1F4C9A]">Active</span> : null}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isViewMode}
-                  onClick={() => setDateISO('')}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
-                    isBacklogTask
-                      ? 'border-[#A8C4F2] bg-[#EFF5FF] text-[#244D96]'
-                      : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
-                  } ${isViewMode ? 'cursor-default' : ''}`}>
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <Inbox className="h-4 w-4" />
-                    Backlog
-                  </span>
-                  {isBacklogTask ? <span className="rounded-full bg-[#D8E7FF] px-2 py-0.5 text-[10px] font-semibold text-[#2859AB]">Active</span> : null}
-                </button>
-              </div>
-            </div>
-
-            {!isBacklogTask ? (
+            {taskType === 'habit' ? (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[#314866]">Date</span>
-                  <CalendarDateInput
-                    value={dateISO}
-                    onChange={setDateISO}
-                    disabled={isViewMode}
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[#314866]">Time</span>
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">Start time</span>
                   <input
                     value={time}
                     onChange={event => setTime(event.target.value)}
@@ -621,18 +651,92 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                     className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   />
                 </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[#314866]">End time</span>
+                  <input
+                    value={endTime}
+                    onChange={event => setEndTime(event.target.value)}
+                    type="time"
+                    disabled={isViewMode}
+                    className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </label>
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-[#C8D8EF] bg-[#F5F9FF] px-3 py-2">
-                <p className="text-sm font-medium text-[#385073]">
-                  This task is in backlog and will not appear on a calendar date.
-                </p>
-                {!isViewMode ? (
-                  <p className="mt-1 text-xs text-[#5A7091]">
-                    Choose <span className="font-semibold">Scheduled</span> above when you are ready to assign a date and time.
-                  </p>
-                ) : null}
-              </div>
+              <>
+                <div className="mb-3 rounded-xl border border-[#D8E3F3] bg-white p-1.5">
+                  <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#556985]">Scheduling</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      disabled={isViewMode}
+                      onClick={() => setDateISO(defaultDateISO || new Date().toISOString().slice(0, 10))}
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                        !isBacklogTask
+                          ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
+                          : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                      } ${isViewMode ? 'cursor-default' : ''}`}>
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                        <CalendarDays className="h-4 w-4" />
+                        Scheduled
+                      </span>
+                      {!isBacklogTask ? <span className="rounded-full bg-[#CFE0FF] px-2 py-0.5 text-[10px] font-semibold text-[#1F4C9A]">Active</span> : null}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isViewMode}
+                      onClick={() => setDateISO('')}
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                        isBacklogTask
+                          ? 'border-[#A8C4F2] bg-[#EFF5FF] text-[#244D96]'
+                          : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                      } ${isViewMode ? 'cursor-default' : ''}`}>
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                        <Inbox className="h-4 w-4" />
+                        Backlog
+                      </span>
+                      {isBacklogTask ? <span className="rounded-full bg-[#D8E7FF] px-2 py-0.5 text-[10px] font-semibold text-[#2859AB]">Active</span> : null}
+                    </button>
+                  </div>
+                </div>
+
+                {!isBacklogTask ? (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-[#314866]">Date</span>
+                      <CalendarDateInput
+                        value={dateISO}
+                        onChange={setDateISO}
+                        disabled={isViewMode}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-[#314866]">Time</span>
+                      <input
+                        value={time}
+                        onChange={event => setTime(event.target.value)}
+                        type="time"
+                        disabled={isViewMode}
+                        className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#C8D8EF] bg-[#F5F9FF] px-3 py-2">
+                    <p className="text-sm font-medium text-[#385073]">
+                      This task is in backlog and will not appear on a calendar date.
+                    </p>
+                    {!isViewMode ? (
+                      <p className="mt-1 text-xs text-[#5A7091]">
+                        Choose <span className="font-semibold">Scheduled</span> above when you are ready to assign a date and time.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -656,17 +760,19 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                   <p className="text-sm font-medium text-[#314866]">Recurrence</p>
                   <button
                     type="button"
-                    disabled={isViewMode || isBacklogTask}
+                    disabled={isViewMode || isBacklogTask || taskType === 'habit'}
                     onClick={() => setRecurrenceEnabled((prev) => !prev)}
                     className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
                       recurrenceEnabled ? 'bg-[#EAF2FF] text-[#1F4C9A]' : 'bg-[#F3F5F9] text-[#607A9C]'
                     }`}
                   >
-                    {recurrenceEnabled ? 'Enabled' : 'Disabled'}
+                    {taskType === 'habit' ? 'Required' : recurrenceEnabled ? 'Enabled' : 'Disabled'}
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-[#607A9C]">
-                  Backlog tasks cannot recur until scheduled.
+                  {taskType === 'habit'
+                    ? 'Habits always repeat and use recurrence settings.'
+                    : 'Backlog tasks cannot recur until scheduled.'}
                 </p>
               </div>
             </div>
@@ -708,6 +814,32 @@ export function AddTaskModal({ isOpen, mode, defaultDateISO, task, categories, o
                     className="h-11 w-full rounded-xl border border-[#CFDBEA] bg-white px-3 text-[#1E2F47] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   />
                 </label>
+              </div>
+            ) : null}
+
+            {recurrenceEnabled && recurrenceFrequency === 'weekly' ? (
+              <div className="mt-3">
+                <span className="mb-1 block text-sm font-medium text-[#314866]">Days of week</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {DAY_OPTIONS.map((day) => {
+                    const active = daysOfWeek.includes(day.value);
+                    return (
+                      <button
+                        key={`${day.label}-${day.value}`}
+                        type="button"
+                        disabled={isViewMode}
+                        onClick={() => toggleDayOfWeek(day.value)}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition ${
+                          active
+                            ? 'border-[#93B7F8] bg-[#EAF2FF] text-[#143C85]'
+                            : 'border-[#D7E0EF] bg-white text-[#5B6E8C] hover:bg-[#F7FAFF]'
+                        } ${isViewMode ? 'cursor-default' : ''}`}
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
 

@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
 import { confirmAction } from '../lib/confirm'
 import { countLabel, statusLabel } from './taskShared'
-import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskLink, RecurrenceRule, TaskType } from '../types'
 
 export function useBacklogTasks() {
   const queryClient = useQueryClient()
@@ -92,6 +92,8 @@ export function useBacklogTasks() {
       description?: string | null
       notes?: string | null
       time?: string | null
+      end_time?: string | null
+      task_type?: TaskType
       status?: TaskStatus
       links?: TaskLink[]
       recurrence?: RecurrenceRule | null
@@ -114,6 +116,8 @@ export function useBacklogTasks() {
       description: extras?.description ?? null,
       notes: extras?.notes ?? null,
       time: extras?.time ?? null,
+      end_time: extras?.end_time ?? null,
+      task_type: extras?.task_type ?? 'task',
       links: extras?.links ?? [],
       recurrence: extras?.recurrence ?? null,
       source_task_id: extras?.source_task_id ?? null,
@@ -186,6 +190,8 @@ export function useBacklogTasks() {
       description?: string | null
       notes?: string | null
       time?: string | null
+      end_time?: string | null
+      task_type?: TaskType
       category_id?: string | null
       date?: string | null
       status?: TaskStatus

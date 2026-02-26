@@ -7,11 +7,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { useCockpit } from '../hooks/useCockpit'
 import { useProfile } from '../hooks/useProfile'
 import { useCategories } from '../hooks/useCategories'
+import { updateHabitStreak } from '../hooks/useHabitStreak'
 import { CockpitHeader } from '../components/cockpit/CockpitHeader'
 import { HabitRow } from '../components/cockpit/HabitRow'
 import { TaskRow } from '../components/cockpit/TaskRow'
 import { AddTaskModal } from '../components/tasks/monthly/AddTaskModal'
-import type { Task, TaskStatus, TaskLink, RecurrenceRule, TaskPriority } from '../types'
+import type { Task, TaskStatus, TaskLink, RecurrenceRule, TaskPriority, TaskType } from '../types'
 
 type CalendarStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -39,6 +40,7 @@ export default function Cockpit() {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalTask, setModalTask] = useState<Task | null>(null)
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create')
+  const [defaultModalTaskType, setDefaultModalTaskType] = useState<TaskType>('task')
 
   // Sorted lists
   const sortedHabits = [...habits].sort(sortByTime)
@@ -77,6 +79,8 @@ export default function Cockpit() {
       return
     }
 
+    await updateHabitStreak(habitId, newStatus, user.id)
+
     // Check 80% threshold for global daily streak
     const updatedDone = newStatus === 'done' ? habitsDone + 1 : habitsDone - 1
     if (habitsTotal > 0 && updatedDone / habitsTotal >= 0.8) {
@@ -112,6 +116,7 @@ export default function Cockpit() {
   function openTask(task: Task) {
     setModalTask(task)
     setModalMode('edit')
+    setDefaultModalTaskType(task.task_type ?? 'task')
     setModalOpen(true)
   }
 
@@ -119,6 +124,14 @@ export default function Cockpit() {
   function openCreateTask() {
     setModalTask(null)
     setModalMode('create')
+    setDefaultModalTaskType('task')
+    setModalOpen(true)
+  }
+
+  function openCreateHabit() {
+    setModalTask(null)
+    setModalMode('create')
+    setDefaultModalTaskType('habit')
     setModalOpen(true)
   }
 
@@ -128,6 +141,8 @@ export default function Cockpit() {
     description: string | null
     notes: string | null
     time: string | null
+    end_time: string | null
+    task_type: TaskType
     categoryId: string
     status: CalendarStatus
     priority: TaskPriority
@@ -151,6 +166,8 @@ export default function Cockpit() {
           description: payload.description,
           notes: payload.notes,
           time: payload.time,
+          end_time: payload.end_time,
+          task_type: payload.task_type,
           category_id: payload.categoryId || null,
           date: payload.dateISO,
           status: dbStatus,
@@ -177,13 +194,14 @@ export default function Cockpit() {
       description: payload.description,
       notes: payload.notes,
       time: payload.time,
+      end_time: payload.end_time,
       category_id: payload.categoryId || null,
       date: payload.dateISO ?? todayStr,
       status: dbStatus,
       priority: payload.priority,
       links: payload.links,
       recurrence: payload.recurrence,
-      task_type: 'task',
+      task_type: payload.task_type,
       user_id: user.id,
     })
 
@@ -216,9 +234,18 @@ export default function Cockpit() {
       <div className="flex-1 px-6 py-6 space-y-8 max-w-2xl">
         {/* ── Habits ── */}
         <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
-            Habits
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+              Habits
+            </h2>
+            <button
+              onClick={openCreateHabit}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add habit
+            </button>
+          </div>
           <div className="space-y-2">
             {sortedHabits.map((habit) => (
               <HabitRow
@@ -272,12 +299,14 @@ export default function Cockpit() {
         isOpen={modalOpen}
         mode={modalMode}
         defaultDateISO={todayStr}
+        defaultTaskType={defaultModalTaskType}
         task={modalTask}
         categories={categories}
         onClose={() => {
           setModalOpen(false)
           setModalTask(null)
           setModalMode('create')
+          setDefaultModalTaskType('task')
         }}
         onSubmit={handleModalSubmit}
       />
