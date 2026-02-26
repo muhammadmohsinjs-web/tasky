@@ -41,6 +41,7 @@ export default function Cockpit() {
   const [modalTask, setModalTask] = useState<Task | null>(null)
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create')
   const [defaultModalTaskType, setDefaultModalTaskType] = useState<TaskType>('task')
+  const [nudgeVersion, setNudgeVersion] = useState(0)
 
   // Sorted lists
   const sortedHabits = [...habits].sort(sortByTime)
@@ -60,6 +61,26 @@ export default function Cockpit() {
 
   const getStreak = (habitId: string) =>
     habitStreaks.find((s) => s.task_id === habitId) ?? null
+
+  const atRiskHabit = (() => {
+    void nudgeVersion
+    const currentHour = new Date().getHours()
+    if (currentHour < 17) return null
+
+    for (const habit of sortedHabits) {
+      const streak = getStreak(habit.id)
+      const currentStreak = streak?.current_streak ?? 0
+      if (currentStreak < 7) continue
+      if (habit.status === 'done') continue
+
+      const dismissedKey = `dismissed_${habit.id}_${todayStr}`
+      if (localStorage.getItem(dismissedKey) === '1') continue
+
+      return { habit, currentStreak, dismissedKey }
+    }
+
+    return null
+  })()
 
   // Toggle a habit done/todo
   async function toggleHabit(habitId: string, currentStatus: TaskStatus) {
@@ -249,6 +270,37 @@ export default function Cockpit() {
               Add habit
             </button>
           </div>
+
+          {atRiskHabit ? (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800">
+                ⚡ {atRiskHabit.habit.title} streak at risk - {atRiskHabit.currentStreak} days.
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                You haven&apos;t logged it yet today.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void toggleHabit(atRiskHabit.habit.id, atRiskHabit.habit.status)}
+                  className="h-8 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-600"
+                >
+                  Mark done
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem(atRiskHabit.dismissedKey, '1')
+                    setNudgeVersion((prev) => prev + 1)
+                  }}
+                  className="h-8 rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             {sortedHabits.map((habit) => (
               <HabitRow

@@ -254,3 +254,35 @@ export interface TaskOccurrence {
   materialized_task_id?: string | null
   created_at: string
 }
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+
+export type ProposalType = 'create_tasks' | 'reschedule_tasks'
+
+export interface ProposedTask {
+  title: string
+  description?: string
+  date?: string | null
+  time?: string | null
+  goal_id?: string | null
+  priority?: TaskPriority
+}
+
+export interface ProposedReschedule {
+  task_id: string
+  task_title: string
+  new_date?: string
+  new_time?: string
+  reason: string
+}
+
+export interface Proposal {
+  type: 'proposal'
+  proposal_type: ProposalType
+  summary: string
+  items: ProposedTask[] | ProposedReschedule[]
+}
