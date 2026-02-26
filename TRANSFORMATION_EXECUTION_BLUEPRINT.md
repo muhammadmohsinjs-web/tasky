@@ -165,17 +165,18 @@ source_task_id  // parent recurring task
 | 6 | Backlog page | Low — mostly exists already |
 | 7 | Calendar heatmap | Low — replaces existing calendar |
 | 8 | Analytics update | Low — additive |
-| 9 | AI integration | Medium — new external dependency (Claude API) |
+| 9 | AI integration | Medium — Python FastAPI server + OpenAI API |
 
 **Each phase must be independently deployable.** Do not mix phases in a single commit.
 
 ### Phase 9 Sub-phases (execute in order)
-| Sub-phase | Stories | What |
-|---|---|---|
-| 9-A | 9.1–9.3 | Infrastructure: Claude client, tool schemas, AI command bar UI |
-| 9-B | 9.4–9.5 | Read-only features: task creation via NL, analytics queries |
-| 9-C | 9.6–9.7 | Write features with confirmation: goal generation, day planning |
-| 9-D | 9.8–9.9 | Proactive features: weekly health check, streak nudge |
+| Sub-phase | Stories | What | Where |
+|---|---|---|---|
+| 9-A | 9.1–9.3c | Python server: setup, schemas, agentic loop, Supabase executor, routes | Python |
+| 9-B | 9.3d–9.3e | Frontend: AIConfirmationPanel + AICommandBar (calls Python) | Frontend |
+| 9-C | 9.4–9.5 | Read-only AI features: task creation, analytics queries | Both |
+| 9-D | 9.6–9.7 | Write features with confirmation: goal generation, day planning | Both |
+| 9-E | 9.8–9.9 | Proactive features: weekly health check, streak nudge | Both |
 
 ---
 
@@ -1055,11 +1056,13 @@ Update the Analytics page to reflect the new entity model. Remove calendar-sync 
 ## Phase 9 — AI Integration
 
 ### Goal
-Embed OpenAI (GPT-4o) into Tasky as an intelligent assistant accessible via the existing `Cmd+K` command palette. AI features are split into two classes:
-- **Read** — query and analyse user data, answer questions, surface insights (no confirmation needed)
-- **Write** — generate and schedule tasks, plan the day, rearrange tasks (always show a preview, user confirms before any DB write)
+Embed OpenAI (GPT-4o) into Tasky via a **Python FastAPI backend server**. The frontend never calls OpenAI directly. All AI logic — the agentic loop, tool execution, Supabase reads — runs in Python. The frontend sends messages, receives responses or proposals, and handles user confirmation before writing to Supabase.
 
-**Golden rule: The AI never writes to the database directly. It proposes. The user confirms.**
+AI features split into two classes:
+- **Read** — query and analyse user data, answer questions in plain English (no confirmation needed)
+- **Write** — generate tasks, schedule, plan the day (always returns a proposal; user confirms before any DB write)
+
+**Golden rule: The Python server never writes to the database. It proposes. The frontend confirms and writes.**
 
 ---
 
@@ -1068,251 +1071,608 @@ Embed OpenAI (GPT-4o) into Tasky as an intelligent assistant accessible via the 
 ```
 User types in Cmd+K
         ↓
-AICommandBar detects intent (slash command vs natural language)
+AICommandBar (React) — detects AI intent
         ↓
-Natural language → send to OpenAI API (gpt-4o or gpt-4o-mini)
-  with: system message + tool schemas + conversation history
+POST /api/chat  →  Python FastAPI server
+  body: { messages, user_id, today }
+  header: X-API-Key: <server_secret>
         ↓
-OpenAI returns finish_reason: 'tool_calls' OR 'stop'
+Python: agentic loop with OpenAI
+  → tool_calls? → execute against Supabase (service role, user_id scoped)
+  → write tool? → stop loop, return { type: 'proposal', ... }
+  → stop?       → return { type: 'text', content: '...' }
         ↓
-If 'tool_calls' → parse message.tool_calls[]
-               → execute tool function client-side (Supabase query, RLS enforced)
-               → append role:'tool' results, loop again
+Frontend receives response
+  → type='text'     → display in command bar
+  → type='proposal' → show AIConfirmationPanel
         ↓
-If tool is a WRITE tool → show AIConfirmationPanel (preview)
-                       → user confirms → execute DB write
-                       → user cancels → discard
-        ↓
-If 'stop' → display plain text response in command bar panel
+User confirms proposal
+  → Frontend writes to Supabase directly (JS client, RLS enforced)
+  → Invalidate TanStack Query keys
 ```
 
 **Model selection:**
 - Quick queries and task creation: `gpt-4o-mini` (fast, cheap)
 - Goal decomposition and day planning: `gpt-4o` (better reasoning)
 
+**Server location:** `ai-server/` folder at the project root (sibling to `src/`)
+
 ---
 
-### Story 9.1 — Install OpenAI SDK and configure environment
+### Story 9.1 — Set up Python FastAPI server
 
-**Package to install:**
+**Folder to create:** `ai-server/` at the project root
+
+**File structure:**
+```
+ai-server/
+  main.py                  # FastAPI app, routes
+  tools/
+    __init__.py
+    schemas.py             # OpenAI tool schema dicts
+    executor.py            # Supabase read tool execution
+  ai/
+    __init__.py
+    chat.py                # agentic loop
+    system_prompt.py       # system prompt builder
+  .env                     # secrets (never committed)
+  .env.example             # template
+  requirements.txt
+```
+
+**`requirements.txt`:**
+```
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+openai==1.50.0
+supabase==2.7.0
+python-dotenv==1.0.0
+pydantic==2.9.0
+```
+
+**`ai-server/.env`:**
+```
+OPENAI_API_KEY=sk-...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...   # service role key from Supabase dashboard
+SERVER_API_KEY=some-random-secret  # used to authenticate requests from the frontend
+```
+
+**`ai-server/.env.example`:**
+```
+OPENAI_API_KEY=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SERVER_API_KEY=
+```
+
+> **Security note:** The service role key bypasses RLS. This is safe here because all queries in `executor.py` explicitly filter by `user_id` extracted from the request body. Never expose the service role key to the browser. Add `ai-server/.env` to `.gitignore`.
+
+**Add to root `.gitignore`:**
+```
+ai-server/.env
+ai-server/__pycache__/
+ai-server/.venv/
+```
+
+**Run command (development):**
 ```bash
-npm install openai
+cd ai-server && uvicorn main:app --reload --port 8000
 ```
 
-**Environment variable to add to `.env` and `.env.example`:**
+**Frontend env var to add to root `.env`:**
 ```
-VITE_OPENAI_API_KEY=sk-...
-```
-
-> **Security note:** For a personal single-user app this is acceptable. The key is protected by Supabase Auth (no auth = no app access) and Vite embeds it at build time. Do NOT commit the `.env` file. Add `.env` to `.gitignore` if not already there. If this app ever becomes multi-user, move all OpenAI calls to a Supabase Edge Function proxy.
-
-**Create `src/lib/ai.ts`:**
-
-```typescript
-import OpenAI from 'openai'
-
-// Client is instantiated once, reused across the app
-export const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true, // required for browser usage
-})
-
-export const AI_MODELS = {
-  fast: 'gpt-4o-mini',   // quick queries, task parsing
-  smart: 'gpt-4o',       // goal decomposition, day planning
-} as const
+VITE_AI_SERVER_URL=http://localhost:8000
+VITE_AI_SERVER_KEY=some-random-secret   # must match SERVER_API_KEY in ai-server/.env
 ```
 
 **Acceptance criteria:**
-- `npm run build` succeeds with the new dependency
-- `openai` can be imported from `src/lib/ai.ts` without TypeScript errors
+- `uvicorn main:app --reload` starts without errors
+- `GET http://localhost:8000/health` returns `{"status": "ok"}`
 
 ---
 
-### Story 9.2 — Define AI tool schemas
+### Story 9.2 — Define tool schemas in Python
 
-**File to create:** `src/lib/aiToolSchemas.ts`
+**File to create:** `ai-server/tools/schemas.py`
 
-This file defines the function schemas OpenAI uses to request data. The actual execution logic lives separately (Story 9.3). Tools are split into READ and WRITE categories.
+OpenAI tool format in Python is a plain dict with `type: 'function'` and a nested `function` key.
 
-OpenAI uses `{ type: 'function', function: { name, description, parameters } }` format — different from Anthropic's `input_schema` format.
+```python
+from typing import Final
 
-```typescript
-import type { ChatCompletionTool } from 'openai/resources/chat/completions'
+# ─── READ TOOLS ────────────────────────────────────────────────────────────────
 
-// ─── READ TOOLS ───────────────────────────────────────────────────────────────
-
-export const queryTasksTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'query_tasks',
-    description: "Query the user's tasks. Use for analytics questions, finding tasks, checking completion rates.",
-    parameters: {
-      type: 'object',
-      properties: {
-        date_from:      { type: 'string', description: 'Start date filter YYYY-MM-DD (optional)' },
-        date_to:        { type: 'string', description: 'End date filter YYYY-MM-DD (optional)' },
-        task_type:      { type: 'string', enum: ['habit', 'task'], description: 'Filter by type (optional)' },
-        status:         { type: 'string', enum: ['todo', 'inprogress', 'done'], description: 'Filter by status (optional)' },
-        category_name:  { type: 'string', description: 'Filter by category name, case-insensitive partial match (optional)' },
-        title_contains: { type: 'string', description: 'Filter tasks whose title contains this string, case-insensitive (optional)' },
-        goal_id:        { type: 'string', description: 'Filter tasks linked to a specific goal id (optional)' },
-        limit:          { type: 'number', description: 'Max rows to return, default 100' },
-      },
-      required: [],
-    },
-  },
-}
-
-export const queryGoalsTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'query_goals',
-    description: "Fetch all of the user's goals with progress data (task counts, completion %). Use when answering goal questions or generating tasks for a goal.",
-    parameters: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['active', 'completed', 'abandoned'], description: 'Filter by goal status (optional)' },
-      },
-      required: [],
-    },
-  },
-}
-
-export const queryHabitsTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'query_habits',
-    description: 'Fetch all habits with their streak data. Use to answer streak questions or when planning a day around habits.',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
-  },
-}
-
-export const getAvailableSlotsTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'get_available_slots',
-    description: 'Get days within a date range that have capacity for more tasks (fewer than 3 scheduled tasks). Use when scheduling generated tasks.',
-    parameters: {
-      type: 'object',
-      properties: {
-        date_from: { type: 'string', description: 'Start of range YYYY-MM-DD' },
-        date_to:   { type: 'string', description: 'End of range YYYY-MM-DD' },
-      },
-      required: ['date_from', 'date_to'],
-    },
-  },
-}
-
-// ─── WRITE TOOLS (always intercepted for user confirmation) ───────────────────
-
-export const proposeTasksTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'propose_tasks',
-    description: 'Propose a list of tasks to create. ALWAYS use this function when you want to create, schedule, or suggest tasks — never just describe them in text. The user will review before anything is saved.',
-    parameters: {
-      type: 'object',
-      properties: {
-        tasks: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              title:       { type: 'string' },
-              description: { type: 'string' },
-              date:        { type: 'string', description: 'YYYY-MM-DD, omit if unscheduled' },
-              time:        { type: 'string', description: 'HH:MM 24-hour start time, optional' },
-              goal_id:     { type: 'string', description: 'Goal UUID to link this task to, optional' },
-              priority:    { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+QUERY_TASKS_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "query_tasks",
+        "description": "Query the user's tasks. Use for analytics questions, finding tasks, checking completion rates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date_from":      {"type": "string", "description": "Start date filter YYYY-MM-DD (optional)"},
+                "date_to":        {"type": "string", "description": "End date filter YYYY-MM-DD (optional)"},
+                "task_type":      {"type": "string", "enum": ["habit", "task"]},
+                "status":         {"type": "string", "enum": ["todo", "inprogress", "done"]},
+                "title_contains": {"type": "string", "description": "Case-insensitive partial match on title"},
+                "goal_id":        {"type": "string", "description": "Filter by linked goal UUID"},
+                "limit":          {"type": "integer", "description": "Max rows, default 100"},
             },
-            required: ['title'],
-          },
+            "required": [],
         },
-        summary: { type: 'string', description: 'A brief explanation of why you are proposing these tasks' },
-      },
-      required: ['tasks', 'summary'],
     },
-  },
 }
 
-export const proposeRescheduleTool: ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'propose_reschedule',
-    description: 'Propose rescheduling or reordering existing tasks. Use for day planning. The user will review before anything changes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        changes: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              task_id:  { type: 'string' },
-              new_date: { type: 'string', description: 'YYYY-MM-DD' },
-              new_time: { type: 'string', description: 'HH:MM 24-hour' },
-              reason:   { type: 'string', description: 'Why this change is suggested' },
+QUERY_GOALS_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "query_goals",
+        "description": "Fetch the user's goals with progress data. Use for goal questions or when generating tasks.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["active", "completed", "abandoned"]},
             },
-            required: ['task_id', 'reason'],
-          },
+            "required": [],
         },
-        summary: { type: 'string' },
-      },
-      required: ['changes', 'summary'],
     },
-  },
 }
 
-// ─── Tool collections by use case ─────────────────────────────────────────────
+QUERY_HABITS_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "query_habits",
+        "description": "Fetch all habits with streak data. Use for streak questions or day planning.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
 
-export const READ_TOOLS = [queryTasksTool, queryGoalsTool, queryHabitsTool, getAvailableSlotsTool]
-export const ALL_TOOLS  = [...READ_TOOLS, proposeTasksTool, proposeRescheduleTool]
+GET_AVAILABLE_SLOTS_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "get_available_slots",
+        "description": "Return dates in a range that have fewer than 3 scheduled tasks. Use when scheduling generated tasks.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date_from": {"type": "string", "description": "YYYY-MM-DD"},
+                "date_to":   {"type": "string", "description": "YYYY-MM-DD"},
+            },
+            "required": ["date_from", "date_to"],
+        },
+    },
+}
 
-export const WRITE_TOOL_NAMES = new Set(['propose_tasks', 'propose_reschedule'])
+# ─── WRITE TOOLS (returned as proposals, never executed server-side) ───────────
+
+PROPOSE_TASKS_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "propose_tasks",
+        "description": "Propose tasks to create. ALWAYS use this when asked to create or schedule tasks. Never list tasks in plain text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title":       {"type": "string"},
+                            "description": {"type": "string"},
+                            "date":        {"type": "string", "description": "YYYY-MM-DD, omit if unscheduled"},
+                            "time":        {"type": "string", "description": "HH:MM 24-hour"},
+                            "goal_id":     {"type": "string"},
+                            "priority":    {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
+                        },
+                        "required": ["title"],
+                    },
+                },
+                "summary": {"type": "string"},
+            },
+            "required": ["tasks", "summary"],
+        },
+    },
+}
+
+PROPOSE_RESCHEDULE_TOOL: Final = {
+    "type": "function",
+    "function": {
+        "name": "propose_reschedule",
+        "description": "Propose rescheduling existing tasks. Use for day planning. Never execute directly.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "task_id":  {"type": "string"},
+                            "new_date": {"type": "string", "description": "YYYY-MM-DD"},
+                            "new_time": {"type": "string", "description": "HH:MM 24-hour"},
+                            "reason":   {"type": "string"},
+                        },
+                        "required": ["task_id", "reason"],
+                    },
+                },
+                "summary": {"type": "string"},
+            },
+            "required": ["changes", "summary"],
+        },
+    },
+}
+
+# ─── Collections ────────────────────────────────────────────────────────────────
+
+READ_TOOLS  = [QUERY_TASKS_TOOL, QUERY_GOALS_TOOL, QUERY_HABITS_TOOL, GET_AVAILABLE_SLOTS_TOOL]
+ALL_TOOLS   = READ_TOOLS + [PROPOSE_TASKS_TOOL, PROPOSE_RESCHEDULE_TOOL]
+WRITE_TOOL_NAMES = {"propose_tasks", "propose_reschedule"}
 ```
 
 ---
 
-### Story 9.3 — Build the AI Command Bar
+### Story 9.3 — Build the agentic loop in Python
 
-**Context:** The app already has a `Cmd+K` command palette. Read the existing command palette component file before editing. It is referenced in `CalendarPage.tsx` keyboard shortcuts. Find its file path by searching for `CommandPalette` or `cmdk` in the codebase.
+**File to create:** `ai-server/ai/chat.py`
 
-**Changes to existing command palette:**
-- Keep all existing slash commands (`/new`, `/search`, etc.) unchanged
-- When the input does not start with `/` and is longer than 3 characters, route to AI mode
-- Add an AI mode indicator: show a small `✦ AI` badge in the input when in AI mode
+This is the core agentic loop. It runs entirely server-side.
 
-**New file to create:** `src/components/ai/AICommandBar.tsx`
+```python
+import json
+from openai import OpenAI
+from tools.schemas import ALL_TOOLS, WRITE_TOOL_NAMES
+from tools.executor import execute_read_tool
+from ai.system_prompt import build_system_prompt
 
-This component wraps the OpenAI API interaction and manages conversation state.
+client = OpenAI()  # reads OPENAI_API_KEY from environment
 
-**State:**
-```typescript
-const [messages, setMessages]           = useState<ConversationMessage[]>([])
-const [isThinking, setIsThinking]       = useState(false)
-const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null)
+def run_chat(messages: list[dict], user_id: str, today: str, goals: list, habits: list) -> dict:
+    """
+    Run the agentic loop.
+    Returns either:
+      {"type": "text", "content": "..."}
+      {"type": "proposal", "proposal_type": "create_tasks"|"reschedule_tasks", "items": [...], "summary": "..."}
+    """
+    system_prompt = build_system_prompt(today, goals, habits)
+
+    oai_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages,  # already in {"role": ..., "content": ...} format
+    ]
+
+    while True:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            tools=ALL_TOOLS,
+            messages=oai_messages,
+        )
+
+        choice = response.choices[0]
+
+        if choice.finish_reason == "tool_calls":
+            oai_messages.append(choice.message)  # append assistant message with tool_calls
+
+            tool_results = []
+
+            for tool_call in choice.message.tool_calls:
+                name  = tool_call.function.name
+                args  = json.loads(tool_call.function.arguments)
+
+                if name in WRITE_TOOL_NAMES:
+                    # Write tool — stop loop, return proposal to frontend
+                    proposal_type = "create_tasks" if name == "propose_tasks" else "reschedule_tasks"
+                    return {
+                        "type": "proposal",
+                        "proposal_type": proposal_type,
+                        "items": args.get("tasks") or args.get("changes"),
+                        "summary": args.get("summary", ""),
+                    }
+
+                # Read tool — execute against Supabase, scoped to user_id
+                result = execute_read_tool(name, args, user_id)
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result),
+                })
+
+            oai_messages.extend(tool_results)
+
+        else:
+            # finish_reason == "stop" — plain text response
+            return {
+                "type": "text",
+                "content": choice.message.content or "",
+            }
 ```
 
-**`ConversationMessage` type** (add to `src/types.ts`):
+**Note on model selection:** For stories 9.6 and 9.7 (goal generation, day planning), the calling code in `main.py` should pass `model="gpt-4o"` to `client.chat.completions.create`. For quick queries, use `"gpt-4o-mini"`. Refactor `run_chat` to accept a `model` parameter.
+
+---
+
+### Story 9.3a — System prompt builder in Python
+
+**File to create:** `ai-server/ai/system_prompt.py`
+
+```python
+def build_system_prompt(today: str, goals: list[dict], habits: list[dict]) -> str:
+    goals_summary = "\n".join(
+        f'- "{g["title"]}" ({g.get("start_date")} to {g.get("end_date")}, '
+        f'{g.get("progress", 0):.0f}% done, id: {g["id"]})'
+        for g in goals
+    ) or "None yet."
+
+    habits_summary = "\n".join(
+        f'- "{h["title"]}" at {h.get("time", "?")}–{h.get("end_time", "?")}, '
+        f'streak: {h.get("habit_streaks", {}).get("current_streak", 0)} days'
+        for h in habits
+    ) or "None yet."
+
+    return f"""You are a personal productivity assistant embedded in Tasky.
+Today is {today}.
+
+The user's active goals:
+{goals_summary}
+
+The user's habits:
+{habits_summary}
+
+Rules:
+1. Be concise. No lengthy preambles.
+2. When asked to create or schedule tasks, ALWAYS use propose_tasks — never list in plain text.
+3. When asked to reschedule or plan a day, ALWAYS use propose_reschedule.
+4. For analytics questions, use query_tasks then compute the answer yourself.
+5. Never invent task IDs. Fetch real IDs with query tools before proposing reschedules.
+6. When generating tasks for a goal, distribute across the date range. Max 2 goal tasks per day.
+7. Never schedule tasks in the same time block as an existing habit.
+8. If you need clarification, ask one question — not multiple."""
+```
+
+---
+
+### Story 9.3b — Supabase read tool executor in Python
+
+**File to create:** `ai-server/tools/executor.py`
+
+Uses the service role key but scopes every query to `user_id`. This preserves data isolation without relying on RLS (service role bypasses it, so we enforce it manually in every query).
+
+```python
+import os
+from datetime import date, timedelta
+from supabase import create_client, Client
+
+def get_supabase() -> Client:
+    return create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+
+def execute_read_tool(tool_name: str, args: dict, user_id: str) -> dict:
+    match tool_name:
+        case "query_tasks":         return query_tasks(args, user_id)
+        case "query_goals":         return query_goals(args, user_id)
+        case "query_habits":        return query_habits(user_id)
+        case "get_available_slots": return get_available_slots(args, user_id)
+        case _:                     return {"error": f"Unknown tool: {tool_name}"}
+
+def query_tasks(args: dict, user_id: str) -> dict:
+    sb = get_supabase()
+    q = (
+        sb.table("tasks")
+        .select("id,title,status,task_type,date,time,priority,goal_id,completed_at,categories(name)")
+        .eq("user_id", user_id)
+        .is_("deleted_at", "null")
+    )
+    if args.get("date_from"):      q = q.gte("date", args["date_from"])
+    if args.get("date_to"):        q = q.lte("date", args["date_to"])
+    if args.get("task_type"):      q = q.eq("task_type", args["task_type"])
+    if args.get("status"):         q = q.eq("status", args["status"])
+    if args.get("goal_id"):        q = q.eq("goal_id", args["goal_id"])
+    if args.get("title_contains"): q = q.ilike("title", f'%{args["title_contains"]}%')
+    if args.get("limit"):          q = q.limit(args["limit"])
+
+    result = q.execute()
+    return {"tasks": result.data, "count": len(result.data)}
+
+def query_goals(args: dict, user_id: str) -> dict:
+    sb = get_supabase()
+    q = (
+        sb.table("goals")
+        .select("id,title,start_date,end_date,status,color")
+        .eq("user_id", user_id)
+    )
+    if args.get("status"): q = q.eq("status", args["status"])
+    goals = q.execute().data
+
+    # Attach task counts for progress
+    for goal in goals:
+        tasks = (
+            sb.table("tasks")
+            .select("status")
+            .eq("goal_id", goal["id"])
+            .eq("user_id", user_id)
+            .is_("deleted_at", "null")
+            .execute()
+            .data
+        )
+        total = len(tasks)
+        done  = sum(1 for t in tasks if t["status"] == "done")
+        goal["task_count"] = total
+        goal["completed_task_count"] = done
+        goal["progress"] = round(done / total * 100) if total > 0 else 0
+
+    return {"goals": goals}
+
+def query_habits(user_id: str) -> dict:
+    sb = get_supabase()
+    habits = (
+        sb.table("tasks")
+        .select("id,title,time,end_time,recurrence,habit_streaks(current_streak,longest_streak,last_completed_date)")
+        .eq("user_id", user_id)
+        .eq("task_type", "habit")
+        .is_("deleted_at", "null")
+        .execute()
+        .data
+    )
+    return {"habits": habits}
+
+def get_available_slots(args: dict, user_id: str) -> dict:
+    sb = get_supabase()
+    tasks = (
+        sb.table("tasks")
+        .select("date")
+        .eq("user_id", user_id)
+        .gte("date", args["date_from"])
+        .lte("date", args["date_to"])
+        .is_("deleted_at", "null")
+        .neq("task_type", "habit")
+        .execute()
+        .data
+    )
+
+    counts: dict[str, int] = {}
+    for t in tasks:
+        if t["date"]:
+            counts[t["date"]] = counts.get(t["date"], 0) + 1
+
+    # Return all dates with fewer than 3 tasks
+    slots = []
+    cursor = date.fromisoformat(args["date_from"])
+    end    = date.fromisoformat(args["date_to"])
+    while cursor <= end:
+        ds = cursor.isoformat()
+        if counts.get(ds, 0) < 3:
+            slots.append(ds)
+        cursor += timedelta(days=1)
+
+    return {"available_dates": slots}
+```
+
+---
+
+### Story 9.3c — FastAPI main routes
+
+**File to create:** `ai-server/main.py`
+
+```python
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Header
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from ai.chat import run_chat
+from tools.executor import query_goals, query_habits
+
+SERVER_API_KEY = os.environ["SERVER_API_KEY"]
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+class ChatRequest(BaseModel):
+    messages: list[dict]   # [{"role": "user"|"assistant", "content": "..."}]
+    user_id: str
+    today: str             # "YYYY-MM-DD"
+    use_smart_model: bool = False  # True for goal generation, day planning
+
+@app.post("/api/chat")
+def chat(req: ChatRequest, x_api_key: str = Header()):
+    if x_api_key != SERVER_API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Pre-load goals and habits for the system prompt
+    goals  = query_goals({}, req.user_id).get("goals", [])
+    habits = query_habits(req.user_id).get("habits", [])
+
+    result = run_chat(
+        messages=req.messages,
+        user_id=req.user_id,
+        today=req.today,
+        goals=goals,
+        habits=habits,
+        model="gpt-4o" if req.use_smart_model else "gpt-4o-mini",
+    )
+    return result
+```
+
+**Update `ai/chat.py`** to accept `model` parameter:
+```python
+def run_chat(messages, user_id, today, goals, habits, model="gpt-4o-mini") -> dict:
+    ...
+    response = client.chat.completions.create(
+        model=model,   # use the passed model
+        ...
+    )
+```
+
+---
+
+### Story 9.3d — AI Confirmation Panel (frontend, unchanged concept)
+
+**File to create:** `src/components/ai/AIConfirmationPanel.tsx`
+
+This component is frontend-only and does not change from the original design. The Python server returns a proposal; the frontend renders it for review; on confirm the frontend writes to Supabase directly using the existing JS client (RLS enforced by user's JWT session).
+
+**Props:**
+```typescript
+interface AIConfirmationPanelProps {
+  proposal: Proposal
+  onConfirm: (proposal: Proposal) => Promise<void>
+  onCancel: () => void
+}
+```
+
+**Layout for `create_tasks` proposal:**
+```
+✦ AI wants to create 8 tasks for "Learn Backend"
+
+[✓] Learn Node.js basics         Mar 3   (Mon)   ← date is editable inline
+[✓] Build first Express server   Mar 5   (Wed)
+[✓] REST principles              Mar 7   (Fri)
+
+[Confirm all]   [Cancel]
+```
+
+**Layout for `reschedule_tasks` proposal:**
+```
+✦ AI suggests these changes for your 3-hour window
+
+[✓] Learn JWT auth   → 2:00 PM  (was 4:00 PM)   "Goal deadline near"
+[✓] Read 5 pages     → 8:00 PM  (was 2:00 PM)   "Low effort, end of day"
+
+[Confirm checked]   [Cancel]
+```
+
+**On confirm:** iterate checked items, `supabase.from('tasks').insert(...)` for new tasks, `.update(...)` for reschedules. Invalidate `['cockpit-tasks']` and `['goals']` query keys. Show `toast.success()`.
+
+---
+
+### Story 9.3e — AI Command Bar (frontend, calls Python server)
+
+**File to create:** `src/components/ai/AICommandBar.tsx`
+
+This is now a thin client. It sends messages to the Python server and handles the response. All agentic logic is gone from the frontend.
+
+**Types to add to `src/types.ts`:**
 ```typescript
 export interface ConversationMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
 }
-```
 
-**`Proposal` type** (add to `src/types.ts`):
-```typescript
 export type ProposalType = 'create_tasks' | 'reschedule_tasks'
 
 export interface Proposal {
-  type: ProposalType
+  type: 'proposal'
+  proposal_type: ProposalType
   summary: string
   items: ProposedTask[] | ProposedReschedule[]
 }
@@ -1328,412 +1688,160 @@ export interface ProposedTask {
 
 export interface ProposedReschedule {
   task_id: string
-  task_title: string   // for display only
+  task_title: string
   new_date?: string
   new_time?: string
   reason: string
 }
 ```
 
-**`sendMessage(userText: string)` function inside AICommandBar:**
-
-OpenAI uses `finish_reason === 'tool_calls'` and `message.tool_calls[]` — different from Anthropic's `stop_reason` and `content` blocks. Tool results are sent as `role: 'tool'` messages.
-
+**`sendMessage` function (frontend, calls Python server):**
 ```typescript
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+const AI_SERVER_URL = import.meta.env.VITE_AI_SERVER_URL  // http://localhost:8000
+const AI_SERVER_KEY = import.meta.env.VITE_AI_SERVER_KEY
 
 async function sendMessage(userText: string) {
   setIsThinking(true)
 
-  const updatedMessages = [...messages, { role: 'user', content: userText, timestamp: new Date().toISOString() }]
+  const updatedMessages = [
+    ...messages,
+    { role: 'user', content: userText, timestamp: new Date().toISOString() },
+  ]
   setMessages(updatedMessages)
 
-  const systemPrompt = buildSystemPrompt(todayStr, goals, habits)
+  const response = await fetch(`${AI_SERVER_URL}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': AI_SERVER_KEY,
+    },
+    body: JSON.stringify({
+      messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+      user_id: user.id,                                // from useAuth()
+      today: new Date().toISOString().split('T')[0],
+      use_smart_model: isComplexRequest(userText),     // see note below
+    }),
+  })
 
-  // OpenAI message format
-  let oaiMessages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    ...updatedMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-  ]
+  const data = await response.json()
 
-  // Agentic loop: keep calling until finish_reason is 'stop' (no more tool calls)
-  while (true) {
-    const response = await openai.chat.completions.create({
-      model: AI_MODELS.fast,
-      tools: ALL_TOOLS,
-      messages: oaiMessages,
-    })
-
-    const choice = response.choices[0]
-
-    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-      // Append the assistant message (with tool_calls) to history
-      oaiMessages.push(choice.message)
-
-      const toolResultMessages: ChatCompletionMessageParam[] = []
-
-      for (const toolCall of choice.message.tool_calls) {
-        const name  = toolCall.function.name
-        const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>
-
-        if (WRITE_TOOL_NAMES.has(name)) {
-          // Write tool — intercept, show confirmation panel, stop loop
-          setPendingProposal(parseProposal(name, input))
-          setIsThinking(false)
-          return
-        }
-
-        // Read tool — execute against Supabase immediately
-        const result = await executeReadTool(name, input)
-        toolResultMessages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        })
-      }
-
-      // Append all tool results, then loop again
-      oaiMessages = [...oaiMessages, ...toolResultMessages]
-
-    } else {
-      // finish_reason === 'stop' — plain text response, we're done
-      const assistantText = choice.message.content ?? ''
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantText, timestamp: new Date().toISOString() }])
-      setIsThinking(false)
-      break
-    }
-  }
-}
-```
-
-**Story 9.3a — System prompt builder**
-
-**File to create:** `src/lib/aiSystemPrompt.ts`
-
-```typescript
-export function buildSystemPrompt(todayStr: string, goals: Goal[], habits: Task[]): string {
-  const goalsSummary = goals.map(g =>
-    `- "${g.title}" (${g.start_date} to ${g.end_date}, ${g.progress ?? 0}% done, id: ${g.id})`
-  ).join('\n')
-
-  const habitsSummary = habits.map(h =>
-    `- "${h.title}" at ${h.time}–${h.end_time}, streak: ${h.streak?.current ?? 0} days`
-  ).join('\n')
-
-  return `You are a personal productivity assistant embedded in Tasky, a habit and goal tracking app.
-Today is ${todayStr}.
-
-The user's active goals:
-${goalsSummary || 'None yet.'}
-
-The user's habits:
-${habitsSummary || 'None yet.'}
-
-Your behaviour rules:
-1. Be concise. No lengthy preambles.
-2. When asked to create or schedule tasks, ALWAYS use the propose_tasks tool — never just list them in text.
-3. When asked to reschedule or plan, ALWAYS use the propose_reschedule tool.
-4. For analytics questions, use query_tasks then compute the answer yourself — do not ask the user to calculate.
-5. Never invent task IDs. Always fetch real IDs using query tools before proposing reschedules.
-6. When generating tasks for a goal, distribute them sensibly over the goal's date range. Do not schedule more than 2 goal tasks on the same day.
-7. Respect existing habits when scheduling — do not schedule heavy tasks in the same time blocks as habits.
-8. If you don't have enough information, ask one clarifying question — not multiple.`
-}
-```
-
-**Story 9.3b — Read tool executor**
-
-**File to create:** `src/lib/aiToolExecutor.ts`
-
-```typescript
-// Executes read-only tool calls against Supabase using the authenticated client
-// RLS ensures the user only ever sees their own data
-
-export async function executeReadTool(toolName: string, input: Record<string, unknown>) {
-  switch (toolName) {
-    case 'query_tasks':     return executeQueryTasks(input)
-    case 'query_goals':     return executeQueryGoals(input)
-    case 'query_habits':    return executeQueryHabits()
-    case 'get_available_slots': return executeGetAvailableSlots(input)
-    default: return { error: `Unknown tool: ${toolName}` }
-  }
-}
-
-async function executeQueryTasks(input) {
-  let query = supabase
-    .from('tasks')
-    .select('id,title,status,task_type,date,time,priority,goal_id,category:categories(name),completed_at')
-    .is('deleted_at', null)
-
-  if (input.date_from)      query = query.gte('date', input.date_from)
-  if (input.date_to)        query = query.lte('date', input.date_to)
-  if (input.task_type)      query = query.eq('task_type', input.task_type)
-  if (input.status)         query = query.eq('status', input.status)
-  if (input.goal_id)        query = query.eq('goal_id', input.goal_id)
-  if (input.title_contains) query = query.ilike('title', `%${input.title_contains}%`)
-  if (input.limit)          query = query.limit(input.limit)
-
-  const { data, error } = await query
-  if (error) return { error: error.message }
-  return { tasks: data, count: data?.length ?? 0 }
-}
-
-async function executeQueryGoals(input) {
-  let query = supabase.from('goals').select(GOAL_SELECT)
-  if (input.status) query = query.eq('status', input.status)
-  const { data, error } = await query
-  if (error) return { error: error.message }
-  // Attach progress data
-  // (reuse computeGoalProgress logic from useGoals hook)
-  return { goals: data }
-}
-
-async function executeQueryHabits() {
-  const { data: habits, error } = await supabase
-    .from('tasks')
-    .select(`${TASK_SELECT}, habit_streaks(current_streak, longest_streak, last_completed_date)`)
-    .eq('task_type', 'habit')
-    .is('deleted_at', null)
-  if (error) return { error: error.message }
-  return { habits }
-}
-
-async function executeGetAvailableSlots(input) {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('date')
-    .gte('date', input.date_from)
-    .lte('date', input.date_to)
-    .is('deleted_at', null)
-    .neq('task_type', 'habit')
-
-  if (error) return { error: error.message }
-
-  // Count tasks per date, return dates with fewer than 3 tasks
-  const counts: Record<string, number> = {}
-  for (const t of data ?? []) {
-    if (t.date) counts[t.date] = (counts[t.date] ?? 0) + 1
+  if (data.type === 'text') {
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: data.content,
+      timestamp: new Date().toISOString(),
+    }])
+  } else if (data.type === 'proposal') {
+    setPendingProposal(data)
   }
 
-  // Generate all dates in range
-  const slots: string[] = []
-  let cursor = new Date(input.date_from)
-  const end  = new Date(input.date_to)
-  while (cursor <= end) {
-    const dateStr = cursor.toISOString().split('T')[0]
-    if ((counts[dateStr] ?? 0) < 3) slots.push(dateStr)
-    cursor.setDate(cursor.getDate() + 1)
-  }
+  setIsThinking(false)
+}
 
-  return { available_dates: slots }
+// Use smart model for goal/day planning requests
+function isComplexRequest(text: string): boolean {
+  const complexKeywords = ['generate tasks', 'break down', 'plan my day', 'weekly review', 'rearrange']
+  return complexKeywords.some(k => text.toLowerCase().includes(k))
 }
 ```
 
-**Story 9.3c — AI Confirmation Panel**
-
-**File to create:** `src/components/ai/AIConfirmationPanel.tsx`
-
-**Props:**
-```typescript
-interface AIConfirmationPanelProps {
-  proposal: Proposal
-  onConfirm: (proposal: Proposal) => Promise<void>
-  onCancel: () => void
-}
-```
-
-**Layout for `create_tasks` proposal:**
-```
-✦ AI wants to create 8 tasks for "Learn Backend"
-
-[✓] Learn Node.js basics            Mar 3  (Mon)
-[✓] Build first Express server       Mar 5  (Wed)
-[✓] Understand REST principles       Mar 7  (Fri)
-... (each item is an editable row — user can uncheck or change date)
-
-[Confirm all]   [Cancel]
-```
-
-**Layout for `reschedule_tasks` proposal:**
-```
-✦ AI suggests these changes for your 3-hour window
-
-[✓] Learn JWT auth    → move to 2:00 PM    (was 4:00 PM)   "High priority, goal deadline near"
-[✓] Read 5 pages      → move to 8:00 PM    (was 2:00 PM)   "Low effort, end of day"
-[ ] Team standup      → no change suggested
-
-[Confirm checked]   [Cancel]
-```
-
-**On confirm:** iterate checked items, execute the appropriate Supabase writes (INSERT for tasks, UPDATE for reschedules), invalidate relevant query keys, show `toast.success()`.
+**Acceptance criteria:**
+- Typing a question calls `POST /api/chat` and displays the text response
+- Typing a task creation request triggers the `AIConfirmationPanel`
+- Server returns 401 if `X-API-Key` is wrong
 
 ---
 
 ### Story 9.4 — Natural Language Task Creation
 
-**Trigger:** User types something like: *"add watch LangChain tutorial on Saturday afternoon linked to my AI expert goal"*
+**No changes from original design.** The Python server handles the agentic loop; the frontend `AICommandBar` and `AIConfirmationPanel` handle display and confirmation.
 
-**How Claude handles it:** Claude uses `query_goals` to find the goal ID, then calls `propose_tasks` with one task, pre-filled fields.
-
-**What the implementer must do:**
-- No new UI needed beyond Story 9.3 — the AICommandBar + AIConfirmationPanel handle everything
-- Test these natural language patterns to verify correct field parsing:
-  - `"add [title] on [date]"` → correct date
-  - `"add [title] at [time]"` → correct time field
-  - `"add [title] linked to [goal name]"` → correct goal_id via query_goals tool call
-  - `"add [title] tomorrow"` → resolves to tomorrow's date
-  - `"add [title]"` (no date) → creates unscheduled task in backlog
+**Test these patterns** by running the Python server and typing in the command bar:
+- `"add watch LangChain tutorial on Saturday at 3pm linked to AI expert goal"` → proposal with 1 task
+- `"add fix resume"` (no date) → proposal with 1 unscheduled task
+- `"add call dentist tomorrow"` → proposal with date = tomorrow
 
 **Acceptance criteria:**
-- A confirmed proposal from `propose_tasks` with one item correctly creates a task in Supabase
-- The task appears in the cockpit on its scheduled date after query invalidation
-- Unscheduled tasks appear in backlog
+- Server correctly identifies goal_id by calling `query_goals` tool internally
+- Confirmed proposal creates the task in Supabase via frontend JS client
+- Task appears in cockpit on its date
 
 ---
 
 ### Story 9.5 — Natural Language Analytics Queries
 
-**Trigger:** User types a question like: *"what percentage of gym tasks done last 3 weeks?"*
+**No changes from original design.** Python server runs the query, computes the answer, returns `type: 'text'`.
 
-**Flow:**
-1. Claude calls `query_tasks` with `{ title_contains: "gym", date_from: "3 weeks ago", date_to: "today" }`
-2. Receives task list
-3. Computes: `done_count / total_count * 100`
-4. Responds in plain text: *"You completed 14 out of 18 gym sessions in the last 3 weeks — 78%."*
-
-**No confirmation panel needed** — this is purely read + respond.
-
-**Test these query patterns** (verify Claude produces correct tool calls for each):
-- `"how many times did I skip AI learning this month?"`
-- `"which goal am I most behind on?"`
-- `"what's my most productive day of the week?"`
-- `"how many tasks have I completed in total?"`
-- `"show me everything due this week"`
+**Test these** by typing directly in the command bar with the Python server running:
+- `"what % of gym tasks done last 3 weeks?"` → text response with computed number
+- `"which goal am I most behind on?"` → text response comparing goal paces
+- `"how many tasks completed this month?"` → count query + text answer
 
 **Acceptance criteria:**
-- Query returns real data from the user's Supabase instance
-- Numbers in the response match what a manual Supabase query would return
-- Response is in plain English, not raw JSON
+- No proposal panel shown — just text response in command bar
+- Numbers match a manual Supabase query for the same date range
 
 ---
 
 ### Story 9.6 — Goal Task Generation + Auto-Schedule Preview
 
-**Trigger:** User types: *"generate tasks for my backend goal"* or *"break down the AI expert goal into tasks"*
+**Frontend change:** pass `use_smart_model: true` when the input contains goal generation keywords (handled by `isComplexRequest()` in Story 9.3e).
 
-**Flow:**
-1. Claude calls `query_goals` → gets the matching goal with `id`, `start_date`, `end_date`
-2. Claude calls `get_available_slots` for the goal's date range
-3. Claude calls `propose_tasks` with a structured breakdown spread across available slots
-4. AIConfirmationPanel shows all proposed tasks — user can uncheck, edit dates, or edit titles inline before confirming
+**Python server** runs the multi-step agentic loop:
+1. `query_goals` → find goal
+2. `get_available_slots` → find free dates in goal's range
+3. `propose_tasks` → return proposal
 
-**Task generation quality rules** (enforce via system prompt — already included in Story 9.3a):
-- Maximum 2 goal tasks per day
-- Tasks distributed progressively (fundamentals first, advanced tasks later in the date range)
-- Each task has a realistic scope for one sitting (1–2 hours)
-- At least 20% buffer at the end of the date range (no tasks in last 2 weeks)
-- Never schedule on the same time block as an existing habit
+**Frontend** receives `type: 'proposal'` and shows `AIConfirmationPanel` with all generated tasks.
 
-**Acceptance criteria:**
-- For a 4-month goal, AI generates 15–25 tasks
-- Tasks are distributed across the date range — not all in week 1
-- All tasks are linked to the correct `goal_id`
-- Confirmed tasks appear in the Goal detail page and in cockpit on their dates
+**Acceptance criteria:** same as original — 15–25 tasks for a 4-month goal, distributed across the range, linked to correct `goal_id`.
 
 ---
 
 ### Story 9.7 — Day Planning ("I have 3 hours today")
 
-**Trigger:** User types: *"I have 3 hours today, plan my day"* or *"rearrange my tasks for today"*
+**Frontend change:** `use_smart_model: true` for inputs containing "plan my day", "rearrange", "hours today".
 
-**Flow:**
-1. Claude calls `query_habits` → gets today's habits + their time blocks
-2. Claude calls `query_tasks` with `{ date: today }` → gets today's tasks
-3. Claude calls `query_goals` → gets goal deadlines and progress (to prioritise tasks linked to near-deadline goals)
-4. Claude computes a ranked order and time assignments that:
-   - Respect existing habit time blocks (no overlap)
-   - Put highest-priority / goal-deadline tasks first
-   - Fit within the stated hours
-5. Claude calls `propose_reschedule` with time changes for today's tasks
-6. AIConfirmationPanel shows proposed time changes
-7. User confirms → UPDATE tasks SET time = new_time for each confirmed change
+**Python server** runs:
+1. `query_habits` → time blocks to avoid
+2. `query_tasks` (date = today) → current tasks
+3. `query_goals` → deadlines for prioritisation
+4. `propose_reschedule` → return proposal
 
-**Input variations to handle:**
-- *"I only have 3 hours today"* → Claude selects top N tasks that fit 3 hours
-- *"I'm tired today"* → Claude selects `priority = 'low'` or short tasks only
-- *"Plan tomorrow"* → same flow but for tomorrow's date
+**Frontend** receives `type: 'proposal'` and shows `AIConfirmationPanel` with time changes.
 
-**Acceptance criteria:**
-- Proposed schedule respects all existing habit time blocks
-- Tasks that don't fit in the stated time are excluded from proposal with a note
-- Confirmed reschedules update `time` field in Supabase and cockpit reflects new order
+**Acceptance criteria:** same as original.
 
 ---
 
 ### Story 9.8 — Weekly Goal Health Check
 
-**Trigger:** Manual — a "Weekly Review" button in the Goals page header. Not automatic.
+**Trigger:** "Weekly Review" button in Goals page → opens `AIWeeklyReviewPanel`.
 
-**File to edit:** `src/pages/Goals.tsx` — add a `Weekly Review` button next to `+ New Goal`.
+**`AIWeeklyReviewPanel`** sends `"Generate my weekly goal health check"` with `use_smart_model: true` on mount.
 
-**Flow:**
-1. Clicking the button opens a full-screen or large modal: `AIWeeklyReviewPanel`
-2. Panel calls `sendMessage("Generate my weekly goal health check")` automatically on open
-3. Claude calls `query_goals` + `query_tasks` for the past 7 days + `query_habits` for streak data
-4. Claude computes for each active goal:
-   - Tasks completed this week vs expected pace (total_tasks / total_weeks = expected per week)
-   - On track / behind / ahead status
-5. Claude responds in structured plain text (no tool needed for the response itself):
+**Python server** calls `query_goals` + `query_tasks` (last 7 days) + `query_habits`, computes pace, returns `type: 'text'` with the structured report.
 
-```
-Weekly Review — Feb 24–26
-
-Backend Goal (ends July)
-  ✓ On track — 3/3 planned tasks done this week
-  Pace: completing 3 tasks/week, need 2.5/week to finish on time
-
-AI Expert Goal (ends May)
-  ⚠ Behind — 0/3 planned tasks done this week
-  At this pace, you'll miss your May 31 deadline by ~3 weeks.
-  → Schedule 4 tasks next week to recover? [Generate plan]
-
-Gym habit — 🔥 12 day streak
-  Missed: Wednesday (you had a heavy day)
-  Pattern: you often miss Wednesdays — consider moving gym to 8 PM Wed
-```
-
-6. If the user clicks `[Generate plan]` inline, it triggers Story 9.6 flow for that goal.
-
-**File to create:** `src/components/ai/AIWeeklyReviewPanel.tsx`
+**Frontend** renders the text response as formatted markdown inside the panel.
 
 ---
 
 ### Story 9.9 — Streak Protection Nudge
 
-**Location:** `CockpitPage.tsx` (cockpit header area)
+**No Python involvement.** Pure client-side logic in `CockpitPage.tsx`.
 
-**Trigger condition (computed client-side, no AI call):**
-- Current time is after 5 PM
-- User has a habit with `current_streak >= 7` days
-- That habit's `status !== 'done'` for today
-- User has not dismissed the nudge today (store dismissal in `localStorage` keyed by `habit_id + today_date`)
+Trigger conditions:
+- After 5 PM
+- Habit with `current_streak >= 7` and `status !== 'done'` today
+- Not dismissed today (check `localStorage` key `dismissed_{habitId}_{todayDate}`)
 
-**UI:** A dismissible amber banner below `CockpitHeader`:
+**UI:**
 ```
 ⚡ Gym streak at risk — 12 days. You haven't logged it yet today.
    [Mark done]   [Dismiss]
 ```
 
-- `[Mark done]` calls the same `toggleHabit` function from Story 3.5 — marks the habit done directly
-- `[Dismiss]` writes `dismissed_{habitId}_{todayDate} = true` to `localStorage`, hides banner for the day
-
-**No AI call needed** — this is pure client-side logic derived from habit streak data already loaded in the cockpit.
-
-**Acceptance criteria:**
-- Banner only appears after 5 PM
-- Banner only appears when streak >= 7 days and habit is not done
-- Dismissing hides it for the rest of the day (persists across page refreshes via localStorage)
-- Multiple at-risk habits: show one banner per habit (stacked)
+No API call to Python server needed.
 
 ---
 
@@ -1749,12 +1857,13 @@ Gym habit — 🔥 12 day streak
 7. **Backward compatibility** — existing tasks without `task_type` default to `'task'` at the DB level. No migration of existing data needed beyond the ALTER TABLE statements.
 
 ### AI-specific constraints (Phase 9)
-8. **AI never writes directly** — all `propose_tasks` and `propose_reschedule` tool calls must be intercepted and shown in `AIConfirmationPanel` before any DB write. The agentic loop must stop when a write tool is encountered and wait for user action.
-9. **Read tools only query authenticated user's data** — all Supabase calls in `aiToolExecutor.ts` use the authenticated `supabase` client. RLS enforces data isolation automatically. Never pass `user_id` as a filter parameter from AI input — it is always injected server-side by RLS.
-10. **No `any` in AI tool input parsing** — tool inputs from Claude are typed as `Record<string, unknown>`. Access fields with type guards, not casting.
-11. **API key never in source control** — `VITE_OPENAI_API_KEY` lives only in `.env`. Verify `.env` is in `.gitignore` before implementing Phase 9.
-12. **AI model selection** — use `gpt-4o-mini` for quick queries (stories 9.4, 9.5). Use `gpt-4o` for goal decomposition and day planning (stories 9.6, 9.7, 9.8). This controls cost.
-13. **Conversation history** — the AICommandBar keeps message history in component state only. It is NOT persisted to Supabase. History resets when the command bar closes.
+8. **Python server never writes to DB** — `propose_tasks` and `propose_reschedule` are intercepted in `chat.py` and returned as proposals. The Python server has no INSERT/UPDATE code. All writes happen in the frontend via the Supabase JS client after user confirmation.
+9. **Service role key is server-side only** — `SUPABASE_SERVICE_ROLE_KEY` lives only in `ai-server/.env`. Never put it in the React app's env vars. The frontend uses only the user's session JWT via the existing Supabase JS client.
+10. **All Python Supabase queries must filter by `user_id`** — since the service role key bypasses RLS, every query in `executor.py` must include `.eq("user_id", user_id)`. This is mandatory. Never query without this filter.
+11. **Python API key authentication** — every request to the FastAPI server must include `X-API-Key` matching `SERVER_API_KEY` in `ai-server/.env`. The server returns 401 if the key is missing or wrong. `VITE_AI_SERVER_KEY` in the frontend must match `SERVER_API_KEY` in the server.
+12. **AI model selection** — use `gpt-4o-mini` for quick queries (stories 9.4, 9.5, 9.9 N/A). Use `gpt-4o` for goal decomposition and day planning (stories 9.6, 9.7, 9.8). Controlled via `use_smart_model` flag in the request.
+13. **Conversation history** — the `AICommandBar` keeps message history in React component state only. Not persisted to Supabase or sent to Python beyond the current session. Resets when the command bar closes.
+14. **Python server is local during development** — run it with `uvicorn main:app --reload --port 8000` from `ai-server/`. The frontend points to `http://localhost:8000` via `VITE_AI_SERVER_URL`. For production, deploy the FastAPI server separately (Railway, Fly.io, Render) and update `VITE_AI_SERVER_URL`.
 
 ### Code patterns to follow
 - Auth: `const { user } = useAuth()` from `src/contexts/AuthContext.tsx`
@@ -1776,17 +1885,22 @@ Phases must be executed in order. Each phase is independently shippable and shou
 
 ## Phase 9 — Story Summary
 
-| Story | Feature | AI call? | Writes DB? | Confirmation needed? |
-|---|---|---|---|---|
-| 9.1 | Claude SDK setup | — | — | — |
-| 9.2 | Tool schemas | — | — | — |
-| 9.3 | AI command bar + agentic loop | Yes | Via confirmation only | — |
-| 9.4 | Natural language task creation | Yes | Yes | Yes — AIConfirmationPanel |
-| 9.5 | Analytics queries | Yes | No | No |
-| 9.6 | Goal task generation | Yes | Yes | Yes — AIConfirmationPanel |
-| 9.7 | Day planning | Yes | Yes | Yes — AIConfirmationPanel |
-| 9.8 | Weekly health check | Yes | No (read + display) | No — generates link to 9.6 |
-| 9.9 | Streak protection nudge | No | Via existing toggle | No — direct action |
+| Story | Where | Feature | OpenAI call? | Writes DB? | Confirmation? |
+|---|---|---|---|---|---|
+| 9.1 | Python | FastAPI server setup, `requirements.txt`, env | — | — | — |
+| 9.2 | Python | Tool schemas (`schemas.py`) | — | — | — |
+| 9.3 | Python | Agentic loop (`chat.py`) + route (`main.py`) | Yes | No | — |
+| 9.3a | Python | System prompt builder | — | — | — |
+| 9.3b | Python | Supabase read tool executor | — | No | — |
+| 9.3c | Python | FastAPI `/api/chat` route | — | — | — |
+| 9.3d | Frontend | `AIConfirmationPanel` component | No | Yes (on confirm) | Yes |
+| 9.3e | Frontend | `AICommandBar` — calls Python server | No | No | — |
+| 9.4 | Both | Natural language task creation | Python | Frontend | Yes |
+| 9.5 | Both | Analytics queries ("% gym done") | Python | No | No |
+| 9.6 | Both | Goal task generation + schedule | Python (smart) | Frontend | Yes |
+| 9.7 | Both | Day planning ("3 hours today") | Python (smart) | Frontend | Yes |
+| 9.8 | Both | Weekly health check panel | Python (smart) | No | No |
+| 9.9 | Frontend | Streak protection nudge | No | Via toggle | No |
 
 ---
 
