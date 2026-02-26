@@ -1,5 +1,7 @@
 export type TaskStatus = 'todo' | 'inprogress' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type TaskType = 'habit' | 'task'
+export type GoalStatus = 'active' | 'completed' | 'abandoned'
 export type CalendarProvider = 'google'
 export type SyncDirection = 'task_to_google'
 export type EventSource = 'native' | 'task'
@@ -102,6 +104,8 @@ export interface Task {
   description?: string | null
   notes?: string | null
   time?: string | null
+  end_time?: string | null    // "HH:MM" 24-hour, only for habits
+  task_type?: TaskType        // 'habit' | 'task', defaults to 'task'
   category_id: string | null
   category?: Category | null
   date: string | null // ISO date string (YYYY-MM-DD) or null for backlog tasks
@@ -112,12 +116,40 @@ export interface Task {
   sort_order?: number
   links?: TaskLink[]
   attachments?: TaskAttachment[]
+  goal_id?: string | null     // FK to goals table
+  goal?: Goal | null          // joined when needed
   created_at: string
   updated_at?: string
   completed_at?: string | null
   deleted_at?: string | null
   is_projected?: boolean
   source_task_id?: string | null
+}
+
+export interface Goal {
+  id: string
+  user_id?: string
+  title: string
+  description?: string | null
+  start_date?: string | null   // YYYY-MM-DD
+  end_date?: string | null     // YYYY-MM-DD
+  status: GoalStatus
+  color?: string | null
+  sort_order?: number
+  created_at: string
+  updated_at?: string
+  // Derived fields (computed client-side, not from DB)
+  task_count?: number
+  completed_task_count?: number
+  progress?: number            // 0–100
+}
+
+export interface HabitStreak {
+  task_id: string
+  user_id?: string
+  current_streak: number
+  longest_streak: number
+  last_completed_date: string | null
 }
 
 export interface TaskActivityLog {
