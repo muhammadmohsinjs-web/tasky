@@ -1,6 +1,6 @@
 # Tasky — Transformation Execution Blueprint
 
-> **Document purpose:** A complete, phase-by-phase implementation guide for transforming Tasky from a calendar-first task manager into a habit-and-goal-driven daily productivity system. Written for an LLM agent executing the changes. Every story references exact files, types, and patterns already in the codebase.
+> **Document purpose:** A complete, phase-by-phase implementation guide for transforming Tasky from a calendar-first task manager into a habit-and-goal-driven daily productivity system with integrated AI assistance. Written for an LLM agent executing the changes. Every story references exact files, types, and patterns already in the codebase.
 
 ---
 
@@ -19,7 +19,8 @@
 11. [Phase 6 — Backlog Page](#phase-6--backlog-page)
 12. [Phase 7 — Calendar Heatmap](#phase-7--calendar-heatmap)
 13. [Phase 8 — Analytics Update](#phase-8--analytics-update)
-14. [Global Constraints & Conventions](#global-constraints--conventions)
+14. [Phase 9 — AI Integration](#phase-9--ai-integration)
+15. [Global Constraints & Conventions](#global-constraints--conventions)
 
 ---
 
@@ -164,8 +165,17 @@ source_task_id  // parent recurring task
 | 6 | Backlog page | Low — mostly exists already |
 | 7 | Calendar heatmap | Low — replaces existing calendar |
 | 8 | Analytics update | Low — additive |
+| 9 | AI integration | Medium — new external dependency (Claude API) |
 
 **Each phase must be independently deployable.** Do not mix phases in a single commit.
+
+### Phase 9 Sub-phases (execute in order)
+| Sub-phase | Stories | What |
+|---|---|---|
+| 9-A | 9.1–9.3 | Infrastructure: Claude client, tool schemas, AI command bar UI |
+| 9-B | 9.4–9.5 | Read-only features: task creation via NL, analytics queries |
+| 9-C | 9.6–9.7 | Write features with confirmation: goal generation, day planning |
+| 9-D | 9.8–9.9 | Proactive features: weekly health check, streak nudge |
 
 ---
 
@@ -1040,6 +1050,693 @@ Update the Analytics page to reflect the new entity model. Remove calendar-sync 
 
 ---
 
+---
+
+## Phase 9 — AI Integration
+
+### Goal
+Embed OpenAI (GPT-4o) into Tasky as an intelligent assistant accessible via the existing `Cmd+K` command palette. AI features are split into two classes:
+- **Read** — query and analyse user data, answer questions, surface insights (no confirmation needed)
+- **Write** — generate and schedule tasks, plan the day, rearrange tasks (always show a preview, user confirms before any DB write)
+
+**Golden rule: The AI never writes to the database directly. It proposes. The user confirms.**
+
+---
+
+### AI Architecture Overview
+
+```
+User types in Cmd+K
+        ↓
+AICommandBar detects intent (slash command vs natural language)
+        ↓
+Natural language → send to OpenAI API (gpt-4o or gpt-4o-mini)
+  with: system message + tool schemas + conversation history
+        ↓
+OpenAI returns finish_reason: 'tool_calls' OR 'stop'
+        ↓
+If 'tool_calls' → parse message.tool_calls[]
+               → execute tool function client-side (Supabase query, RLS enforced)
+               → append role:'tool' results, loop again
+        ↓
+If tool is a WRITE tool → show AIConfirmationPanel (preview)
+                       → user confirms → execute DB write
+                       → user cancels → discard
+        ↓
+If 'stop' → display plain text response in command bar panel
+```
+
+**Model selection:**
+- Quick queries and task creation: `gpt-4o-mini` (fast, cheap)
+- Goal decomposition and day planning: `gpt-4o` (better reasoning)
+
+---
+
+### Story 9.1 — Install OpenAI SDK and configure environment
+
+**Package to install:**
+```bash
+npm install openai
+```
+
+**Environment variable to add to `.env` and `.env.example`:**
+```
+VITE_OPENAI_API_KEY=sk-...
+```
+
+> **Security note:** For a personal single-user app this is acceptable. The key is protected by Supabase Auth (no auth = no app access) and Vite embeds it at build time. Do NOT commit the `.env` file. Add `.env` to `.gitignore` if not already there. If this app ever becomes multi-user, move all OpenAI calls to a Supabase Edge Function proxy.
+
+**Create `src/lib/ai.ts`:**
+
+```typescript
+import OpenAI from 'openai'
+
+// Client is instantiated once, reused across the app
+export const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true, // required for browser usage
+})
+
+export const AI_MODELS = {
+  fast: 'gpt-4o-mini',   // quick queries, task parsing
+  smart: 'gpt-4o',       // goal decomposition, day planning
+} as const
+```
+
+**Acceptance criteria:**
+- `npm run build` succeeds with the new dependency
+- `openai` can be imported from `src/lib/ai.ts` without TypeScript errors
+
+---
+
+### Story 9.2 — Define AI tool schemas
+
+**File to create:** `src/lib/aiToolSchemas.ts`
+
+This file defines the function schemas OpenAI uses to request data. The actual execution logic lives separately (Story 9.3). Tools are split into READ and WRITE categories.
+
+OpenAI uses `{ type: 'function', function: { name, description, parameters } }` format — different from Anthropic's `input_schema` format.
+
+```typescript
+import type { ChatCompletionTool } from 'openai/resources/chat/completions'
+
+// ─── READ TOOLS ───────────────────────────────────────────────────────────────
+
+export const queryTasksTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'query_tasks',
+    description: "Query the user's tasks. Use for analytics questions, finding tasks, checking completion rates.",
+    parameters: {
+      type: 'object',
+      properties: {
+        date_from:      { type: 'string', description: 'Start date filter YYYY-MM-DD (optional)' },
+        date_to:        { type: 'string', description: 'End date filter YYYY-MM-DD (optional)' },
+        task_type:      { type: 'string', enum: ['habit', 'task'], description: 'Filter by type (optional)' },
+        status:         { type: 'string', enum: ['todo', 'inprogress', 'done'], description: 'Filter by status (optional)' },
+        category_name:  { type: 'string', description: 'Filter by category name, case-insensitive partial match (optional)' },
+        title_contains: { type: 'string', description: 'Filter tasks whose title contains this string, case-insensitive (optional)' },
+        goal_id:        { type: 'string', description: 'Filter tasks linked to a specific goal id (optional)' },
+        limit:          { type: 'number', description: 'Max rows to return, default 100' },
+      },
+      required: [],
+    },
+  },
+}
+
+export const queryGoalsTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'query_goals',
+    description: "Fetch all of the user's goals with progress data (task counts, completion %). Use when answering goal questions or generating tasks for a goal.",
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['active', 'completed', 'abandoned'], description: 'Filter by goal status (optional)' },
+      },
+      required: [],
+    },
+  },
+}
+
+export const queryHabitsTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'query_habits',
+    description: 'Fetch all habits with their streak data. Use to answer streak questions or when planning a day around habits.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+}
+
+export const getAvailableSlotsTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'get_available_slots',
+    description: 'Get days within a date range that have capacity for more tasks (fewer than 3 scheduled tasks). Use when scheduling generated tasks.',
+    parameters: {
+      type: 'object',
+      properties: {
+        date_from: { type: 'string', description: 'Start of range YYYY-MM-DD' },
+        date_to:   { type: 'string', description: 'End of range YYYY-MM-DD' },
+      },
+      required: ['date_from', 'date_to'],
+    },
+  },
+}
+
+// ─── WRITE TOOLS (always intercepted for user confirmation) ───────────────────
+
+export const proposeTasksTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'propose_tasks',
+    description: 'Propose a list of tasks to create. ALWAYS use this function when you want to create, schedule, or suggest tasks — never just describe them in text. The user will review before anything is saved.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title:       { type: 'string' },
+              description: { type: 'string' },
+              date:        { type: 'string', description: 'YYYY-MM-DD, omit if unscheduled' },
+              time:        { type: 'string', description: 'HH:MM 24-hour start time, optional' },
+              goal_id:     { type: 'string', description: 'Goal UUID to link this task to, optional' },
+              priority:    { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+            },
+            required: ['title'],
+          },
+        },
+        summary: { type: 'string', description: 'A brief explanation of why you are proposing these tasks' },
+      },
+      required: ['tasks', 'summary'],
+    },
+  },
+}
+
+export const proposeRescheduleTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'propose_reschedule',
+    description: 'Propose rescheduling or reordering existing tasks. Use for day planning. The user will review before anything changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        changes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              task_id:  { type: 'string' },
+              new_date: { type: 'string', description: 'YYYY-MM-DD' },
+              new_time: { type: 'string', description: 'HH:MM 24-hour' },
+              reason:   { type: 'string', description: 'Why this change is suggested' },
+            },
+            required: ['task_id', 'reason'],
+          },
+        },
+        summary: { type: 'string' },
+      },
+      required: ['changes', 'summary'],
+    },
+  },
+}
+
+// ─── Tool collections by use case ─────────────────────────────────────────────
+
+export const READ_TOOLS = [queryTasksTool, queryGoalsTool, queryHabitsTool, getAvailableSlotsTool]
+export const ALL_TOOLS  = [...READ_TOOLS, proposeTasksTool, proposeRescheduleTool]
+
+export const WRITE_TOOL_NAMES = new Set(['propose_tasks', 'propose_reschedule'])
+```
+
+---
+
+### Story 9.3 — Build the AI Command Bar
+
+**Context:** The app already has a `Cmd+K` command palette. Read the existing command palette component file before editing. It is referenced in `CalendarPage.tsx` keyboard shortcuts. Find its file path by searching for `CommandPalette` or `cmdk` in the codebase.
+
+**Changes to existing command palette:**
+- Keep all existing slash commands (`/new`, `/search`, etc.) unchanged
+- When the input does not start with `/` and is longer than 3 characters, route to AI mode
+- Add an AI mode indicator: show a small `✦ AI` badge in the input when in AI mode
+
+**New file to create:** `src/components/ai/AICommandBar.tsx`
+
+This component wraps the OpenAI API interaction and manages conversation state.
+
+**State:**
+```typescript
+const [messages, setMessages]           = useState<ConversationMessage[]>([])
+const [isThinking, setIsThinking]       = useState(false)
+const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null)
+```
+
+**`ConversationMessage` type** (add to `src/types.ts`):
+```typescript
+export interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+```
+
+**`Proposal` type** (add to `src/types.ts`):
+```typescript
+export type ProposalType = 'create_tasks' | 'reschedule_tasks'
+
+export interface Proposal {
+  type: ProposalType
+  summary: string
+  items: ProposedTask[] | ProposedReschedule[]
+}
+
+export interface ProposedTask {
+  title: string
+  description?: string
+  date?: string | null
+  time?: string | null
+  goal_id?: string | null
+  priority?: TaskPriority
+}
+
+export interface ProposedReschedule {
+  task_id: string
+  task_title: string   // for display only
+  new_date?: string
+  new_time?: string
+  reason: string
+}
+```
+
+**`sendMessage(userText: string)` function inside AICommandBar:**
+
+OpenAI uses `finish_reason === 'tool_calls'` and `message.tool_calls[]` — different from Anthropic's `stop_reason` and `content` blocks. Tool results are sent as `role: 'tool'` messages.
+
+```typescript
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+
+async function sendMessage(userText: string) {
+  setIsThinking(true)
+
+  const updatedMessages = [...messages, { role: 'user', content: userText, timestamp: new Date().toISOString() }]
+  setMessages(updatedMessages)
+
+  const systemPrompt = buildSystemPrompt(todayStr, goals, habits)
+
+  // OpenAI message format
+  let oaiMessages: ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
+    ...updatedMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+  ]
+
+  // Agentic loop: keep calling until finish_reason is 'stop' (no more tool calls)
+  while (true) {
+    const response = await openai.chat.completions.create({
+      model: AI_MODELS.fast,
+      tools: ALL_TOOLS,
+      messages: oaiMessages,
+    })
+
+    const choice = response.choices[0]
+
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      // Append the assistant message (with tool_calls) to history
+      oaiMessages.push(choice.message)
+
+      const toolResultMessages: ChatCompletionMessageParam[] = []
+
+      for (const toolCall of choice.message.tool_calls) {
+        const name  = toolCall.function.name
+        const input = JSON.parse(toolCall.function.arguments) as Record<string, unknown>
+
+        if (WRITE_TOOL_NAMES.has(name)) {
+          // Write tool — intercept, show confirmation panel, stop loop
+          setPendingProposal(parseProposal(name, input))
+          setIsThinking(false)
+          return
+        }
+
+        // Read tool — execute against Supabase immediately
+        const result = await executeReadTool(name, input)
+        toolResultMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result),
+        })
+      }
+
+      // Append all tool results, then loop again
+      oaiMessages = [...oaiMessages, ...toolResultMessages]
+
+    } else {
+      // finish_reason === 'stop' — plain text response, we're done
+      const assistantText = choice.message.content ?? ''
+      setMessages(prev => [...prev, { role: 'assistant', content: assistantText, timestamp: new Date().toISOString() }])
+      setIsThinking(false)
+      break
+    }
+  }
+}
+```
+
+**Story 9.3a — System prompt builder**
+
+**File to create:** `src/lib/aiSystemPrompt.ts`
+
+```typescript
+export function buildSystemPrompt(todayStr: string, goals: Goal[], habits: Task[]): string {
+  const goalsSummary = goals.map(g =>
+    `- "${g.title}" (${g.start_date} to ${g.end_date}, ${g.progress ?? 0}% done, id: ${g.id})`
+  ).join('\n')
+
+  const habitsSummary = habits.map(h =>
+    `- "${h.title}" at ${h.time}–${h.end_time}, streak: ${h.streak?.current ?? 0} days`
+  ).join('\n')
+
+  return `You are a personal productivity assistant embedded in Tasky, a habit and goal tracking app.
+Today is ${todayStr}.
+
+The user's active goals:
+${goalsSummary || 'None yet.'}
+
+The user's habits:
+${habitsSummary || 'None yet.'}
+
+Your behaviour rules:
+1. Be concise. No lengthy preambles.
+2. When asked to create or schedule tasks, ALWAYS use the propose_tasks tool — never just list them in text.
+3. When asked to reschedule or plan, ALWAYS use the propose_reschedule tool.
+4. For analytics questions, use query_tasks then compute the answer yourself — do not ask the user to calculate.
+5. Never invent task IDs. Always fetch real IDs using query tools before proposing reschedules.
+6. When generating tasks for a goal, distribute them sensibly over the goal's date range. Do not schedule more than 2 goal tasks on the same day.
+7. Respect existing habits when scheduling — do not schedule heavy tasks in the same time blocks as habits.
+8. If you don't have enough information, ask one clarifying question — not multiple.`
+}
+```
+
+**Story 9.3b — Read tool executor**
+
+**File to create:** `src/lib/aiToolExecutor.ts`
+
+```typescript
+// Executes read-only tool calls against Supabase using the authenticated client
+// RLS ensures the user only ever sees their own data
+
+export async function executeReadTool(toolName: string, input: Record<string, unknown>) {
+  switch (toolName) {
+    case 'query_tasks':     return executeQueryTasks(input)
+    case 'query_goals':     return executeQueryGoals(input)
+    case 'query_habits':    return executeQueryHabits()
+    case 'get_available_slots': return executeGetAvailableSlots(input)
+    default: return { error: `Unknown tool: ${toolName}` }
+  }
+}
+
+async function executeQueryTasks(input) {
+  let query = supabase
+    .from('tasks')
+    .select('id,title,status,task_type,date,time,priority,goal_id,category:categories(name),completed_at')
+    .is('deleted_at', null)
+
+  if (input.date_from)      query = query.gte('date', input.date_from)
+  if (input.date_to)        query = query.lte('date', input.date_to)
+  if (input.task_type)      query = query.eq('task_type', input.task_type)
+  if (input.status)         query = query.eq('status', input.status)
+  if (input.goal_id)        query = query.eq('goal_id', input.goal_id)
+  if (input.title_contains) query = query.ilike('title', `%${input.title_contains}%`)
+  if (input.limit)          query = query.limit(input.limit)
+
+  const { data, error } = await query
+  if (error) return { error: error.message }
+  return { tasks: data, count: data?.length ?? 0 }
+}
+
+async function executeQueryGoals(input) {
+  let query = supabase.from('goals').select(GOAL_SELECT)
+  if (input.status) query = query.eq('status', input.status)
+  const { data, error } = await query
+  if (error) return { error: error.message }
+  // Attach progress data
+  // (reuse computeGoalProgress logic from useGoals hook)
+  return { goals: data }
+}
+
+async function executeQueryHabits() {
+  const { data: habits, error } = await supabase
+    .from('tasks')
+    .select(`${TASK_SELECT}, habit_streaks(current_streak, longest_streak, last_completed_date)`)
+    .eq('task_type', 'habit')
+    .is('deleted_at', null)
+  if (error) return { error: error.message }
+  return { habits }
+}
+
+async function executeGetAvailableSlots(input) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('date')
+    .gte('date', input.date_from)
+    .lte('date', input.date_to)
+    .is('deleted_at', null)
+    .neq('task_type', 'habit')
+
+  if (error) return { error: error.message }
+
+  // Count tasks per date, return dates with fewer than 3 tasks
+  const counts: Record<string, number> = {}
+  for (const t of data ?? []) {
+    if (t.date) counts[t.date] = (counts[t.date] ?? 0) + 1
+  }
+
+  // Generate all dates in range
+  const slots: string[] = []
+  let cursor = new Date(input.date_from)
+  const end  = new Date(input.date_to)
+  while (cursor <= end) {
+    const dateStr = cursor.toISOString().split('T')[0]
+    if ((counts[dateStr] ?? 0) < 3) slots.push(dateStr)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return { available_dates: slots }
+}
+```
+
+**Story 9.3c — AI Confirmation Panel**
+
+**File to create:** `src/components/ai/AIConfirmationPanel.tsx`
+
+**Props:**
+```typescript
+interface AIConfirmationPanelProps {
+  proposal: Proposal
+  onConfirm: (proposal: Proposal) => Promise<void>
+  onCancel: () => void
+}
+```
+
+**Layout for `create_tasks` proposal:**
+```
+✦ AI wants to create 8 tasks for "Learn Backend"
+
+[✓] Learn Node.js basics            Mar 3  (Mon)
+[✓] Build first Express server       Mar 5  (Wed)
+[✓] Understand REST principles       Mar 7  (Fri)
+... (each item is an editable row — user can uncheck or change date)
+
+[Confirm all]   [Cancel]
+```
+
+**Layout for `reschedule_tasks` proposal:**
+```
+✦ AI suggests these changes for your 3-hour window
+
+[✓] Learn JWT auth    → move to 2:00 PM    (was 4:00 PM)   "High priority, goal deadline near"
+[✓] Read 5 pages      → move to 8:00 PM    (was 2:00 PM)   "Low effort, end of day"
+[ ] Team standup      → no change suggested
+
+[Confirm checked]   [Cancel]
+```
+
+**On confirm:** iterate checked items, execute the appropriate Supabase writes (INSERT for tasks, UPDATE for reschedules), invalidate relevant query keys, show `toast.success()`.
+
+---
+
+### Story 9.4 — Natural Language Task Creation
+
+**Trigger:** User types something like: *"add watch LangChain tutorial on Saturday afternoon linked to my AI expert goal"*
+
+**How Claude handles it:** Claude uses `query_goals` to find the goal ID, then calls `propose_tasks` with one task, pre-filled fields.
+
+**What the implementer must do:**
+- No new UI needed beyond Story 9.3 — the AICommandBar + AIConfirmationPanel handle everything
+- Test these natural language patterns to verify correct field parsing:
+  - `"add [title] on [date]"` → correct date
+  - `"add [title] at [time]"` → correct time field
+  - `"add [title] linked to [goal name]"` → correct goal_id via query_goals tool call
+  - `"add [title] tomorrow"` → resolves to tomorrow's date
+  - `"add [title]"` (no date) → creates unscheduled task in backlog
+
+**Acceptance criteria:**
+- A confirmed proposal from `propose_tasks` with one item correctly creates a task in Supabase
+- The task appears in the cockpit on its scheduled date after query invalidation
+- Unscheduled tasks appear in backlog
+
+---
+
+### Story 9.5 — Natural Language Analytics Queries
+
+**Trigger:** User types a question like: *"what percentage of gym tasks done last 3 weeks?"*
+
+**Flow:**
+1. Claude calls `query_tasks` with `{ title_contains: "gym", date_from: "3 weeks ago", date_to: "today" }`
+2. Receives task list
+3. Computes: `done_count / total_count * 100`
+4. Responds in plain text: *"You completed 14 out of 18 gym sessions in the last 3 weeks — 78%."*
+
+**No confirmation panel needed** — this is purely read + respond.
+
+**Test these query patterns** (verify Claude produces correct tool calls for each):
+- `"how many times did I skip AI learning this month?"`
+- `"which goal am I most behind on?"`
+- `"what's my most productive day of the week?"`
+- `"how many tasks have I completed in total?"`
+- `"show me everything due this week"`
+
+**Acceptance criteria:**
+- Query returns real data from the user's Supabase instance
+- Numbers in the response match what a manual Supabase query would return
+- Response is in plain English, not raw JSON
+
+---
+
+### Story 9.6 — Goal Task Generation + Auto-Schedule Preview
+
+**Trigger:** User types: *"generate tasks for my backend goal"* or *"break down the AI expert goal into tasks"*
+
+**Flow:**
+1. Claude calls `query_goals` → gets the matching goal with `id`, `start_date`, `end_date`
+2. Claude calls `get_available_slots` for the goal's date range
+3. Claude calls `propose_tasks` with a structured breakdown spread across available slots
+4. AIConfirmationPanel shows all proposed tasks — user can uncheck, edit dates, or edit titles inline before confirming
+
+**Task generation quality rules** (enforce via system prompt — already included in Story 9.3a):
+- Maximum 2 goal tasks per day
+- Tasks distributed progressively (fundamentals first, advanced tasks later in the date range)
+- Each task has a realistic scope for one sitting (1–2 hours)
+- At least 20% buffer at the end of the date range (no tasks in last 2 weeks)
+- Never schedule on the same time block as an existing habit
+
+**Acceptance criteria:**
+- For a 4-month goal, AI generates 15–25 tasks
+- Tasks are distributed across the date range — not all in week 1
+- All tasks are linked to the correct `goal_id`
+- Confirmed tasks appear in the Goal detail page and in cockpit on their dates
+
+---
+
+### Story 9.7 — Day Planning ("I have 3 hours today")
+
+**Trigger:** User types: *"I have 3 hours today, plan my day"* or *"rearrange my tasks for today"*
+
+**Flow:**
+1. Claude calls `query_habits` → gets today's habits + their time blocks
+2. Claude calls `query_tasks` with `{ date: today }` → gets today's tasks
+3. Claude calls `query_goals` → gets goal deadlines and progress (to prioritise tasks linked to near-deadline goals)
+4. Claude computes a ranked order and time assignments that:
+   - Respect existing habit time blocks (no overlap)
+   - Put highest-priority / goal-deadline tasks first
+   - Fit within the stated hours
+5. Claude calls `propose_reschedule` with time changes for today's tasks
+6. AIConfirmationPanel shows proposed time changes
+7. User confirms → UPDATE tasks SET time = new_time for each confirmed change
+
+**Input variations to handle:**
+- *"I only have 3 hours today"* → Claude selects top N tasks that fit 3 hours
+- *"I'm tired today"* → Claude selects `priority = 'low'` or short tasks only
+- *"Plan tomorrow"* → same flow but for tomorrow's date
+
+**Acceptance criteria:**
+- Proposed schedule respects all existing habit time blocks
+- Tasks that don't fit in the stated time are excluded from proposal with a note
+- Confirmed reschedules update `time` field in Supabase and cockpit reflects new order
+
+---
+
+### Story 9.8 — Weekly Goal Health Check
+
+**Trigger:** Manual — a "Weekly Review" button in the Goals page header. Not automatic.
+
+**File to edit:** `src/pages/Goals.tsx` — add a `Weekly Review` button next to `+ New Goal`.
+
+**Flow:**
+1. Clicking the button opens a full-screen or large modal: `AIWeeklyReviewPanel`
+2. Panel calls `sendMessage("Generate my weekly goal health check")` automatically on open
+3. Claude calls `query_goals` + `query_tasks` for the past 7 days + `query_habits` for streak data
+4. Claude computes for each active goal:
+   - Tasks completed this week vs expected pace (total_tasks / total_weeks = expected per week)
+   - On track / behind / ahead status
+5. Claude responds in structured plain text (no tool needed for the response itself):
+
+```
+Weekly Review — Feb 24–26
+
+Backend Goal (ends July)
+  ✓ On track — 3/3 planned tasks done this week
+  Pace: completing 3 tasks/week, need 2.5/week to finish on time
+
+AI Expert Goal (ends May)
+  ⚠ Behind — 0/3 planned tasks done this week
+  At this pace, you'll miss your May 31 deadline by ~3 weeks.
+  → Schedule 4 tasks next week to recover? [Generate plan]
+
+Gym habit — 🔥 12 day streak
+  Missed: Wednesday (you had a heavy day)
+  Pattern: you often miss Wednesdays — consider moving gym to 8 PM Wed
+```
+
+6. If the user clicks `[Generate plan]` inline, it triggers Story 9.6 flow for that goal.
+
+**File to create:** `src/components/ai/AIWeeklyReviewPanel.tsx`
+
+---
+
+### Story 9.9 — Streak Protection Nudge
+
+**Location:** `CockpitPage.tsx` (cockpit header area)
+
+**Trigger condition (computed client-side, no AI call):**
+- Current time is after 5 PM
+- User has a habit with `current_streak >= 7` days
+- That habit's `status !== 'done'` for today
+- User has not dismissed the nudge today (store dismissal in `localStorage` keyed by `habit_id + today_date`)
+
+**UI:** A dismissible amber banner below `CockpitHeader`:
+```
+⚡ Gym streak at risk — 12 days. You haven't logged it yet today.
+   [Mark done]   [Dismiss]
+```
+
+- `[Mark done]` calls the same `toggleHabit` function from Story 3.5 — marks the habit done directly
+- `[Dismiss]` writes `dismissed_{habitId}_{todayDate} = true` to `localStorage`, hides banner for the day
+
+**No AI call needed** — this is pure client-side logic derived from habit streak data already loaded in the cockpit.
+
+**Acceptance criteria:**
+- Banner only appears after 5 PM
+- Banner only appears when streak >= 7 days and habit is not done
+- Dismissing hides it for the rest of the day (persists across page refreshes via localStorage)
+- Multiple at-risk habits: show one banner per habit (stacked)
+
+---
+
 ## Global Constraints & Conventions
 
 ### Do not break these things
@@ -1050,6 +1747,14 @@ Update the Analytics page to reflect the new entity model. Remove calendar-sync 
 5. **Tailwind only** — no new CSS files. Use only Tailwind utility classes.
 6. **Recurrence** — habits use the existing `RecurrenceRule` and `expandRecurrence()` from `src/lib/recurrence.ts`. Do not create a parallel recurrence system.
 7. **Backward compatibility** — existing tasks without `task_type` default to `'task'` at the DB level. No migration of existing data needed beyond the ALTER TABLE statements.
+
+### AI-specific constraints (Phase 9)
+8. **AI never writes directly** — all `propose_tasks` and `propose_reschedule` tool calls must be intercepted and shown in `AIConfirmationPanel` before any DB write. The agentic loop must stop when a write tool is encountered and wait for user action.
+9. **Read tools only query authenticated user's data** — all Supabase calls in `aiToolExecutor.ts` use the authenticated `supabase` client. RLS enforces data isolation automatically. Never pass `user_id` as a filter parameter from AI input — it is always injected server-side by RLS.
+10. **No `any` in AI tool input parsing** — tool inputs from Claude are typed as `Record<string, unknown>`. Access fields with type guards, not casting.
+11. **API key never in source control** — `VITE_OPENAI_API_KEY` lives only in `.env`. Verify `.env` is in `.gitignore` before implementing Phase 9.
+12. **AI model selection** — use `gpt-4o-mini` for quick queries (stories 9.4, 9.5). Use `gpt-4o` for goal decomposition and day planning (stories 9.6, 9.7, 9.8). This controls cost.
+13. **Conversation history** — the AICommandBar keeps message history in component state only. It is NOT persisted to Supabase. History resets when the command bar closes.
 
 ### Code patterns to follow
 - Auth: `const { user } = useAuth()` from `src/contexts/AuthContext.tsx`
@@ -1064,6 +1769,24 @@ Phases must be executed in order. Each phase is independently shippable and shou
 1. TypeScript compiles with no errors
 2. The new screen/feature renders without runtime errors
 3. Existing screens that were not modified still work
+
+---
+
+---
+
+## Phase 9 — Story Summary
+
+| Story | Feature | AI call? | Writes DB? | Confirmation needed? |
+|---|---|---|---|---|
+| 9.1 | Claude SDK setup | — | — | — |
+| 9.2 | Tool schemas | — | — | — |
+| 9.3 | AI command bar + agentic loop | Yes | Via confirmation only | — |
+| 9.4 | Natural language task creation | Yes | Yes | Yes — AIConfirmationPanel |
+| 9.5 | Analytics queries | Yes | No | No |
+| 9.6 | Goal task generation | Yes | Yes | Yes — AIConfirmationPanel |
+| 9.7 | Day planning | Yes | Yes | Yes — AIConfirmationPanel |
+| 9.8 | Weekly health check | Yes | No (read + display) | No — generates link to 9.6 |
+| 9.9 | Streak protection nudge | No | Via existing toggle | No — direct action |
 
 ---
 
