@@ -3,9 +3,11 @@ import { Toaster } from 'sonner'
 import { AppLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import Landing from './pages/Landing'
-import Dashboard from './pages/Dashboard'
-import Tasks from './pages/Tasks'
-import Planning from './pages/Planning'
+import Cockpit from './pages/Cockpit'
+import Goals from './pages/Goals'
+import GoalDetail from './pages/GoalDetail'
+import Backlog from './pages/Backlog'
+import CalendarHeatmap from './pages/CalendarHeatmap'
 import Categories from './pages/Categories'
 import Analytics from './pages/Analytics'
 import Welcome from './pages/Welcome'
@@ -31,12 +33,17 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/planning" element={<Planning />} />
-            <Route path="/events" element={<Navigate to="/tasks" replace />} />
-            <Route path="/categories" element={<Categories />} />
+            <Route index element={<Navigate to="/cockpit" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/cockpit" replace />} />
+            <Route path="/tasks" element={<Navigate to="/cockpit" replace />} />
+            <Route path="/planning" element={<Navigate to="/goals" replace />} />
+            <Route path="/cockpit" element={<Cockpit />} />
+            <Route path="/goals" element={<Goals />} />
+            <Route path="/goals/:id" element={<GoalDetail />} />
+            <Route path="/backlog" element={<Backlog />} />
+            <Route path="/calendar" element={<CalendarHeatmap />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/categories" element={<Categories />} />
           </Route>
         </Route>
 

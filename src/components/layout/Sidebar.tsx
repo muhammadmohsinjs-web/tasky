@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, Tag, BarChart3, Menu, X, LogOut, ChevronRight, Target } from 'lucide-react';
+import { Sun, Target, Inbox, Calendar, BarChart2, Tag, Menu, X, LogOut, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../hooks/useProfile';
@@ -7,11 +7,12 @@ import { UserAvatar } from '../ui/UserAvatar';
 import tasksPulseLogo from '../../assets/TasksPulse-logo-horizontal.svg';
 
 const NAV_ITEMS = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview & stats' },
-  { path: '/tasks', label: 'Tasks', icon: CheckSquare, description: 'Manage your work' },
-  { path: '/planning', label: 'Planning', icon: Target, description: 'Weekly cockpit' },
-  { path: '/categories', label: 'Categories', icon: Tag, description: 'Organize tasks' },
-  { path: '/analytics', label: 'Analytics', icon: BarChart3, description: 'Track progress' },
+  { path: '/cockpit',    label: 'Today',      icon: Sun,      description: 'Habits & daily tasks' },
+  { path: '/goals',      label: 'Goals',      icon: Target,   description: 'Track your goals' },
+  { path: '/backlog',    label: 'Backlog',    icon: Inbox,    description: 'Unscheduled tasks' },
+  { path: '/calendar',   label: 'Calendar',   icon: Calendar, description: 'Completion heatmap' },
+  { path: '/analytics',  label: 'Analytics',  icon: BarChart2, description: 'Track progress' },
+  { path: '/categories', label: 'Categories', icon: Tag,      description: 'Organize tasks' },
 ];
 
 export function Sidebar() {
