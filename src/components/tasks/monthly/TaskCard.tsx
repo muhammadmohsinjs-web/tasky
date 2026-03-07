@@ -43,14 +43,14 @@ const DOT_COLOR = {
 export function TaskCard({
   task,
   isSelected,
-  isChecked = false,
-  selectionMode = false,
+  isChecked: _isChecked = false,
+  selectionMode: _selectionMode = false,
   onSelect,
   onView,
   onEdit,
   onDelete,
   onToggleStatus,
-  onToggleSelect,
+  onToggleSelect: _onToggleSelect,
 }: TaskCardProps) {
   const meta = STATUS_META[task.status];
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,21 +90,6 @@ export function TaskCard({
         {/* Row 1: dot + title ... time */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            {selectionMode ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleSelect?.(task.id);
-                }}
-                className={`h-4 w-4 rounded border text-[10px] font-bold ${
-                  isChecked ? 'border-[#4E80D9] bg-[#EAF2FF] text-[#1D4F95]' : 'border-[#C7D3E6] bg-white text-transparent'
-                }`}
-                aria-label={isChecked ? 'Unselect task' : 'Select task'}
-              >
-                {isChecked ? '✓' : ''}
-              </button>
-            ) : null}
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLOR[task.categoryColor]}`}
               aria-hidden="true"

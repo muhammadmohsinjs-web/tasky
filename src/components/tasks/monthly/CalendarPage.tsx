@@ -13,7 +13,6 @@ import { uploadFilesForTask } from '../../../lib/uploadAttachment';
 import type { Task, TaskStatus as DbTaskStatus } from '../../../types';
 import { ConfirmationDialog } from '../../design-system/feedback/ConfirmationDialog';
 import { AddTaskModal } from './AddTaskModal';
-import { BulkAddModal } from '../BulkAddModal';
 import { CalendarGrid } from './CalendarGrid';
 import { MobileCalendarAgenda } from './MobileCalendarAgenda';
 import { filterTasksByQuery, formatMonthLabel, getTasksForDate, parseISODate, shiftMonth, startOfMonth, toISODate } from './calendarHelpers';
@@ -101,7 +100,6 @@ export default function CalendarPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [pendingDeleteTask, setPendingDeleteTask] = useState<CalendarTask | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [bulkDate, setBulkDate] = useState(todayISO);
@@ -114,7 +112,6 @@ export default function CalendarPage() {
     deleteTask: deleteScheduledTask,
     updateTaskStatus: updateScheduledStatus,
     addTask: addScheduledTask,
-    addTasks: addScheduledTasks,
     updateTask: updateScheduledTask,
     bulkUpdateStatus: bulkUpdateScheduledStatus,
     bulkReschedule: bulkRescheduleScheduledTasks,
@@ -129,7 +126,6 @@ export default function CalendarPage() {
     deleteTask: deleteBacklogTask,
     updateTaskStatus: updateBacklogStatus,
     addTask: addBacklogTask,
-    addTasks: addBacklogTasks,
     updateTask: updateBacklogTask,
     bulkUpdateStatus: bulkUpdateBacklogStatus,
     bulkDelete: bulkDeleteBacklogTasks,
@@ -542,13 +538,6 @@ export default function CalendarPage() {
                   className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
                   <Command className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold">Commands</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsBulkAddOpen(true)}
-                  disabled={!isOnline}
-                  className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#CBD4E3] bg-white px-3.5 text-[#2A3650] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                  <span className="text-[11px] font-semibold">Bulk Add</span>
                 </button>
                 <button
                   type="button"
@@ -1124,25 +1113,6 @@ export default function CalendarPage() {
           }
           setSelectedTaskId(created.id);
           return true;
-        }}
-      />
-      <BulkAddModal
-        open={isBulkAddOpen}
-        onClose={() => setIsBulkAddOpen(false)}
-        categories={categories}
-        onAddToDate={async (items) => {
-          if (!isOnline) {
-            toast.error('You are offline. Reconnect to add tasks.');
-            return;
-          }
-          await addScheduledTasks(items);
-        }}
-        onAddToBacklog={async (items) => {
-          if (!isOnline) {
-            toast.error('You are offline. Reconnect to add tasks.');
-            return;
-          }
-          await addBacklogTasks(items);
         }}
       />
       <ConfirmationDialog
