@@ -32,6 +32,9 @@ const STATUS_OVERFLOW_CLASS = {
   completed: 'bg-[#D3EEDC] text-[#1E5034]',
 } as const;
 
+const HEAVY_DAY_THRESHOLD = 5;
+const VERY_HEAVY_DAY_THRESHOLD = 8;
+
 export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, onQuickAddDate, onPrevMonth, onNextMonth, showHeader = true }: CalendarGridProps) {
   const monthCells = generateMonthGrid(monthDate.getFullYear(), monthDate.getMonth());
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -78,6 +81,8 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
           const dayTasks = getTasksForDate(tasks, cell.isoDate);
           const visibleDayTasks = dayTasks.slice(0, 3);
           const hiddenCount = dayTasks.length - visibleDayTasks.length;
+          const isHeavyDay = dayTasks.length >= HEAVY_DAY_THRESHOLD;
+          const isVeryHeavyDay = dayTasks.length >= VERY_HEAVY_DAY_THRESHOLD;
           const isSelected = selectedDateISO === cell.isoDate;
           const isSundayInMonth = cell.inCurrentMonth && cell.date.getDay() === 0;
           const isToday = cell.isoDate === todayISO;
@@ -98,11 +103,13 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
                 'group relative min-h-[94px] border-r border-b border-[#E5EBF5] p-2 text-left transition-colors md:min-h-[124px] md:p-2.5',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
                 cell.inCurrentMonth ? 'bg-white hover:bg-[#F8FAFF]' : 'bg-[#F7F9FC] text-slate-400',
+                isHeavyDay && cell.inCurrentMonth ? 'ring-1 ring-inset ring-[#F3C17C]' : '',
+                isVeryHeavyDay && cell.inCurrentMonth ? 'bg-[#FFF9F1]' : '',
                 isSelected ? 'bg-[#EEF4FF] shadow-[inset_0_0_0_1px_#C5D8F7]' : '',
               ].join(' ')}
               role="button"
               tabIndex={0}
-              aria-label={`Select ${cell.isoDate}`}
+              aria-label={`Select ${cell.isoDate}${dayTasks.length > 0 ? `, ${dayTasks.length} tasks` : ''}${isHeavyDay ? ', heavy day' : ''}`}
               aria-pressed={isSelected}
             >
               {showQuickAdd ? (
@@ -135,6 +142,17 @@ export function CalendarGrid({ monthDate, selectedDateISO, tasks, onSelectDate, 
               >
                 {cell.dayNumber}
               </span>
+              {isHeavyDay ? (
+                <span
+                  className={`absolute left-10 top-2 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold md:left-12 ${
+                    isVeryHeavyDay
+                      ? 'bg-[#FDE3C2] text-[#9A4A00]'
+                      : 'bg-[#FFF0DA] text-[#A45C0B]'
+                  }`}
+                >
+                  Heavy
+                </span>
+              ) : null}
 
               <div className="mt-2 space-y-1">
                 {visibleDayTasks.map((task) => (

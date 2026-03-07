@@ -1,6 +1,7 @@
 export type TaskStatus = 'todo' | 'inprogress' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type TaskType = 'habit' | 'task'
+export type CategoryAppliesTo = 'task' | 'habit' | 'both'
 export type GoalStatus = 'active' | 'completed' | 'abandoned'
 export type CalendarProvider = 'google'
 export type SyncDirection = 'task_to_google'
@@ -79,6 +80,7 @@ export interface Category {
   accent: string
   short_label: string
   icon?: string
+  applies_to?: CategoryAppliesTo
   sort_order?: number
   created_at?: string
 }

@@ -60,12 +60,13 @@ interface CategoryForm {
   short_label: string
   icon: string
   paletteIndex: number
+  applies_to: 'task' | 'habit' | 'both'
 }
 
-const emptyForm: CategoryForm = { name: '', slug: '', short_label: '', icon: 'tag', paletteIndex: 0 }
+const emptyForm: CategoryForm = { name: '', slug: '', short_label: '', icon: 'tag', paletteIndex: 0, applies_to: 'task' }
 
 export default function Categories() {
-  const { categories, loading, addCategory, updateCategory, deleteCategory } = useCategories()
+  const { taskCategories, habitCategories, loading, addCategory, updateCategory, deleteCategory } = useCategories()
   const { tasks } = useAllTasks()
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -98,6 +99,7 @@ export default function Categories() {
       color: palette.color,
       accent: palette.accent,
       icon: form.icon,
+      applies_to: form.applies_to,
     })
     setForm(emptyForm)
     setShowAdd(false)
@@ -112,6 +114,7 @@ export default function Categories() {
       short_label: cat.short_label,
       icon: cat.icon || 'tag',
       paletteIndex: paletteIdx >= 0 ? paletteIdx : 0,
+      applies_to: cat.applies_to ?? 'task',
     })
   }
 
@@ -125,6 +128,7 @@ export default function Categories() {
       color: palette.color,
       accent: palette.accent,
       icon: form.icon,
+      applies_to: form.applies_to,
     })
     setEditingId(null)
     setForm(emptyForm)
@@ -209,6 +213,39 @@ export default function Categories() {
           </div>
 
           <div className="mb-5">
+            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Applies To</label>
+            <div className="mt-2 grid grid-cols-3 gap-2 max-w-md">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, applies_to: 'task' }))}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                  form.applies_to === 'task' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'
+                }`}
+              >
+                Task
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, applies_to: 'habit' }))}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                  form.applies_to === 'habit' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'
+                }`}
+              >
+                Habit
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, applies_to: 'both' }))}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                  form.applies_to === 'both' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'
+                }`}
+              >
+                Both
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-5">
             <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Icon</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {CATEGORY_ICONS.map((iconName) => {
@@ -246,8 +283,62 @@ export default function Categories() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((cat) => {
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">Task Categories</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {taskCategories.map((cat) => {
+            const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Tag
+            const breakdown = getStatusBreakdown(cat.id)
+            return (
+              <div key={cat.id} className={`panel p-5 border-l-4 ${cat.accent}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <IconComponent className="w-4 h-4 text-slate-400" />
+                    <h3 className="text-sm font-semibold text-slate-800">{cat.name}</h3>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.color}`}>{cat.short_label}</span>
+                </div>
+
+                <div className="mb-3">
+                  <div className="text-xs text-slate-500 mb-1.5">{breakdown.total} tasks</div>
+                  {breakdown.total > 0 && (
+                    <div className="flex gap-3 text-[10px]">
+                      <span className="text-slate-400">{breakdown.todo} todo</span>
+                      <span className="text-amber-700">{breakdown.inprogress} in progress</span>
+                      <span className="text-emerald-700">{breakdown.done} done</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-1">
+                  <button onClick={() => startEdit(cat)} className="btn btn-ghost !p-2" title="Edit category">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {deleteConfirm === cat.id ? (
+                    <>
+                      <button onClick={() => handleDelete(cat.id)} className="btn btn-danger !px-2 !py-1 text-xs">
+                        Confirm
+                      </button>
+                      <button onClick={() => setDeleteConfirm(null)} className="btn btn-secondary !px-2 !py-1 text-xs">
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => setDeleteConfirm(cat.id)} className="btn btn-ghost !p-2 text-red-500 hover:bg-red-50" title="Delete category">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">Habit Categories</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {habitCategories.map((cat) => {
           const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Tag
           const breakdown = getStatusBreakdown(cat.id)
           return (
@@ -293,7 +384,8 @@ export default function Categories() {
             </div>
           )
         })}
-      </div>
+        </div>
+      </section>
     </div>
   )
 }

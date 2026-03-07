@@ -124,9 +124,10 @@ export default function Analytics() {
     }
 
     for (const habit of habitItems) {
-      if (!habit.date || !habit.recurrence) continue
-
-      const occurrences = expandRecurrence(habit.date, habit.recurrence, rangeStart, rangeEnd)
+      const anchorDate = habit.date ?? habit.created_at?.slice(0, 10)
+      if (!anchorDate) continue
+      const recurrence = habit.recurrence ?? { frequency: 'daily', interval: 1, end_date: null }
+      const occurrences = expandRecurrence(anchorDate, recurrence, rangeStart, rangeEnd)
       const occurrenceSet = new Set(occurrences)
 
       for (const occurrence of occurrenceSet) {
@@ -173,7 +174,7 @@ export default function Analytics() {
       if (rows.length === 0) return [] as TopHabitStreak[]
 
       const { data: taskRows, error: taskError } = await supabase
-        .from('tasks')
+        .from('habits')
         .select('id,title')
         .in('id', rows.map((row) => row.task_id))
 

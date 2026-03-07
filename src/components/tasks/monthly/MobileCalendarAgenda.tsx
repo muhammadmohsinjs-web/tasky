@@ -26,6 +26,8 @@ const DOT_CLASS = {
   blue: 'bg-blue-500',
 } as const;
 
+const HEAVY_DAY_THRESHOLD = 5;
+
 export function MobileCalendarAgenda({
   monthDate,
   selectedDateISO,
@@ -86,6 +88,7 @@ export function MobileCalendarAgenda({
         <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1">
           {monthDays.map((day) => {
             const isSelected = day.isoDate === selectedDateISO;
+            const isHeavyDay = day.dayTasks.length >= HEAVY_DAY_THRESHOLD;
             const dots = day.dayTasks.slice(0, 3);
             const hiddenCount = day.dayTasks.length - dots.length;
             return (
@@ -97,7 +100,9 @@ export function MobileCalendarAgenda({
                   'min-w-[64px] snap-start rounded-xl border px-2 py-2 text-left transition',
                   isSelected
                     ? 'border-[#2D7DEF] bg-[#2D7DEF] text-white shadow-[0_6px_14px_rgba(37,99,235,0.30)]'
-                    : 'border-[#D7E2F1] bg-white text-[#314764]',
+                    : isHeavyDay
+                      ? 'border-[#EDC78F] bg-[#FFF7EA] text-[#314764]'
+                      : 'border-[#D7E2F1] bg-white text-[#314764]',
                 ].join(' ')}
               >
                 <p className={`text-[10px] font-semibold ${isSelected ? 'text-white/90' : 'text-[#6A7F9E]'}`}>
@@ -118,6 +123,11 @@ export function MobileCalendarAgenda({
                     </span>
                   ) : null}
                 </div>
+                {isHeavyDay ? (
+                  <span className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${isSelected ? 'bg-white/20 text-white' : 'bg-[#FFE6C4] text-[#965003]'}`}>
+                    Heavy
+                  </span>
+                ) : null}
               </button>
             );
           })}

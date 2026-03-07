@@ -48,10 +48,9 @@ export function useCalendarHeatmap(year: number, month: number) {
           .gte('date', monthStartKey)
           .lt('date', nextMonthStartKey),
         supabase
-          .from('tasks')
+          .from('habits')
           .select('*')
           .eq('user_id', user!.id)
-          .eq('task_type', 'habit')
           .is('deleted_at', null),
       ])
 
@@ -72,8 +71,10 @@ export function useCalendarHeatmap(year: number, month: number) {
       }
 
       for (const habit of (habitTasks as Task[] | null) ?? []) {
-        if (!habit.date || !habit.recurrence) continue
-        const occurrences = expandRecurrence(habit.date, habit.recurrence, start, end)
+        const anchorDate = habit.date ?? habit.created_at?.slice(0, 10)
+        if (!anchorDate) continue
+        const recurrence = habit.recurrence ?? { frequency: 'daily', interval: 1, end_date: null }
+        const occurrences = expandRecurrence(anchorDate, recurrence, start, end)
 
         for (const dayKey of occurrences) {
           if (!dayMap[dayKey]) continue

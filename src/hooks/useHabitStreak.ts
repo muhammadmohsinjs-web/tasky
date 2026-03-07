@@ -1,19 +1,19 @@
 import { supabase } from '../lib/supabase'
-import type { RecurrenceRule, TaskStatus } from '../types'
+import { formatDateStr } from '../lib/recurrence'
+import type { TaskStatus } from '../types'
 
 function getYesterday(dateStr: string): string {
   const d = new Date(dateStr)
   d.setDate(d.getDate() - 1)
-  return d.toISOString().split('T')[0]
+  return formatDateStr(d)
 }
 
 export async function updateHabitStreak(
   taskId: string,
   newStatus: TaskStatus,
   userId: string,
-  _recurrence?: RecurrenceRule | null,
 ): Promise<void> {
-  const today = new Date().toISOString().split('T')[0]
+  const today = formatDateStr(new Date())
 
   const { data: existing } = await supabase
     .from('habit_streaks')

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { ListChecks, Plus, Repeat2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
@@ -34,7 +34,7 @@ export default function Cockpit() {
   const queryClient = useQueryClient()
   const { habits, tasks, habitStreaks, isLoading, todayStr } = useCockpit()
   const { profile, updateStreak } = useProfile()
-  const { categories } = useCategories()
+  const { taskCategories, habitCategories } = useCategories()
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -51,6 +51,9 @@ export default function Cockpit() {
     if (b.status === 'inprogress' && a.status !== 'inprogress') return 1
     return sortByTime(a, b)
   })
+  const modalCategories = (modalTask?.task_type ?? defaultModalTaskType) === 'habit'
+    ? habitCategories
+    : taskCategories
 
   // Daily streak from profile
   const dailyStreak = profile?.streak?.current ?? 0
@@ -88,7 +91,7 @@ export default function Cockpit() {
     const newStatus: TaskStatus = currentStatus === 'done' ? 'todo' : 'done'
 
     const { error } = await supabase
-      .from('tasks')
+      .from('habits')
       .update({
         status: newStatus,
         completed_at: newStatus === 'done' ? new Date().toISOString() : null,
@@ -180,6 +183,31 @@ export default function Cockpit() {
     const dbStatus = CALENDAR_TO_DB_STATUS[payload.status]
 
     if (modalTask) {
+      if (modalTask.task_type === 'habit') {
+        const { error } = await supabase
+          .from('habits')
+          .update({
+            title: payload.title,
+            time: payload.time,
+            end_time: payload.end_time,
+            category_id: payload.categoryId || null,
+            date: payload.dateISO ?? todayStr,
+            status: dbStatus === 'done' ? 'done' : 'todo',
+            recurrence: payload.recurrence ?? { frequency: 'daily', interval: 1, end_date: null },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', modalTask.id)
+
+        if (error) {
+          toast.error('Failed to save habit')
+          return false
+        }
+
+        toast.success('Habit saved')
+        queryClient.invalidateQueries({ queryKey: ['cockpit-habits', user.id] })
+        return true
+      }
+
       // Edit existing task
       const { error } = await supabase
         .from('tasks')
@@ -208,6 +236,28 @@ export default function Cockpit() {
 
       toast.success('Task saved')
       queryClient.invalidateQueries({ queryKey: ['cockpit-tasks', user.id] })
+      return true
+    }
+
+    if (payload.task_type === 'habit') {
+      const { error } = await supabase.from('habits').insert({
+        title: payload.title,
+        time: payload.time,
+        end_time: payload.end_time,
+        category_id: payload.categoryId || null,
+        date: payload.dateISO ?? todayStr,
+        status: dbStatus === 'done' ? 'done' : 'todo',
+        recurrence: payload.recurrence ?? { frequency: 'daily', interval: 1, end_date: null },
+        user_id: user.id,
+      })
+
+      if (error) {
+        toast.error('Failed to add habit')
+        return false
+      }
+
+      toast.success('Habit added')
+      queryClient.invalidateQueries({ queryKey: ['cockpit-habits', user.id] })
       return true
     }
 
@@ -241,45 +291,48 @@ export default function Cockpit() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50">
-      <CockpitHeader
-        dailyStreak={dailyStreak}
-        habitsTotal={habitsTotal}
-        habitsDone={habitsDone}
-      />
+    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_12%,rgba(148,197,255,0.18),transparent_34%),radial-gradient(circle_at_88%_8%,rgba(191,219,254,0.2),transparent_26%),#F6F8FC] px-4 py-5 sm:px-6 sm:py-6">
+      <div className="mx-auto w-full max-w-4xl space-y-6">
+        <CockpitHeader
+          dailyStreak={dailyStreak}
+          habitsTotal={habitsTotal}
+          habitsDone={habitsDone}
+        />
 
-      <div className="flex-1 px-6 py-6 space-y-8 max-w-2xl">
-        {/* ── Habits ── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-              Habits
-            </h2>
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <Repeat2 className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Habits</h2>
+                <p className="text-xs text-slate-500">Recurring rituals for today</p>
+              </div>
+            </div>
             <button
               onClick={openCreateHabit}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="h-3.5 w-3.5" />
               Add habit
             </button>
           </div>
 
           {atRiskHabit ? (
-            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3">
               <p className="text-sm font-semibold text-amber-800">
-                ⚡ {atRiskHabit.habit.title} streak at risk - {atRiskHabit.currentStreak} days.
+                {atRiskHabit.habit.title} streak is at risk ({atRiskHabit.currentStreak} days)
               </p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                You haven&apos;t logged it yet today.
-              </p>
-              <div className="mt-2 flex items-center gap-2">
+              <p className="mt-0.5 text-xs text-amber-700">You have not logged this one yet today.</p>
+              <div className="mt-2.5 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void toggleHabit(atRiskHabit.habit.id, atRiskHabit.habit.status)}
@@ -301,7 +354,7 @@ export default function Cockpit() {
             </div>
           ) : null}
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {sortedHabits.map((habit) => (
               <HabitRow
                 key={habit.id}
@@ -311,28 +364,33 @@ export default function Cockpit() {
               />
             ))}
             {sortedHabits.length === 0 && (
-              <p className="text-sm text-slate-400 px-4 py-3">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                 No habits scheduled for today. Add a recurring habit to get started.
-              </p>
+              </div>
             )}
           </div>
         </section>
 
-        {/* ── Today's Tasks ── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-              Today
-            </h2>
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <ListChecks className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Today&apos;s tasks</h2>
+                <p className="text-xs text-slate-500">Focus list for {todayStr}</p>
+              </div>
+            </div>
             <button
               onClick={openCreateTask}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="h-3.5 w-3.5" />
               Add task
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {sortedTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -342,9 +400,9 @@ export default function Cockpit() {
               />
             ))}
             {sortedTasks.length === 0 && (
-              <p className="text-sm text-slate-400 px-4 py-3">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                 Nothing scheduled for today.
-              </p>
+              </div>
             )}
           </div>
         </section>
@@ -356,7 +414,7 @@ export default function Cockpit() {
         defaultDateISO={todayStr}
         defaultTaskType={defaultModalTaskType}
         task={modalTask}
-        categories={categories}
+        categories={modalCategories}
         onClose={() => {
           setModalOpen(false)
           setModalTask(null)

@@ -3,13 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { TASK_SELECT } from '../lib/constants'
-import { expandRecurrence } from '../lib/recurrence'
-import type { Task, HabitStreak } from '../types'
+import { expandRecurrence, formatDateStr } from '../lib/recurrence'
+import type { Task, HabitStreak, RecurrenceRule } from '../types'
 
 export function useCockpit() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = formatDateStr(new Date())
 
   // Query 1: All habits for the user
   const { data: allHabits = [], isLoading: habitsLoading } = useQuery({
@@ -17,25 +17,49 @@ export function useCockpit() {
     enabled: !!user?.id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tasks')
-        .select(TASK_SELECT)
+        .from('habits')
+        .select('id,user_id,title,category_id,date,time,end_time,recurrence,status,completed_at,deleted_at,created_at,updated_at,category:categories(id,name,slug,color,accent,short_label,icon,sort_order,created_at,applies_to)')
         .eq('user_id', user!.id)
-        .eq('task_type', 'habit')
         .is('deleted_at', null)
       if (error) throw error
-      return data as unknown as Task[]
+      return ((data as Array<Record<string, unknown>> | null) ?? []).map((habit) => ({
+        ...habit,
+        task_type: 'habit',
+        priority: 'medium',
+        status: habit.status === 'done' ? 'done' : 'todo',
+        recurrence: (habit.recurrence as RecurrenceRule | null) ?? { frequency: 'daily', interval: 1, end_date: null },
+      })) as unknown as Task[]
     },
   })
 
   // Filter habits client-side to only those scheduled for today via recurrence
   const habits = useMemo(() => {
-    const today = new Date(todayStr)
-    const tomorrow = new Date(todayStr)
+    const [year, month, day] = todayStr.split('-').map(Number)
+    const today = new Date(year, month - 1, day)
+    const tomorrow = new Date(year, month - 1, day)
     tomorrow.setDate(tomorrow.getDate() + 1)
     return allHabits.filter((habit) => {
-      if (!habit.recurrence || !habit.date) return false
-      const dates = expandRecurrence(habit.date, habit.recurrence, today, tomorrow)
-      return dates.includes(todayStr)
+      const anchorDate = habit.date ?? habit.created_at?.slice(0, 10) ?? todayStr
+      const fallbackVisible = anchorDate <= todayStr
+      const recurrence = habit.recurrence ?? { frequency: 'daily', interval: 1, end_date: null }
+
+      if (!recurrence || typeof recurrence !== 'object' || !('frequency' in recurrence)) {
+        return fallbackVisible
+      }
+
+      try {
+        const safeRule = {
+          frequency: recurrence.frequency ?? 'daily',
+          interval: Math.max(1, recurrence.interval ?? 1),
+          end_date: recurrence.end_date ?? null,
+          ...(Array.isArray(recurrence.days_of_week) ? { days_of_week: recurrence.days_of_week } : {}),
+          ...(recurrence.count ? { count: recurrence.count } : {}),
+        }
+        const dates = expandRecurrence(anchorDate, safeRule, today, tomorrow)
+        return dates.includes(todayStr) || (dates.length === 0 && fallbackVisible)
+      } catch {
+        return fallbackVisible
+      }
     })
   }, [allHabits, todayStr])
 
@@ -90,6 +114,18 @@ export function useCockpit() {
         () => {
           queryClient.invalidateQueries({ queryKey: ['cockpit-habits', user.id] })
           queryClient.invalidateQueries({ queryKey: ['cockpit-tasks', user.id] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'habits',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['cockpit-habits', user.id] })
         }
       )
       .subscribe()

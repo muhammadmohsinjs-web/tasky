@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { formatSidebarDate, getTaskCounts } from './calendarHelpers';
 import { TaskCard } from './TaskCard';
@@ -7,6 +8,9 @@ interface TaskSidebarProps {
   selectedDateISO: string;
   tasks: CalendarTask[];
   visibleTasks: CalendarTask[];
+  monthTasks?: CalendarTask[];
+  visibleMonthTasks?: CalendarTask[];
+  monthLabel?: string;
   selectedTaskId: string | null;
   searchQuery: string;
   onSearchChange: (value: string) => void;
@@ -22,12 +26,18 @@ interface TaskSidebarProps {
   selectionMode?: boolean;
   selectedTaskIds?: Set<string>;
   onToggleSelectTask?: (taskId: string) => void;
+  panelMode?: 'view' | 'edit';
+  onPanelModeChange?: (mode: 'view' | 'edit') => void;
+  onOpenSelectedTask?: (taskId: string, mode: 'view' | 'edit') => void;
 }
 
 export function TaskSidebar({
   selectedDateISO,
   tasks,
   visibleTasks,
+  monthTasks = [],
+  visibleMonthTasks = [],
+  monthLabel,
   selectedTaskId,
   searchQuery,
   onSearchChange,
@@ -43,8 +53,17 @@ export function TaskSidebar({
   selectionMode = false,
   selectedTaskIds,
   onToggleSelectTask,
+  panelMode = 'view',
+  onPanelModeChange,
+  onOpenSelectedTask,
 }: TaskSidebarProps) {
-  const counts = getTaskCounts(tasks);
+  const [scope, setScope] = useState<'day' | 'month'>('day');
+  const scopeTasks = scope === 'month' ? monthTasks : tasks;
+  const scopeVisibleTasks = scope === 'month' ? visibleMonthTasks : visibleTasks;
+  const counts = getTaskCounts(scopeTasks);
+  const selectedTask = (scopeVisibleTasks.find((task) => task.id === selectedTaskId)
+    ?? scopeTasks.find((task) => task.id === selectedTaskId))
+    ?? null;
 
   return (
     <aside className="flex h-full flex-col rounded-[16px] border border-[#DEE6F2] bg-[#FCFDFF]">
@@ -68,12 +87,31 @@ export function TaskSidebar({
         {/* Date + stats row */}
         <div className="mt-2 flex items-center justify-between">
           <p className="flex items-center text-[13px] font-medium text-[#55657F]">
-            <span>{formatSidebarDate(selectedDateISO)}</span>
+            <span>{scope === 'month' ? (monthLabel ?? formatSidebarDate(selectedDateISO)) : formatSidebarDate(selectedDateISO)}</span>
             <span className="px-1.5 opacity-70">&middot;</span>
             <span>{counts.total} {counts.total === 1 ? 'Task' : 'Tasks'}</span>
             <span className="px-1.5 opacity-70">&middot;</span>
             <span>{counts.completed} Completed</span>
           </p>
+        </div>
+
+        <div className="mt-2.5 rounded-xl border border-[#DDE7F7] bg-white p-1.5">
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => setScope('day')}
+              className={`h-8 rounded-lg text-[11px] font-semibold transition ${scope === 'day' ? 'bg-[#EAF2FF] text-[#1B4A93]' : 'bg-[#F7FAFF] text-[#5B6E8C]'}`}
+            >
+              Selected Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope('month')}
+              className={`h-8 rounded-lg text-[11px] font-semibold transition ${scope === 'month' ? 'bg-[#EAF2FF] text-[#1B4A93]' : 'bg-[#F7FAFF] text-[#5B6E8C]'}`}
+            >
+              Month Agenda
+            </button>
+          </div>
         </div>
 
         {/* Command bar: Add Task + progress */}
@@ -99,6 +137,34 @@ export function TaskSidebar({
             </span>
           </div>
         </div>
+
+        {selectedTask ? (
+          <div className="mt-2.5 rounded-xl border border-[#DDE7F7] bg-white p-1.5">
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => onPanelModeChange?.('view')}
+                className={`h-8 rounded-lg text-[11px] font-semibold transition ${panelMode === 'view' ? 'bg-[#EAF2FF] text-[#1B4A93]' : 'bg-[#F7FAFF] text-[#5B6E8C]'}`}
+              >
+                View
+              </button>
+              <button
+                type="button"
+                onClick={() => onPanelModeChange?.('edit')}
+                className={`h-8 rounded-lg text-[11px] font-semibold transition ${panelMode === 'edit' ? 'bg-[#EAF2FF] text-[#1B4A93]' : 'bg-[#F7FAFF] text-[#5B6E8C]'}`}
+              >
+                Edit
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenSelectedTask?.(selectedTask.id, panelMode)}
+              className="mt-1.5 inline-flex h-8 w-full items-center justify-center rounded-lg border border-[#D8E3F3] bg-[#F8FBFF] text-[11px] font-semibold text-[#2E4B74] transition hover:bg-white"
+            >
+              Open {panelMode === 'edit' ? 'Editor' : 'Details'}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {/* ── Search ── */}
@@ -129,12 +195,12 @@ export function TaskSidebar({
 
       {/* ── Task list ── */}
       <div className="flex-1 space-y-2.5 overflow-y-auto px-3 pb-4 pt-1.5">
-        {visibleTasks.length === 0 ? (
+        {scopeVisibleTasks.length === 0 ? (
           <div className="mt-3 rounded-lg border border-dashed border-[#DDE5F2] bg-[#F9FBFE] px-4 py-6 text-center text-[11px] text-[#7F8FA8]">
-            No tasks for this day.
+            {scope === 'month' ? 'No tasks in this month.' : 'No tasks for this day.'}
           </div>
         ) : (
-          visibleTasks.map((task) => (
+          scopeVisibleTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}

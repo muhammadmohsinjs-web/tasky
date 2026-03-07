@@ -26,24 +26,15 @@ const initialMonth = startOfMonth(now.getFullYear(), now.getMonth());
 const todayISO = toISODate(now);
 
 type ViewMode = 'calendar' | 'list' | 'backlog';
-type SmartView = 'all' | 'inbox' | 'today' | 'upcoming' | 'overdue' | 'backlog';
 const ALL_CATEGORY_FILTER = 'all';
 const UNCATEGORIZED_FILTER = '__uncategorized__';
-const UPCOMING_WINDOW_DAYS = 7;
 const STATUS_FILTER_LABELS: Record<'all' | TaskStatus, string> = {
   all: 'All Status',
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
 };
-const SMART_VIEW_LABELS: Record<SmartView, string> = {
-  all: 'All',
-  inbox: 'Inbox',
-  today: 'Today',
-  upcoming: 'Upcoming',
-  overdue: 'Overdue',
-  backlog: 'Backlog',
-};
+const HEAVY_DAY_THRESHOLD = 5;
 
 /* ── Status mapping between DB and Calendar UI ── */
 const DB_TO_CALENDAR_STATUS: Record<DbTaskStatus, TaskStatus> = {
@@ -93,16 +84,6 @@ function formatTimeLabel(value: string | null | undefined): string {
   return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
 }
 
-function matchesSmartView(task: CalendarTask, view: SmartView, today: string, upcomingLimit: string): boolean {
-  if (view === 'all') return true;
-  if (view === 'backlog') return task.dateISO === null;
-  if (view === 'inbox') return task.dateISO === null && task.status === 'pending';
-  if (view === 'today') return task.dateISO === today;
-  if (view === 'overdue') return Boolean(task.dateISO && task.dateISO < today && task.status !== 'completed');
-  if (view === 'upcoming') return Boolean(task.dateISO && task.dateISO > today && task.dateISO <= upcomingLimit);
-  return true;
-}
-
 export default function CalendarPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -113,10 +94,10 @@ export default function CalendarPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [activeView, setActiveView] = useState<ViewMode>('list');
-  const [smartView, setSmartView] = useState<SmartView>('all');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_FILTER);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [sidePanelMode, setSidePanelMode] = useState<'view' | 'edit'>('view');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -167,8 +148,6 @@ export default function CalendarPage() {
 
   const loading = scheduledLoading || backlogLoading;
   const loadError = scheduledError || backlogError;
-  const todayKey = toISODate(new Date());
-  const upcomingLimitISO = toISODate(new Date(Date.now() + UPCOMING_WINDOW_DAYS * 24 * 60 * 60 * 1000));
 
   const handleDeleteTask = useCallback((taskId: string) => {
     if (!isOnline) {
@@ -204,6 +183,7 @@ export default function CalendarPage() {
   const handleViewTask = (taskId: string) => {
     setSelectedTaskId(taskId);
     setEditingTaskId(taskId);
+    setSidePanelMode('view');
     setModalMode('view');
     setIsAddModalOpen(true);
   };
@@ -211,6 +191,7 @@ export default function CalendarPage() {
   const handleEditTask = (taskId: string) => {
     setSelectedTaskId(taskId);
     setEditingTaskId(taskId);
+    setSidePanelMode('edit');
     setModalMode('edit');
     setIsAddModalOpen(true);
   };
@@ -242,14 +223,9 @@ export default function CalendarPage() {
     });
   }, [allCalendarTasks, searchQuery, statusFilter, categoryFilter]);
 
-  const smartViewTasks = useMemo(
-    () => filteredTasks.filter((task) => matchesSmartView(task, smartView, todayKey, upcomingLimitISO)),
-    [filteredTasks, smartView, todayKey, upcomingLimitISO]
-  );
-
   const calendarScheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
-  const scheduledTasks = useMemo(() => smartViewTasks.filter(task => task.dateISO !== null), [smartViewTasks]);
-  const backlogTasks = useMemo(() => smartViewTasks.filter(task => task.dateISO === null), [smartViewTasks]);
+  const scheduledTasks = useMemo(() => filteredTasks.filter(task => task.dateISO !== null), [filteredTasks]);
+  const backlogTasks = useMemo(() => filteredTasks.filter(task => task.dateISO === null), [filteredTasks]);
   const tasksForSelectedDate = useMemo(() => getTasksForDate(calendarScheduledTasks, selectedDateISO), [calendarScheduledTasks, selectedDateISO]);
   const visibleSidebarTasks = useMemo(() => filterTasksByQuery(tasksForSelectedDate, searchQuery), [tasksForSelectedDate, searchQuery]);
 
@@ -260,6 +236,15 @@ export default function CalendarPage() {
       return date.getFullYear() === monthDate.getFullYear() && date.getMonth() === monthDate.getMonth();
     });
   }, [calendarScheduledTasks, monthDate]);
+  const visibleMonthSidebarTasks = useMemo(() => filterTasksByQuery(monthTasks, searchQuery), [monthTasks, searchQuery]);
+  const heavyDayCount = useMemo(() => {
+    const dayCountMap = monthTasks.reduce<Record<string, number>>((acc, task) => {
+      if (!task.dateISO) return acc;
+      acc[task.dateISO] = (acc[task.dateISO] ?? 0) + 1;
+      return acc;
+    }, {});
+    return Object.values(dayCountMap).filter((count) => count >= HEAVY_DAY_THRESHOLD).length;
+  }, [monthTasks]);
 
   const groupedVisibleScheduledTasks = useMemo(() => {
     const dateKeys = Array.from(new Set(scheduledTasks.map(task => task.dateISO).filter((date): date is string => Boolean(date)))).sort();
@@ -378,7 +363,7 @@ export default function CalendarPage() {
     if (categoryFilter === UNCATEGORIZED_FILTER) return 'Uncategorized';
     return categories.find(category => category.id === categoryFilter)?.name ?? 'All Categories';
   }, [categories, categoryFilter]);
-  const hasActiveFilters = categoryFilter !== ALL_CATEGORY_FILTER || statusFilter !== 'all' || searchQuery.trim().length > 0 || smartView !== 'all';
+  const hasActiveFilters = categoryFilter !== ALL_CATEGORY_FILTER || statusFilter !== 'all' || searchQuery.trim().length > 0;
 
   const setMonthAndYear = (year: number, monthIndex: number) => {
     const currentSelectedDay = parseISODate(selectedDateISO).getDate();
@@ -484,7 +469,7 @@ export default function CalendarPage() {
 
       if (key === 'd') {
         event.preventDefault();
-        setBulkDate(todayKey);
+        setBulkDate(toISODate(new Date()));
         void applyBulkScheduleDate();
       }
     };
@@ -499,7 +484,6 @@ export default function CalendarPage() {
     isCommandPaletteOpen,
     isOnline,
     selectedCount,
-    todayKey,
   ]);
 
   return (
@@ -595,25 +579,24 @@ export default function CalendarPage() {
                   </button>
 
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium ${
-                      categoryFilter === ALL_CATEGORY_FILTER
-                        ? 'border border-[#D4DEEE] bg-white text-[#4C5C77]'
-                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
-                    }`}>
-                      {selectedCategoryLabel}
-                    </span>
-                    <span className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-medium ${
-                      statusFilter === 'all'
-                        ? 'border border-[#D4DEEE] bg-white text-[#4C5C77]'
-                        : 'border border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
-                    }`}>
-                      {STATUS_FILTER_LABELS[statusFilter]}
-                    </span>
+                    {categoryFilter !== ALL_CATEGORY_FILTER ? (
+                      <span className="inline-flex h-8 items-center rounded-md border border-[#AFC7F4] bg-[#EAF2FF] px-2.5 text-[12px] font-medium text-[#184593]">
+                        {selectedCategoryLabel}
+                      </span>
+                    ) : null}
+                    {statusFilter !== 'all' ? (
+                      <span className="inline-flex h-8 items-center rounded-md border border-[#AFC7F4] bg-[#EAF2FF] px-2.5 text-[12px] font-medium text-[#184593]">
+                        {STATUS_FILTER_LABELS[statusFilter]}
+                      </span>
+                    ) : null}
                     <span className="inline-flex h-8 items-center rounded-md border border-[#DFE6F2] bg-[#F4F8FF] px-2.5 text-[12px] font-medium text-[#5A6780]">
                       This month: {progressTotal}
                     </span>
                     <span className="inline-flex h-8 items-center rounded-md border border-[#DFE6F2] bg-[#F4F8FF] px-2.5 text-[12px] font-medium text-[#5A6780]">
                       Backlog: {backlogTasks.length}
+                    </span>
+                    <span className="inline-flex h-8 items-center rounded-md border border-[#F0D6AF] bg-[#FFF4E2] px-2.5 text-[12px] font-medium text-[#8B4B0D]">
+                      Heavy dates: {heavyDayCount}
                     </span>
                     {hasActiveFilters ? (
                       <button
@@ -622,7 +605,6 @@ export default function CalendarPage() {
                           setCategoryFilter(ALL_CATEGORY_FILTER);
                           setStatusFilter('all');
                           setSearchQuery('');
-                          setSmartView('all');
                         }}
                         className="inline-flex h-8 items-center rounded-md border border-[#C7D4EA] bg-[#F4F8FF] px-2.5 text-[12px] font-semibold text-[#314563] transition hover:bg-white">
                         Clear
@@ -684,30 +666,21 @@ export default function CalendarPage() {
                       <option value="completed">Completed</option>
                     </select>
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter(ALL_CATEGORY_FILTER);
+                      setStatusFilter('all');
+                      setSearchQuery('');
+                    }}
+                    disabled={!hasActiveFilters}
+                    className="inline-flex h-9 items-center justify-center rounded-md border border-[#C7D4EA] bg-[#F4F8FF] px-3 text-[12px] font-semibold text-[#314563] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                  >
+                    Clear filters
+                  </button>
                 </div>
               ) : null}
 
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {(Object.keys(SMART_VIEW_LABELS) as SmartView[]).map((view) => (
-                  <button
-                    key={view}
-                    type="button"
-                    onClick={() => {
-                      setSmartView(view);
-                      if ((view === 'inbox' || view === 'backlog') && activeView === 'calendar') {
-                        setActiveView('backlog');
-                      }
-                    }}
-                    className={`inline-flex h-8 items-center rounded-md border px-2.5 text-[12px] font-semibold transition ${
-                      smartView === view
-                        ? 'border-[#AFC7F4] bg-[#EAF2FF] text-[#184593]'
-                        : 'border-[#D4DEEE] bg-white text-[#4C5C77] hover:bg-[#F8FAFD]'
-                    }`}
-                  >
-                    {SMART_VIEW_LABELS[view]}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </section>
@@ -846,6 +819,9 @@ export default function CalendarPage() {
                       selectedDateISO={selectedDateISO}
                       tasks={tasksForSelectedDate}
                       visibleTasks={visibleSidebarTasks}
+                      monthTasks={monthTasks}
+                      visibleMonthTasks={visibleMonthSidebarTasks}
+                      monthLabel={formatMonthLabel(monthDate)}
                       selectedTaskId={selectedTaskId}
                       searchQuery={searchQuery}
                       onSearchChange={setSearchQuery}
@@ -868,6 +844,12 @@ export default function CalendarPage() {
                       selectionMode={true}
                       selectedTaskIds={selectedTaskIds}
                       onToggleSelectTask={toggleTaskSelection}
+                      panelMode={sidePanelMode}
+                      onPanelModeChange={setSidePanelMode}
+                      onOpenSelectedTask={(taskId, mode) => {
+                        if (mode === 'edit') handleEditTask(taskId);
+                        else handleViewTask(taskId);
+                      }}
                     />
                   </div>
                 </div>
@@ -999,7 +981,6 @@ export default function CalendarPage() {
               }} />
               <PaletteAction label="Open backlog view" hint="B" onRun={() => {
                 setActiveView('backlog');
-                setSmartView('backlog');
                 setIsCommandPaletteOpen(false);
               }} />
               <PaletteAction label="Focus search" hint="/" onRun={() => {

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { confirmAction } from '../lib/confirm'
-import type { Category } from '../types'
+import type { Category, CategoryAppliesTo } from '../types'
 
 export function useCategories() {
   const queryClient = useQueryClient()
@@ -23,7 +23,17 @@ export function useCategories() {
     enabled: !!user,
   })
 
-  const addCategory = async (category: Omit<Category, 'id' | 'created_at'>) => {
+  const taskCategories = categories.filter((category) => {
+    const appliesTo = category.applies_to ?? 'task'
+    return appliesTo === 'task' || appliesTo === 'both'
+  })
+
+  const habitCategories = categories.filter((category) => {
+    const appliesTo = category.applies_to ?? 'task'
+    return appliesTo === 'habit' || appliesTo === 'both'
+  })
+
+  const addCategory = async (category: Omit<Category, 'id' | 'created_at'> & { applies_to?: CategoryAppliesTo }) => {
     const { data, error } = await supabase
       .from('categories')
       .insert({ ...category, user_id: user?.id })
@@ -38,7 +48,10 @@ export function useCategories() {
     return data as Category
   }
 
-  const updateCategory = async (id: string, updates: Partial<Omit<Category, 'id' | 'created_at'>>) => {
+  const updateCategory = async (
+    id: string,
+    updates: Partial<Omit<Category, 'id' | 'created_at'> & { applies_to?: CategoryAppliesTo }>,
+  ) => {
     const { error } = await supabase.from('categories').update(updates).eq('id', id)
     if (error) {
       console.error('Failed to update category:', error)
@@ -66,6 +79,8 @@ export function useCategories() {
 
   return {
     categories,
+    taskCategories,
+    habitCategories,
     loading,
     refetch: () => queryClient.invalidateQueries({ queryKey }),
     addCategory,

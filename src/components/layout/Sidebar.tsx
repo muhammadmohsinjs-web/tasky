@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Sun, Target, Inbox, Calendar, BarChart2, Tag, Menu, X, LogOut, ChevronRight } from 'lucide-react';
+import { Sun, Target, Calendar, BarChart2, Tag, Menu, X, LogOut, ChevronRight, ListTodo } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../hooks/useProfile';
@@ -8,8 +8,8 @@ import tasksPulseLogo from '../../assets/TasksPulse-logo-horizontal.svg';
 
 const NAV_ITEMS = [
   { path: '/cockpit',    label: 'Today',      icon: Sun,      description: 'Habits & daily tasks' },
+  { path: '/tasks',      label: 'Tasks',      icon: ListTodo, description: 'Monthly planner' },
   { path: '/goals',      label: 'Goals',      icon: Target,   description: 'Track your goals' },
-  { path: '/backlog',    label: 'Backlog',    icon: Inbox,    description: 'Unscheduled tasks' },
   { path: '/calendar',   label: 'Calendar',   icon: Calendar, description: 'Completion heatmap' },
   { path: '/analytics',  label: 'Analytics',  icon: BarChart2, description: 'Track progress' },
   { path: '/categories', label: 'Categories', icon: Tag,      description: 'Organize tasks' },

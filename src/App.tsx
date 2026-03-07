@@ -17,6 +17,7 @@ import TermsOfService from './pages/TermsOfService'
 import Support from './pages/Support'
 import GoogleApiDisclosure from './pages/GoogleApiDisclosure'
 import { GlobalApiLoadingIndicator } from './components/ui/GlobalApiLoadingIndicator'
+import Tasks from './pages/Tasks'
 
 export default function App() {
   return (
@@ -35,7 +36,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<Navigate to="/cockpit" replace />} />
             <Route path="/dashboard" element={<Navigate to="/cockpit" replace />} />
-            <Route path="/tasks" element={<Navigate to="/cockpit" replace />} />
+            <Route path="/tasks" element={<Tasks />} />
             <Route path="/planning" element={<Navigate to="/goals" replace />} />
             <Route path="/cockpit" element={<Cockpit />} />
             <Route path="/goals" element={<Goals />} />
